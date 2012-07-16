@@ -1,7 +1,3 @@
-0.62
-- BUG en reader_rrd y client_time, si las demoras son > 8segs se
-produce un acceso fuera de memoria.
-
 0.61
 - CLEANUP Limpieza del código fuente, preparación para su 
 publicación

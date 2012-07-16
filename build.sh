@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Ensure that libconfig and libdebug libraries are compiled,
-# the will be inserted as static libs inside our binaries,
-# to ensure they are portable.
+# they will be inserted as static libs inside our binaries,
+# to ensure portability.
 
 #if [ ! -d libs/libconfig-0.1.5 ] || [ ! -d libs/libdebug-0.4.2 ]
 #then
@@ -23,9 +23,6 @@ gcc -Wall -g -o bin/reader_network64 src/reader_network.c src/asterix.c src/sacs
 
 echo reader_rrd
 gcc -Wall -g -o bin/reader_rrd src/reader_rrd.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32 -DCLIENT_RRD
-
-echo reader_rrd3
-gcc -Wall -g -o bin/reader_rrd3 src/reader_rrd3.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32 -DCLIENT_RRD
 
 echo client_time
 gcc -g -o bin/client_time src/client_time.c src/sacsic.c src/helpers.c src/startup.c $params32

@@ -395,7 +395,7 @@ int main(int argc, char *argv[]) {
                     diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
                 }
 
-                if (fabs(diff) >= 8.0) {
+                if (fabs(diff) >= 16.0) {
                     log_printf(LOG_ERROR, "retardo mayor de 8 segundos\n");
 		    continue;
 //                    exit(EXIT_FAILURE);

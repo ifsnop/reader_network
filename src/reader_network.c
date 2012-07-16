@@ -162,7 +162,7 @@ char *dest_file_format_string = NULL;
 	    if (!strcasecmp(source_file + strlen(source_file) - 3, "gps")) {
 		source_file_gps = true;
 		if (!cfg_get_int(&source_file_gps_version, "source_file_gps_version")) {
-		    log_printf(LOG_ERROR, "source_file_gps_version entry missing\n");
+		    log_printf(LOG_ERROR, "source_file entry missing\n");
 		    exit(EXIT_FAILURE);
 		} else {
                     if (source_file_gps_version == 0) {

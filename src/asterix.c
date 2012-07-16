@@ -37,6 +37,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 extern float current_time;
 extern int s;
 extern struct sockaddr_in srvaddr;
+
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index) {
 int i;
 char *ptr_tmp;
@@ -122,13 +123,12 @@ int index = 0;
 	}
 	if ( ptr_raw[0] & 64 ) { //I001/010
 	    if ( ptr_raw[j] & 128 ) { // track
-	    	//log_printf(LOG_NORMAL, "type %02X TRACK\n", ptr_raw[j]);
 	        dbp.available |= IS_TRACK;
 		size_current = size_datablock - 3; //exit without further decompression
 	    
 	    } else { // plot
 		dbp.available |= IS_TYPE;
-		//log_printf(LOG_NORMAL, "type %02X\n", ptr_raw[j]);
+//		log_printf(LOG_NORMAL, "type %02X\n", ptr_raw[j]);
 
 		if ( (!(ptr_raw[j] & 32)) && (!(ptr_raw[j] & 16)) ) {
 		    dbp.type = NO_DETECTION;
@@ -149,14 +149,14 @@ int index = 0;
 		}
 		size_current++; j++;
 		if ( ptr_raw[0] & 32 ) { //I001/040
-		    //log_printf(LOG_NORMAL, "polar %02X %02X %02X %02X \n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2], ptr_raw[j+3] );
+//		    log_printf(LOG_NORMAL, "polar %02X %02X %02X %02X \n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2], ptr_raw[j+3] );
 	    	    dbp.rho = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
 	    	    dbp.theta = (ptr_raw[j+2]*256 + ptr_raw[j+3]) * 360.0/65536.0;
 	    	    size_current += 4; j+= 4;
 	    	    dbp.available |= IS_MEASURED_POLAR;
 	        }
 		if ( ptr_raw[0] & 16 ) { //I001/070
-		    //log_printf(LOG_NORMAL, "modea %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+//		    log_printf(LOG_NORMAL, "modea %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 		    dbp.modea_status |= (ptr_raw[j] & 128) ? STATUS_MODEA_NOTVALIDATED : 0;
 		    dbp.modea_status |= (ptr_raw[j] & 64) ? STATUS_MODEA_GARBLED : 0;
 		    dbp.modea_status |= (ptr_raw[j] & 32) ? STATUS_MODEA_SMOOTHED : 0;
@@ -165,7 +165,7 @@ int index = 0;
 		    dbp.available |= IS_MODEA;
 		}
 		if ( ptr_raw[0] & 8  ) { //I001/090
-		    //log_printf(LOG_NORMAL, "modec %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+//		    log_printf(LOG_NORMAL, "modec %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 		    dbp.modec_status |= (ptr_raw[j] & 128) ? STATUS_MODEC_NOTVALIDATED : 0;
 		    dbp.modec_status |= (ptr_raw[j] & 64) ? STATUS_MODEC_GARBLED : 0;
 		    dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]) * 1.0/4.0;// * 100;
@@ -173,14 +173,14 @@ int index = 0;
 		    dbp.available |= IS_MODEC;
 		}
 		if ( ptr_raw[0] & 4  ) { //I001/130
-		    //log_printf(LOG_NORMAL, "responses %02X\n", ptr_raw[j]);
+//		    log_printf(LOG_NORMAL, "responses %02X\n", ptr_raw[j]);
 	    	    dbp.radar_responses = (ptr_raw[j] >> 1);
 		    while (ptr_raw[j] & 1) { j++; size_current++; }
 		    size_current++; j++;
 		    dbp.available |= IS_RADAR_RESPONSES;
 		}
 		if ( ptr_raw[0] & 2  ) { //I001/141
-		    //log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+//		    log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 	    	    dbp.truncated_tod = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
 		    if ( (dbp.tod = ttod_get_full(dbp.sac, dbp.sic, ptr_raw + j, id)) != T_ERROR )
 			dbp.available |= IS_TOD;
@@ -202,7 +202,7 @@ int index = 0;
 		}
 	    }
 	}
-	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+//	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
 //	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
 	if ( dbp.available & IS_TYPE ) {
 /*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
