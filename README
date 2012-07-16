@@ -3,7 +3,7 @@ multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
 See bin/conf/scrm.conf as a working example of the reader_network
-config file. It as all the options detailed.
+config file. All options are detailed inside.
 
 If you want to understand what ASTERIX is and how it is used, you
 should check the following documents from EUROCONTROL and the
