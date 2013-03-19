@@ -393,9 +393,11 @@ int main(int argc, char *argv[]) {
 		}
 		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
                     diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+                } else if (diff >= (86400-512)) {
+            	    diff -= 86400;
                 }
 
-                if (fabs(diff) >= 16.0) {
+                if (fabs(diff) >= 8.0) {
                     log_printf(LOG_ERROR, "retardo mayor de 8 segundos\n");
 		    continue;
 //                    exit(EXIT_FAILURE);

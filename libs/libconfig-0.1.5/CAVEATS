@@ -1,0 +1,88 @@
+
+1. boolean values (true, false) are lower case and are reserved words, i.e
+   you're not allowed to use these words for any purpose other than
+   indicating true or false. Therefore the following is incorrect:
+
+        false = "string"
+        true = false
+
+   whereas the following are correct:
+
+        False = "string"
+        truE = false
+        FALSE = 0x10
+
+2. integers are interpreted as either octal (base-8), decimal (base-10),
+   or hexadecimal (base-16), depending how they are written. Octal values
+   begin with a 0, hexadecimal values begin with 0x and all other values
+   are decimal. Examples:
+
+        value1 = 013      # octal, (11 decimal)
+        value2 = 0x10     # hexadimal (16 decimal)
+        value3 = 10       # decimal
+
+   All integers may be prefixed with a negative sign which indicates that
+   it is negative:
+
+        value1 = -013     # -11 decimal
+        value2 = -0x10    # -16 decimal
+        value3 = -10      # -10 decimal
+
+   Note that spaces between the sign and the integers are not allowed and
+   neither are plus signs. Therefore, the following are illegal:
+
+        value1 = - 10
+        value2 = +10
+
+3. array elements must all be of the same type. Therefore, the following
+   statements are correct:
+
+        array1 = { true, false, false, true, false }
+        array2 = { 0, 1, 2 }
+        array3 = { foo, bar, TRUE }
+        array4 = { "foo", "bar" }
+
+   whereas the following statements are all wrong:
+
+        array1 = { True, false, false, true, false }
+        array2 = { 0, true, 2 }
+        array3 = { foo, bar, true }
+        array4 = { "foo", 2 }
+
+4. keywords are case sensitive and must all be unique. This is correct:
+
+        foo = 1
+        bar = "true"
+
+   but this is incorrect:
+
+        foo = 1
+        foo = "true"
+
+5. enumerations are case sensitive, so the following are _not_ identical:
+
+        enum1 = BAR
+        enum2 = Bar
+
+6. sections may not be empty and may be nested to unlimited depths. each
+   section may contain it's own statements. statements have the same scope
+   in a section. This is correct:
+
+        a = true
+        b = "string"
+        section = {
+          a = -10
+          b = TOK_STRING
+          section = {
+             c = 5
+             d = { tmp = "string" }
+          }
+          d = { a = 20 }
+        }
+
+   but this is incorrect:
+
+        a = true
+        b = false        # duplicate keywords in same scope
+        section = { }    # empty array / section
+

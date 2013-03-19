@@ -37,7 +37,6 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 extern float current_time;
 extern int s;
 extern struct sockaddr_in srvaddr;
-
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index) {
 int i;
 char *ptr_tmp;
@@ -123,12 +122,13 @@ int index = 0;
 	}
 	if ( ptr_raw[0] & 64 ) { //I001/010
 	    if ( ptr_raw[j] & 128 ) { // track
+	    	//log_printf(LOG_NORMAL, "type %02X TRACK\n", ptr_raw[j]);
 	        dbp.available |= IS_TRACK;
 		size_current = size_datablock - 3; //exit without further decompression
 	    
 	    } else { // plot
 		dbp.available |= IS_TYPE;
-//		log_printf(LOG_NORMAL, "type %02X\n", ptr_raw[j]);
+		//log_printf(LOG_NORMAL, "type %02X\n", ptr_raw[j]);
 
 		if ( (!(ptr_raw[j] & 32)) && (!(ptr_raw[j] & 16)) ) {
 		    dbp.type = NO_DETECTION;
@@ -149,14 +149,14 @@ int index = 0;
 		}
 		size_current++; j++;
 		if ( ptr_raw[0] & 32 ) { //I001/040
-//		    log_printf(LOG_NORMAL, "polar %02X %02X %02X %02X \n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2], ptr_raw[j+3] );
+		    //log_printf(LOG_NORMAL, "polar %02X %02X %02X %02X \n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2], ptr_raw[j+3] );
 	    	    dbp.rho = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
 	    	    dbp.theta = (ptr_raw[j+2]*256 + ptr_raw[j+3]) * 360.0/65536.0;
 	    	    size_current += 4; j+= 4;
 	    	    dbp.available |= IS_MEASURED_POLAR;
 	        }
 		if ( ptr_raw[0] & 16 ) { //I001/070
-//		    log_printf(LOG_NORMAL, "modea %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+		    //log_printf(LOG_NORMAL, "modea %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 		    dbp.modea_status |= (ptr_raw[j] & 128) ? STATUS_MODEA_NOTVALIDATED : 0;
 		    dbp.modea_status |= (ptr_raw[j] & 64) ? STATUS_MODEA_GARBLED : 0;
 		    dbp.modea_status |= (ptr_raw[j] & 32) ? STATUS_MODEA_SMOOTHED : 0;
@@ -165,7 +165,7 @@ int index = 0;
 		    dbp.available |= IS_MODEA;
 		}
 		if ( ptr_raw[0] & 8  ) { //I001/090
-//		    log_printf(LOG_NORMAL, "modec %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+		    //log_printf(LOG_NORMAL, "modec %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 		    dbp.modec_status |= (ptr_raw[j] & 128) ? STATUS_MODEC_NOTVALIDATED : 0;
 		    dbp.modec_status |= (ptr_raw[j] & 64) ? STATUS_MODEC_GARBLED : 0;
 		    dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]) * 1.0/4.0;// * 100;
@@ -173,14 +173,14 @@ int index = 0;
 		    dbp.available |= IS_MODEC;
 		}
 		if ( ptr_raw[0] & 4  ) { //I001/130
-//		    log_printf(LOG_NORMAL, "responses %02X\n", ptr_raw[j]);
+		    //log_printf(LOG_NORMAL, "responses %02X\n", ptr_raw[j]);
 	    	    dbp.radar_responses = (ptr_raw[j] >> 1);
 		    while (ptr_raw[j] & 1) { j++; size_current++; }
 		    size_current++; j++;
 		    dbp.available |= IS_RADAR_RESPONSES;
 		}
 		if ( ptr_raw[0] & 2  ) { //I001/141
-//		    log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+		    //log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 	    	    dbp.truncated_tod = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
 		    if ( (dbp.tod = ttod_get_full(dbp.sac, dbp.sic, ptr_raw + j, id)) != T_ERROR )
 			dbp.available |= IS_TOD;
@@ -202,7 +202,7 @@ int index = 0;
 		}
 	    }
 	}
-//	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
 //	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
 	if ( dbp.available & IS_TYPE ) {
 /*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
@@ -956,8 +956,6 @@ int adjust = 0;
     	    break;
 	//log_printf(LOG_ERROR, "f)CAT02] (-) %02X %02X array[%02X%02X] i(%d)\n", sac, sic, full_tod[i], full_tod[i+1],i);
     }
-                                              
-
 
     if ( (i < MAX_RADAR_NUMBER*TTOD_WIDTH) && (full_tod[i] != 0) && (full_tod[i+1] != 0) ) {
 	long p = (full_tod[i+5]<<8) + full_tod[i+6];
@@ -982,6 +980,14 @@ int adjust = 0;
 	    // viene de que a8c0000 es el num max de segs en un dia
             adjust=-full_tod[i+2];
 	    //log_printf(LOG_VERBOSE, "\tADJ2 %02X%02X%02X %ld/128.0\n", full_tod[i+2] + adjust, ptr_ttod[0], ptr_ttod[1], ((full_tod[i+2]+adjust)<<16) + q);
+	} else if ( (d > 0xB800) && (d <= 0xC000) && (full_tod[i+2] == 0x00) ) {// fuera de ventana de seguimiento
+	    // rollover del tod. en este caso, ha habido paso por norte, pero el plot viene fechado con el paso
+	    // por norte anterior. hace falta "ajustar temporalmente" para usar 0xA8 en lugar de 0x00.
+	    //NRT  [000005] [5->01:00:00.039]
+	    //PLT    [BFE8] p:5 q:49128 q-p:49123
+	    //ADJ3 [00BFE8] [49128->01:06:23.812] ERROR
+	    adjust=0xA8;
+	    //log_printf(LOG_VERBOSE, "\tADJ3 %02X%02X%02X %ld/128.0\n", full_tod[i+2] + adjust, ptr_ttod[0], ptr_ttod[1], ((full_tod[i+2]+adjust)<<16) + q);
         } else if ( d > 0xF800 ) { 	// se ha dado la vuelta al contador, respetamos 0xFFFF - 16*128
 	    if ( (q-p) > 0 ) { 		// es positivo si es un plot que llega tarde
 		adjust = -1;
@@ -991,10 +997,10 @@ int adjust = 0;
 		//    NRT 330007 3342343
 		//    PLT    FFED p:29 q:65517 q-p:65488
 		//    ADJ3 32FFED 3342317/128.0
-	    	//log_printf(LOG_VERBOSE, "\tADJ3 %02X%02X%02X %ld/128.0\n", full_tod[i+2] + adjust, ptr_ttod[0], ptr_ttod[1], ((full_tod[i+2]+adjust)<<16) + q);
+	    	//log_printf(LOG_VERBOSE, "\tADJ4 %02X%02X%02X %ld/128.0\n", full_tod[i+2] + adjust, ptr_ttod[0], ptr_ttod[1], ((full_tod[i+2]+adjust)<<16) + q);
 	    } else {			// es negativo si todavia no ha llegado el paso por norte
 		adjust = 1;
-		//log_printf(LOG_VERBOSE, "\tADJ4 %02X%02X%02X %ld/128.0\n", full_tod[i+2] + adjust, ptr_ttod[0], ptr_ttod[1], ((full_tod[i+2]+adjust)<<16) + q);
+		//log_printf(LOG_VERBOSE, "\tADJ5 %02X%02X%02X %ld/128.0\n", full_tod[i+2] + adjust, ptr_ttod[0], ptr_ttod[1], ((full_tod[i+2]+adjust)<<16) + q);
 	    }
         } else { //if ( (abs(q-p)>16*128) && (abs(q-p)<=60000) ) { // ERROR, fuera de ventanas de seguimiento
 	    //	SAC: 20 SIC: 133
@@ -1018,13 +1024,15 @@ int adjust = 0;
 	    tm_s = localtime(&secs); 
 	    strftime(str, 256, "%H:%M:%S", tm_s);
 
-	    log_printf(LOG_ERROR, "ADJ5 [%02X%02X%02X] [%ld->%s.%03.0f] ERROR\n", full_tod[i+2], ptr_ttod[0], ptr_ttod[1], 
+	    log_printf(LOG_ERROR, "ADJ6 [%02X%02X%02X] [%ld->%s.%03.0f] ERROR\n", full_tod[i+2], ptr_ttod[0], ptr_ttod[1], 
 		((full_tod[i+2]<<16) + q) , str, (((full_tod[i+2]<<16) + q)/128.0 - secs)*1000);
 	    
 	    log_printf(LOG_ERROR, "-------------------------------------------------------------\n");
 	    return T_ERROR;
 	}
 	return ((float)( ((full_tod[i+2] + adjust)<<16) + q))/128.0;
+    } else {
+	log_printf(LOG_VERBOSE, "%02X %02X array[%02X%02X] i(%d)\n", sac, sic, full_tod[i], full_tod[i+1],i);
     }
     return T_ERROR;
 };

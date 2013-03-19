@@ -29,6 +29,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <getopt.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #define _GNU_SOURCE

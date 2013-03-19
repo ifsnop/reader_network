@@ -22,7 +22,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#define VERSION "0.61"
+#define VERSION "0.63"
 
 #define TEXT_LENGTH_SHORT 4
 #define TEXT_LENGTH_LONG  32

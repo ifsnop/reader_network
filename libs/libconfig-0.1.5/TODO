@@ -1,0 +1,16 @@
+
+* Finish jed mode indenting
+
+* Add key-value support:
+
+	name = key : value
+
+or
+
+	name =
+	{
+		key1 : value1,
+		key2 : value2,
+		key3 : value3
+	}
+

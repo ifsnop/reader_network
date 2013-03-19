@@ -1,3 +1,17 @@
+0.63
+- BUG en client, client_time, etc. Faltaba por corregir el caso
+en el que if (diff >=(86400-512)), porque podía ser que si el
+grabador estaba con la hora atrasasda, los tiempos podían ser
+negativos.
+
+                        (tiempo plot)          (tiempo actual)
+[MODEA 6764] [FL271] r8 [00:00:00.672] (0.672) [23:59:59.891] (86399.2188)
+
+
+0.62
+- BUG en reader_rrd y client_time, si las demoras son > 8segs se
+produce un acceso fuera de memoria.
+
 0.61
 - CLEANUP Limpieza del código fuente, preparación para su 
 publicación

@@ -94,6 +94,8 @@ int main(int argc, char *argv[]) {
 		diff = dbp.tod_stamp - dbp.tod;
 		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
 		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
 		}
 	    }
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s]%s [AZI %3.3f]"
@@ -138,7 +140,16 @@ int main(int argc, char *argv[]) {
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
 	    }
 
-	    log_printf(LOG_VERBOSE, "[%s/%s] [%s%s%s%s%s%s] [%s] [%s] (%3.4f)\n",
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l,
 		(dbp.type == NO_DETECTION) ? "unk" : "",
 		(dbp.type == TYPE_C2_NORTH_MARKER) ? "NORTE" : "", 
@@ -147,7 +158,7 @@ int main(int argc, char *argv[]) {
 		(dbp.type == TYPE_C2_START_BLIND_ZONE_FILTERING) ? "START_BLIND" : "", 
 		(dbp.type == TYPE_C2_STOP_BLIND_ZONE_FILTERING) ? "STOP_BLIND" : "", 
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff: 0.0);
     	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
@@ -162,6 +173,14 @@ int main(int argc, char *argv[]) {
 	    if (dbp.available & IS_SACSIC) {
 		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
 	    }
 
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s%s%s%s%s%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
@@ -180,7 +199,7 @@ int main(int argc, char *argv[]) {
 		(dbp.plot_type == TYPE_C10_PLOT_NOT_DEFINED) ? "und" : "",
 		(dbp.plot_type == TYPE_C10_PLOT_OTHER) ? "OTHER" : "",
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
@@ -196,6 +215,14 @@ int main(int argc, char *argv[]) {
 		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
 	    }
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
+	    }
 
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l,
@@ -203,7 +230,7 @@ int main(int argc, char *argv[]) {
 		(dbp.type == TYPE_C19_PERIODIC_STATUS) ? "PERIODIC" : "",
 		(dbp.type == TYPE_C19_EVENT_STATUS) ? "EVENT" : "",
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
@@ -219,11 +246,19 @@ int main(int argc, char *argv[]) {
 		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
 	    }
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
+	    }
 
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%04X] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l, dbp.type, 
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
@@ -239,6 +274,14 @@ int main(int argc, char *argv[]) {
 		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
 	    }
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
+	    }
 
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l,
@@ -247,7 +290,7 @@ int main(int argc, char *argv[]) {
 		(dbp.flag_sim == T_YES) ? "SIM" : "",
 		(dbp.flag_fixed == T_YES) ? "FIXED" : "",
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
@@ -263,6 +306,14 @@ int main(int argc, char *argv[]) {
 		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
 	    }
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
+	    }
 
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l,
@@ -271,7 +322,7 @@ int main(int argc, char *argv[]) {
 		(dbp.type == TYPE_C34_GEOGRAPHICAL_FILTERING) ? "FILTER" : "",
 		(dbp.type == TYPE_C34_JAMMING_STROBE) ? "JAMM" : "",
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
@@ -287,11 +338,19 @@ int main(int argc, char *argv[]) {
 		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
 	    }
+	    if (dbp.available & IS_TOD) {
+		diff = dbp.tod_stamp - dbp.tod;
+		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+		} else if (diff >=(86400-512)) {
+		    diff -= 86400;
+		}
+	    }
 
 	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l, "PLOT?",
 		hora1, hora2,
-		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {

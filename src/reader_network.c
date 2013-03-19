@@ -162,7 +162,7 @@ char *dest_file_format_string = NULL;
 	    if (!strcasecmp(source_file + strlen(source_file) - 3, "gps")) {
 		source_file_gps = true;
 		if (!cfg_get_int(&source_file_gps_version, "source_file_gps_version")) {
-		    log_printf(LOG_ERROR, "source_file entry missing\n");
+		    log_printf(LOG_ERROR, "source_file_gps_version entry missing\n");
 		    exit(EXIT_FAILURE);
 		} else {
                     if (source_file_gps_version == 0) {
@@ -399,8 +399,12 @@ void send_output_file() {
     char file[1024];
     char buff_1[1024];
     char buff_2[CURL_ERROR_SIZE];
+    //char buff_active[1024];
     struct stat file_info;
     curl_off_t fsize;
+    
+    //bzero(buff_active, 1024);
+    //snprintf(buff_active, "-");
     
     if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
 	snprintf(file, 1023, "%s%s", dest_file_final_ast, (dest_file_compress ? ".bz2" : "") );
@@ -440,6 +444,10 @@ void send_output_file() {
         
 	curl_easy_setopt(ch, CURLOPT_HTTPPROXYTUNNEL, 0L);
                                      
+	/* disable PASSIVE transfers */
+	// NOT TESTED
+	// curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_active);
+
         /* now specify which file to upload */
         curl_easy_setopt(ch, CURLOPT_READDATA, fh);
                                                      
