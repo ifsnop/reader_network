@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -140,7 +140,7 @@ int index = 0;
 		    dbp.type = TYPE_C1_CMB;
 		}
 		if ( ptr_raw[j] & 2 ) {
-		    dbp.type |= FROM_C1_FIXED_TRANSPONDER;
+		    dbp.type |= TYPE_C1_FIXED_TRANSPONDER;
 		}
 		if (ptr_raw[j] & 1) {
 		    j++; size_current++;
@@ -202,7 +202,7 @@ int index = 0;
 		}
 	    }
 	}
-	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+//	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
 //	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
 	if ( dbp.available & IS_TYPE ) {
 /*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
@@ -800,12 +800,11 @@ int index = 0;
 int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar) {
 int size_current = 0, j = 0;
 int index = 0;
+//int i = 0; char *ptr_tmp;
 
     do {
 	int sizeFSPEC;
 	struct datablock_plot dbp;
-
-//	log_printf(LOG_NORMAL, "fspec %02X\n", ptr_raw[0]);
 
 	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
 	dbp.cat = CAT_48;
@@ -818,33 +817,130 @@ int index = 0;
 	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
     
-	if (sizeFSPEC == 0) {
-	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
-	    return T_ERROR;
-	}
-	
+//	if (sizeFSPEC == 0) {
+//	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
+//	    return T_ERROR;
+//	}
+
+/*
+	ptr_tmp = (char *) mem_alloc(sizeFSPEC*3 + 1);
+	memset(ptr_tmp, 0x0, sizeFSPEC*3 + 1);
+	for( i = 0; i < sizeFSPEC; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[i]));
+	ptr_tmp[strlen(ptr_tmp)-1] = 0;
+        log_printf(LOG_NORMAL, "fspec(%s)\n", ptr_tmp);
+        mem_free(ptr_tmp);
+*/
+	/*
+	ptr_tmp = (char *) mem_alloc(size_datablock*3 + 1);
+        memset(ptr_tmp, 0x0, size_datablock*3 + 1);
+        for (i=0; i < size_datablock*3 - size_current*3 -3*3; i+=3) sprintf((char *)(ptr_tmp + i), "%02X ", (unsigned char) (ptr_raw[i/3]));
+	log_printf(LOG_NORMAL, "%s(%d)\n", ptr_tmp, size_datablock - size_current);
+	mem_free(ptr_tmp);
+	*/	
+
+//	ast_output_datablock(ptr_raw, size_datablock - size_current - 3, id, index);
+
 	j = sizeFSPEC;
 	size_current += sizeFSPEC;
 	if ( ptr_raw[0] & 128 ) { //I048/010
-	    dbp.sac = ptr_raw[sizeFSPEC];
-	    dbp.sic = ptr_raw[sizeFSPEC + 1];
-	    j += 2; size_current += 2;
-	    dbp.available |= IS_SACSIC;
+	    dbp.sac = ptr_raw[sizeFSPEC]; dbp.sic = ptr_raw[sizeFSPEC + 1];
+	    j += 2; size_current += 2; dbp.available |= IS_SACSIC;
 	}
 	if ( ptr_raw[0] & 64  ) { //I048/140
-	    //log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 	    dbp.tod = ((float)(ptr_raw[j]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]))/128.0;
-	    size_current += 3; j += 3;
-	    dbp.available |= IS_TOD;
+//	    log_printf(LOG_NORMAL, "hextod(%02X %02X %02X)\n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2]);
+	    size_current += 3; j += 3; dbp.available |= IS_TOD;
+	}
+	if ( ptr_raw[0] & 32 ) { /* I048/020 */ 
+	    int b = 0;
+	    b = (ptr_raw[j] & 224) >> 5;
+	    switch (b) {
+		case 0: dbp.type = NO_DETECTION; break;
+		case 1: dbp.type = TYPE_C48_PSR; break;
+		case 2: dbp.type = TYPE_C48_SSR; break;
+		case 3: dbp.type = TYPE_C48_CMB; break;
+		case 4: dbp.type = TYPE_C48_SSRSGEN; break;
+		case 5: dbp.type = TYPE_C48_SSRSROL; break;
+		case 6: dbp.type = TYPE_C48_CMBSGEN; break;
+		case 7: dbp.type = TYPE_C48_CMBSROL; break;
+		default: dbp.type = NO_DETECTION; break;
+	    }
+	    if (ptr_raw[j] & 2) dbp.type |= TYPE_C48_FIXED_TRANSPONDER;
+	    while (ptr_raw[j] & 1) { j++; size_current++; } j++; size_current++; 
+	}
+	if ( ptr_raw[0] & 16 ) { /* I048/040 */
+	    dbp.rho = (ptr_raw[j]*256 + ptr_raw[j+1]) / 256.0;
+	    dbp.theta = (ptr_raw[j+2]*256 + ptr_raw[j+3]) * 360.0/65536.0;
+	    size_current += 4; j+= 4;
+	    dbp.available |= IS_MEASURED_POLAR;
+	}
+	if ( ptr_raw[0] & 8 ) {  /* I048/070 */ j += 2; size_current += 2; }
+	if ( ptr_raw[0] & 4 ) {  /* I048/090 */ j += 2; size_current += 2; }
+	if ( ptr_raw[0] & 2 ) {  /* I048/130 */ int k = j; //log_printf(LOG_NORMAL, "I048/130[%02X]\n", ptr_raw[j]);
+	    if ( ptr_raw[k] & 128 ) { j++; size_current++; }
+	    if ( ptr_raw[k] & 64 ) { j++; size_current++; }
+	    if ( ptr_raw[k] & 32 ) { j++; size_current++; }
+	    if ( ptr_raw[k] & 16 ) { j++; size_current++; }
+	    if ( ptr_raw[k] & 8 ) { j++; size_current++; }
+	    if ( ptr_raw[k] & 4 ) { j++; size_current++; }
+	    if ( ptr_raw[k] & 2 ) { j++; size_current++; }
+	    j++; size_current++;
+	}
+	if ( ptr_raw[0] & 1 ) { // FX1
+	    if ( ptr_raw[1] & 128 ) { /* I048/220 */ j += 3; size_current += 3; }
+	    if ( ptr_raw[1] & 64 ) {  /* I048/240 */ j += 6; size_current += 6; 
+
+//	ptr_tmp = (char *) mem_alloc(6*3 + 1);
+//	memset(ptr_tmp, 0x0, 6*3 + 1);
+//	for( i = 0; i < 6; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[j-6+i]));
+//        log_printf(LOG_NORMAL, "I048/240[%s]\n", ptr_tmp);
+//        mem_free(ptr_tmp);
+
+	    }
+	    if ( ptr_raw[1] & 32 ) {  /* I048/250 */ int k = j; j += ptr_raw[k]*8 + 1 ; size_current += ptr_raw[k]*8 + 1; }
+	    if ( ptr_raw[1] & 16 ) {  /* I048/161 */ j += 2; size_current += 2; }
+	    if ( ptr_raw[1] & 8 ) {   /* I048/042 */ j += 4; size_current += 4; }
+	    if ( ptr_raw[1] & 4 ) {   /* I048/200 */ j += 4; size_current += 4; }
+	    if ( ptr_raw[1] & 2 ) {   /* I048/170 */ while (ptr_raw[j] & 1) { j++; size_current++; } j++; size_current++; }
+	    if ( ptr_raw[1] & 1 ) { // FX2
+		if ( ptr_raw[2] & 128 ) { /* I048/210 */ j += 4; size_current += 4; }
+		if ( ptr_raw[2] & 64 ) {  /* I048/030 */ while (ptr_raw[j] & 1) { j++; size_current++; } j++; size_current++; }
+		if ( ptr_raw[2] & 32 ) {  /* I048/080 */ j += 2; size_current += 2; }
+		if ( ptr_raw[2] & 16 ) {  /* I048/100 */ j += 4; size_current += 4; }
+		if ( ptr_raw[2] & 8 ) {   /* I048/110 */ j += 2; size_current += 2; }
+		if ( ptr_raw[2] & 4 ) {   /* I048/120 */ 
+		    int k = j; 
+		    if ( ptr_raw[k] & 128 ) { j += 2; size_current += 2; }
+		    if ( ptr_raw[k] & 64 ) { int l = j; j += ptr_raw[l]*6 + 1; size_current += ptr_raw[l]*6 + 1; }
+		}
+		if ( ptr_raw[2] & 2 ) {   /* I048/230 */ j += 2; size_current += 2; }
+		if ( ptr_raw[2] & 1 ) { // FX3
+		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ j += 7; size_current += 7; }
+		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
+		    if ( ptr_raw[3] & 32 ) {  /* I048/050 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 16 ) {  /* I048/065 */ j += 1; size_current += 1; }
+		    if ( ptr_raw[3] & 8 ) {   /* I048/060 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 4 ) {   /* I048/SP  */ size_current = size_datablock - 3; j = 0; 
+			log_printf(LOG_ERROR, "unexpected I048/SP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(-1);
+		    }
+		    if ( ptr_raw[3] & 2 ) {   /* I048/RE  */ size_current = size_datablock - 3; j = 0;
+			log_printf(LOG_ERROR, "unexpected I048/RE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(-1);
+		    }
+		    if ( ptr_raw[3] & 1 ) {   /* FX4 */      size_current = size_datablock - 3; j = 0;
+			log_printf(LOG_ERROR, "unexpected I048/FX4!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(-1);
+		    }
+		}
+	    }
+	
 	}
 
 	if ( dbp.available & IS_TOD ) {
-/*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
-	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
-		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
-		exit(EXIT_FAILURE);
-	    }
-*/	    if (enviar) {
+//	    log_printf(LOG_NORMAL, "currenttod(%3.3f) plottod(%3.3f) diff(%3.3f)\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
+//	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
+//		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
+//		exit(EXIT_FAILURE);
+//	    }
+	    if (enviar) {
 		if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
@@ -853,11 +949,13 @@ int index = 0;
 	    }
 	}
 	
-	// FIXME
-	
         ptr_raw += j;
 	index++;
-	size_current = size_datablock - 3;
+	
+	// FIXME (solo tiene en cuenta el primer datablock
+	
+//	log_printf(LOG_NORMAL, "size_current(%d) size_datablock(%d)\n", size_current, size_datablock);
+//	size_current = size_datablock - 3;
 	
     } while ((size_current + 3) < size_datablock);
 
@@ -1031,8 +1129,8 @@ int adjust = 0;
 	    return T_ERROR;
 	}
 	return ((float)( ((full_tod[i+2] + adjust)<<16) + q))/128.0;
-    } else {
-	log_printf(LOG_VERBOSE, "%02X %02X array[%02X%02X] i(%d)\n", sac, sic, full_tod[i], full_tod[i+1],i);
+//    } else {
+//	log_printf(LOG_VERBOSE, "%02X %02X array[%02X%02X] i(%d)\n", sac, sic, full_tod[i], full_tod[i+1],i);
     }
     return T_ERROR;
 };

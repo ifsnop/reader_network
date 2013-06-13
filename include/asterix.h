@@ -41,7 +41,16 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define TYPE_C1_PSR 1
 #define TYPE_C1_SSR 2
 #define TYPE_C1_CMB 4
-#define FROM_C1_FIXED_TRANSPONDER 8
+#define TYPE_C1_FIXED_TRANSPONDER 8
+
+#define TYPE_C48_PSR 1
+#define TYPE_C48_SSR 2
+#define TYPE_C48_CMB 4
+#define TYPE_C48_SSRSGEN 8
+#define TYPE_C48_SSRSROL 16
+#define TYPE_C48_CMBSGEN 32
+#define TYPE_C48_CMBSROL 64
+#define TYPE_C48_FIXED_TRANSPONDER 128
 
 #define IS_ERROR 0
 #define IS_SACSIC 1
@@ -50,11 +59,13 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define IS_MEASURED_CARTE 8
 #define IS_MODEA 16
 #define IS_MODEC 32
+#define IS_MODES 2048
 #define IS_TRUNCATED_TOD 64
 #define IS_RADAR_RESPONSES 128
 #define IS_TRACK 256
 #define IS_TOD 512
 #define IS_PLOT 1024
+#define IS_MODES 2048
 
 #define STATUS_MODEC_GARBLED 1
 #define STATUS_MODEC_NOTVALIDATED 2

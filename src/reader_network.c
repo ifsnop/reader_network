@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -998,6 +998,7 @@ unsigned long count2_udp_received = 0;
 //					RBTreePrint(tree);
 				    }
 
+//				    log_printf(LOG_NORMAL, "\n==================================================================\n");
 //				    ast_output_datablock(ast_ptr_raw, ast_size_datablock, count2_plot_processed, 0);
 //				    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 				    if (dest_localhost && record) {

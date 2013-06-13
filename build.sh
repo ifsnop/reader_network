@@ -11,18 +11,27 @@
 #    echo OK OK OK OK OK OK OK OK OK
 #    cd ..
 #fi
-params="-m32 -Wall -Iinclude/ -Ilibs/libdebug-0.4.2/tmp/usr/local/include -Ilibs/curl-7.24.0/tmp/usr/local/include -Ilibs/libconfig-0.1.5 -Llibs/libconfig-0.1.5 -Llibs/libdebug-0.4.2/src -lm -lconfig -ldebug -lcurl -lidn -ldl -lz -DLINUX"
-params32="-m32 -Wall -Iinclude/ -Ilibs/include/ -Ilibs/lib -Llibs/lib -lm -lconfig32 -ldebug32 -static -DLINUX -lcurl32 -ldl -lz32 -lpthread -lrt"
-params64="-m64 -Wall -Iinclude/ -Ilibs/include/ -Ilibs/lib -Llibs/lib -lm -lconfig64 -ldebug64 -static -DLINUX -lcurl64 -ldl -lz64 -lpthread -lrt"
+params="-Wall -lm -lz -ldl -static -lpthread -lrt -DLINUX \
+    -Iinclude/ \
+    -Ilibs/lib \
+    -Llibs/lib \
+    -Ilibs/libconfig-0.1.5 \
+    -Llibs/libconfig-0.1.5 \
+    -Ilibs/libdebug-0.4.2/tmp/usr/local/include \
+    -Llibs/libdebug-0.4.2/src \
+    -Ilibs/curl-7.24.0/tmp/usr/local/include"
+
+params32="-m32 -lconfig32 -ldebug32 -lcurl32 -lz32 $params"
+params64="-m64 -lconfig64 -ldebug64 -lcurl64 -lz64 $params"
 
 echo reader_reader32
 gcc -Wall -g -o bin/reader_network src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32
 
-echo reader_reader64
-gcc -Wall -g -o bin/reader_network64 src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params64
+#echo reader_reader64
+#gcc -Wall -g -o bin/reader_network64 src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params64
 
-echo reader_rrd
-gcc -Wall -g -o bin/reader_rrd src/reader_rrd.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32 -DCLIENT_RRD
+#echo reader_rrd
+#gcc -Wall -g -o bin/reader_rrd src/reader_rrd.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32 -DCLIENT_RRD
 
 echo reader_rrd3
 gcc -Wall -g -o bin/reader_rrd3 src/reader_rrd3.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32 -DCLIENT_RRD
