@@ -108,7 +108,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define TYPE_C34_GEOGRAPHICAL_FILTERING 4
 #define TYPE_C34_JAMMING_STROBE 8
 
-unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
+// unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
 void ttod_put_full(unsigned char sac, unsigned char sic, unsigned char *ptr_full_tod);
 float ttod_get_full(int sac, int sic, unsigned char *ptr_ttod, unsigned long id);

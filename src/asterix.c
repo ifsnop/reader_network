@@ -37,6 +37,9 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 extern float current_time;
 extern int s;
 extern struct sockaddr_in srvaddr;
+
+unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
+
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index) {
 int i;
 char *ptr_tmp;

@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
 	    forced_exit = true;
 	}
 	if ( (dbp.cat == CAT_01) && (dbp.available & IS_TYPE)/* && (dbp.available & IS_TOD)*/ ) {
-	    char *hora1,*hora2;
+	    char *hora1 = NULL,*hora2 = NULL;
 
 	    if (dbp.available & IS_TOD) 
 		hora1 = parse_hora(dbp.tod);

@@ -1,3 +1,0 @@
-scan.o: scan.c scan.h
-parse.o: parse.c scan.h parse.h
-config.o: config.c typedefs.h parse.h scan.h config.h config/typedefs.h
