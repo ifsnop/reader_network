@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -44,10 +44,10 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <limits.h>
 #include <values.h>
 #include <libgen.h>
-#include "debug/memory.h"
-#include "debug/log.h"
-#include "debug/hex.h"
-#include "config/config.h"
+#include "libdebug/memory.h"
+#include "libdebug/log.h"
+#include "libdebug/hex.h"
+#include "libconfig/config.h"
 #include "startup.h"
 #include "defines.h"
 #include "asterix.h"
