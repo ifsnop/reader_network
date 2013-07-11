@@ -1,3 +1,10 @@
+0.64
+- SOPORTE de datablocks en categoría 48. Antes solo se deco-
+dificaba el primero. Ahora se procesan todos los datablocks
+de un mismo paquete.
+- CLEANUP de las librerías externas, ahora el paquete ocupa
+la mitad porque no se distribuye tanta guarrería precompilada.
+
 0.63
 - BUG en client, client_time, etc. Faltaba por corregir el caso
 en el que if (diff >=(86400-512)), porque podía ser que si el

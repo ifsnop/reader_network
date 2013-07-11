@@ -18,3 +18,16 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
+
+
+DEPENDENCIES
+
+
+libz32 || libz64
+
+libcurl
+
+libconfig
+libdebug
+
+pthreads

@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -22,6 +22,8 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "includes.h"
+
+extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
 float current_time=0.0;
 struct sockaddr_in cliaddr,srvaddr;
@@ -263,9 +265,9 @@ char *dest_file_format_string = NULL;
 }
 
 void setup_output_file(void) {
-char *gpsheader;
+char *gpsheader = NULL;
 struct timeval t;
-struct tm *t2;
+struct tm *t2 = NULL;
 
     gpsheader = (char *) mem_alloc(2200);
     gpsheader = memset(gpsheader, 0xcd, 2200);
@@ -273,10 +275,10 @@ struct tm *t2;
     if (dest_file != NULL) {
 	if (dest_file_timestamp) {
 	    if (gettimeofday(&t, NULL) !=0 ) {
-		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno));
+		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	    if ((t2 = gmtime(&t.tv_sec))==NULL) {
-		log_printf(LOG_ERROR, "ERROR gmtime: %s\n", strerror(errno));
+		log_printf(LOG_ERROR, "ERROR gmtime: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	}
 	if ((dest_file_format & DEST_FILE_FORMAT_AST ) == DEST_FILE_FORMAT_AST) {
@@ -287,8 +289,7 @@ struct tm *t2;
 		//    t2->tm_hour, t2->tm_min, t2->tm_sec);
 		snprintf(dest_file_final_ast, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
 		if ((res = system(dest_file_final_ast)) == -1) {
-		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_ast);
-		    exit(EXIT_FAILURE);
+		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
 		}
 		snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d-%s-%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
 		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
@@ -301,8 +302,7 @@ struct tm *t2;
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_ast);
 	    if ( (fd_out_ast = open(dest_file_final_ast, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
-		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	}
 	if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
@@ -311,8 +311,7 @@ struct tm *t2;
 		int res = 0;
 		snprintf(dest_file_final_gps, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
 		if ((res = system(dest_file_final_gps)) == -1) {
-		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_gps);
-		    exit(EXIT_FAILURE);
+		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
 		}
 		//
 		snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d-%s-%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
@@ -328,12 +327,10 @@ struct tm *t2;
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_gps);
 	    if ( (fd_out_gps = open(dest_file_final_gps, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 	        | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
-		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	    if (write(fd_out_gps, gpsheader, 2200)!=2200) {
-		log_printf(LOG_ERROR, "ERROR write gps file init: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR write gps file init: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	}
     }
@@ -458,7 +455,7 @@ void send_output_file() {
         //curl_easy_setopt(ch, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
         curl_easy_setopt(ch, CURLOPT_INFILESIZE, (long)(curl_off_t)fsize);
     
-	curl_easy_setopt(ch, CURLOPT_ERRORBUFFER, &buff_2);
+	curl_easy_setopt(ch, CURLOPT_ERRORBUFFER, buff_2);
                            
 	/* Now run off and do what you've been told! */
         res = curl_easy_perform(ch);
@@ -998,6 +995,7 @@ unsigned long count2_udp_received = 0;
 //					RBTreePrint(tree);
 				    }
 
+//				    log_printf(LOG_NORMAL, "\n==================================================================\n");
 //				    ast_output_datablock(ast_ptr_raw, ast_size_datablock, count2_plot_processed, 0);
 //				    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 				    if (dest_localhost && record) {

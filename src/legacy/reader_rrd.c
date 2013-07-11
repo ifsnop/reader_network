@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -29,8 +29,6 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define DEST_FILE_FORMAT_GPS 4
 #define DEST_FILE_FORMAT_BOTH 6
 
-extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
-
 //date --utc --date "2012-03-02 00:00:00" +%s
 // date -d @1193144433
 float current_time=0.0;
@@ -46,8 +44,6 @@ bool mode_daemon = false;
 bool mode_scrm = false;
 long timed = 0;
 time_t midnight_t; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
-char *region_name = NULL;
-char *rrd_directory = NULL;
 char *dest_file = NULL, 
     *dest_file_final_ast = NULL, *dest_file_final_gps = NULL, 
     *source_file = NULL, **radar_definition;
@@ -61,8 +57,6 @@ int socket_count = 0, s, offset = 0;
 int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
-int stdout_output = 0;
-
 
 struct Queue {
     rb_red_blk_node **node;
@@ -189,17 +183,6 @@ unsigned long count2_plot_processed = 0;
 unsigned long count2_udp_received = 0;
 long timestamp = 0;
 
-    int opt = 0; // getopt
-    int long_index = 0; // getopt
-    static struct option long_options[] = {
-        {"timestamp", 	  required_argument, 0,  't' },
-        {"source_file",   required_argument, 0,  'f' },
-        {"ouput",  	  no_argument, 	     0,  'o' },
-        {"region_name",   required_argument, 0,  'r' },
-        {"rrd_directory", required_argument, 0,  'd' },
-        {0,         	  0,		     0,  0   }
-    };
-
     mem_open(fail);
     if (log_open(NULL, /*LOG_VERBOSE*/ LOG_NORMAL, /*LOG_TIMESTAMP |*/
 	LOG_HAVE_COLORS | LOG_PRINT_FUNCTION |
@@ -207,80 +190,26 @@ long timestamp = 0;
         fprintf(stderr, "log_open failed: %m\n");
         exit (EXIT_FAILURE);
     }
-
-    memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
-
-    while ((opt = getopt_long(argc, argv,"t:s:or:d:",
-	long_options, &long_index )) != -1) {
-        switch (opt) {
-    	    case 't' :
-    	    	errno = 0;
-		timestamp = strtol(optarg, NULL, 10);
-		if (errno != 0) {
-    		    log_printf(LOG_ERROR, "invalid timestamp (%s)!\n", optarg);
-		    exit(EXIT_FAILURE);
-		}
-        	break;
-    	    case 's' : 
-		source_file = optarg;
-        	break;
-    	    case 'r' : 
-		region_name = optarg;
-        	break;
-            case 'o' : stdout_output = 1; 
-                break;
-    	    case 'd' : 
-		rrd_directory = optarg;
-        	break;
-    	    default: 
-	        log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
-	            "This program comes with ABSOLUTELY NO WARRANTY.\n"
-	            "This is free software, and you are welcome to redistribute it\n"
-	            "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    		log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
-    		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
-    		    "\t-s asterix input source file\n"
-    		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
-		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
-		    "\t-d rrd directory\n\n"
-    		    , argv[0]);
-        	exit(EXIT_FAILURE);
-        }
-    }
     
-    if (source_file == NULL || timestamp == 0 || rrd_directory == NULL) {
-        log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
-	            "This program comes with ABSOLUTELY NO WARRANTY.\n"
-	            "This is free software, and you are welcome to redistribute it\n"
-	            "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    	log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
-    		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
-    		    "\t-s asterix input source file\n"
-    		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
-		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
-		    "\t-d rrd directory\n\n"
-	    , argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
-    if (stdout_output == 0) {
-        log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
+    memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
+    if (argc>3 || argc<2 || strlen(argv[1])<5) {
+        log_printf(LOG_ERROR, "reader_rrd_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
             "This program comes with ABSOLUTELY NO WARRANTY.\n"
             "This is free software, and you are welcome to redistribute it\n"
             "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    }    
-/*
-    log_printf(LOG_ERROR, "timestamp (%ld)\n", timestamp);
-    log_printf(LOG_ERROR, "source_file (%s)\n", source_file);
-    log_printf(LOG_ERROR, "stdout_output (%d)\n", stdout_output);
-    log_printf(LOG_ERROR, "region_name (%s)\n", region_name);
-    log_printf(LOG_ERROR, "rrd_directory (%s)\n", rrd_directory);
-    
-    exit(EXIT_SUCCESS);
-*/        
+	log_printf(LOG_ERROR, "usage: %s <gps_file> [yyyymmdd]\n\n", argv[0]);
+	exit(EXIT_FAILURE);
+    }
     parse_config(/*argv[1]*/);
 //    log_printf(LOG_ERROR, "init...\n");
-
+    if (argc==3) {
+	errno = 0;
+	timestamp = strtol(argv[2], NULL, 10);
+	if (errno!=0) {
+	    log_printf(LOG_ERROR, "invalid timestamp (%s)!\n", argv[2]);
+	    exit(EXIT_FAILURE);
+	}
+    }
     setup_time(timestamp);
     setup_crc32_table();
     if (mode_scrm) { 
@@ -295,8 +224,8 @@ long timestamp = 0;
     radar_delay_alloc();
     radar_delay_clear();
 
-    //source_file = (char *) mem_alloc(strlen(argv[1])+1);
-    //memcpy(source_file, argv[1], strlen(argv[1])+1);
+    source_file = (char *) mem_alloc(strlen(argv[1])+1);
+    memcpy(source_file, argv[1], strlen(argv[1])+1);
 
 /*
     {
@@ -354,10 +283,12 @@ long timestamp = 0;
 		//current_time, count2_plot_processed, count2_plot_ignored, ast_ptr_raw[ast_pos]);
 	    if (dest_localhost) {
 //		int l;
-//		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock/* + offset*/, count2_plot_processed+1, 0);
-//		    for (l=0; l < ast_size_datablock; l++)
-//			printf("[%02X]", (unsigned char) ast_ptr_raw[ast_pos + l]);
-//		    printf("\n");
+		
+		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock/* + offset*/, count2_plot_processed+1, 0);
+
+//		for (l=0; l < ast_size_datablock; l++)
+//		    printf("[%02X]", (unsigned char) ast_ptr_raw[ast_pos + l]);
+//		printf("\n");
 		         
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
@@ -689,8 +620,6 @@ void update_calculations(struct datablock_plot dbp) {
 double diff = 0.0, stdev = 0.0, media = 0.0;
 div_t d;
 
-    d.quot = 0; d.rem = 0;
-
     if (dbp.cat == CAT_255) {
 	//log_printf(LOG_ERROR, "fin de fichero\n");
 	forced_exit = true;
@@ -830,7 +759,7 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat1 / radar_delay[i].cuenta_plot_cat1) - 
 			pow(radar_delay[i].suma_retardos_cat1 / radar_delay[i].cuenta_plot_cat1,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 1, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat1, radar_delay[i].max_retardo_cat1, radar_delay[i].min_retardo_cat1,
     			media, stdev, moda, p99_cat1);
 		}
@@ -854,7 +783,7 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat2 / radar_delay[i].cuenta_plot_cat2) - 
 			pow(radar_delay[i].suma_retardos_cat2 / radar_delay[i].cuenta_plot_cat2,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 2, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat2, radar_delay[i].max_retardo_cat2, radar_delay[i].min_retardo_cat2,
     			media, stdev, moda, p99_cat2);
 		}
@@ -878,7 +807,7 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat8 / radar_delay[i].cuenta_plot_cat8) - 
 			pow(radar_delay[i].suma_retardos_cat8 / radar_delay[i].cuenta_plot_cat8,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 8, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat8, radar_delay[i].max_retardo_cat8, radar_delay[i].min_retardo_cat8,
     			media, stdev, moda, p99_cat8);
 		}
@@ -902,7 +831,7 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat10 / radar_delay[i].cuenta_plot_cat10) - 
 			pow(radar_delay[i].suma_retardos_cat10 / radar_delay[i].cuenta_plot_cat10,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 10, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat10, radar_delay[i].max_retardo_cat10, radar_delay[i].min_retardo_cat10,
     			media, stdev, moda, p99_cat10);
 		}
@@ -926,9 +855,10 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat21 / radar_delay[i].cuenta_plot_cat21) - 
 			pow(radar_delay[i].suma_retardos_cat21 / radar_delay[i].cuenta_plot_cat21,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 21, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat21, radar_delay[i].max_retardo_cat21, radar_delay[i].min_retardo_cat21,
     			media, stdev, moda, p99_cat21);
+
 		}
 		// 34
 		if (radar_delay[i].cuenta_plot_cat34>0) {
@@ -950,7 +880,7 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat34 / radar_delay[i].cuenta_plot_cat34) - 
 			pow(radar_delay[i].suma_retardos_cat34 / radar_delay[i].cuenta_plot_cat34,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 34, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat34, radar_delay[i].max_retardo_cat34, radar_delay[i].min_retardo_cat34,
     			media, stdev, moda, p99_cat34);
 		}
@@ -974,7 +904,7 @@ div_t d;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat48 / radar_delay[i].cuenta_plot_cat48) - 
 			pow(radar_delay[i].suma_retardos_cat48 / radar_delay[i].cuenta_plot_cat48,2));
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 48, i,
-			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
+			((long) dbp.tod_stamp) + midnight_t,
 			radar_delay[i].cuenta_plot_cat48, radar_delay[i].max_retardo_cat48, radar_delay[i].min_retardo_cat48,
     			media, stdev, moda, p99_cat48);
 		}
@@ -1110,85 +1040,57 @@ div_t d;
     return;
 }
 
-void create_database(int sac, int sic, int cat, long timestamp) {
-char *rrd_path, *cmd;
+void create_database(sac, sic, cat) {
+char *tmp;
 
-    //date -d"121231 23:59:59" +%s
-    //1356998399
-    //date -d "120630 23:59:59" +%s
-    //1341100799
-    //--start|-b start time (default: now - 10s)
-    
-    
-    
-    //Specifies the time in seconds since 1970-01-01 UTC when the first value should be added 
-    //to the RRD. RRDtool will not accept any data timed before or at the time specified.
-
-    rrd_path = mem_alloc(512);
-    sprintf(rrd_path, "%s/%s_%03d_%03d_%03d.rrd", rrd_directory, region_name, sac, sic, cat);
-    //log_printf(LOG_ERROR, "buscando(%s)\n", rrd_path);
-    if (open(rrd_path,O_EXCL) == -1){ 
-        //log_printf(LOG_ERROR, "no encontrado, creando(%s)\n", rrd_path);
-	cmd = mem_alloc(512);
-        sprintf(cmd, "rrdtool create %s --step 300 \
---start 1341100799 \
-DS:max_ds:GAUGE:600:-16:16 \
-DS:min_ds:GAUGE:600:-16:16 \
-DS:media_ds:GAUGE:600:-16:16 \
-DS:stdev_ds:GAUGE:600:-16:16 \
-DS:p99_ds:GAUGE:600:-16:16 \
-RRA:AVERAGE:0.5:1:600 \
-RRA:AVERAGE:0.5:6:700 \
-RRA:AVERAGE:0.5:24:775 \
-RRA:AVERAGE:0.5:288:797 \
-RRA:MAX:0.5:1:600 \
-RRA:MAX:0.5:6:700 \
-RRA:MAX:0.5:24:775 \
-RRA:MAX:0.5:288:797 \
-RRA:MIN:0.5:1:600 \
-RRA:MIN:0.5:6:700 \
-RRA:MIN:0.5:24:775 \
-RRA:MIN:0.5:288:797",rrd_path);
-	system(cmd);
-	mem_free(cmd);
-    }/* else {
-	log_printf(LOG_ERROR, "encontrado(%s)\n", rrd_path);
-    }*/
-    mem_free(rrd_path);
+    tmp = mem_alloc(512);
+    sprintf(tmp, "rrd_create.sh %03d_%03d_%03d %ld 2> /dev/null", sac, sic, cat, midnight_t);
+    system(tmp);
+    mem_free(tmp);
     return;
 }
 
 void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, float max,
     float min, float media, float stdev, float moda, float p99) {
-    char *cmd;
-
-    if ( cat != 1 && cat != 48 ) 
-	return;
+//    pid_t pid;
+    char *tmp;
+    
+//    char *sac_s,*sic_l;
+//    sac_s = ast_get_SACSIC((unsigned char *) &sac,
+//	    (unsigned char *) &sic, GET_SAC_SHORT);
+//    sic_l = ast_get_SACSIC((unsigned char *) &sac, 
+//	(unsigned char *) &sic, GET_SIC_LONG);
 
     moda = (moda < -7.994) || (moda > 7.996) ? 0 : moda;
     max = (max == -10000) ? 0 : max;
     min = (min == +10000) ? 0 : min;
 
-    create_database(sac, sic, cat, timestamp);
+//    log_printf(LOG_NORMAL, "%03d_%03d_%03d %ld %3.0f %3.3f %3.3f %3.3f %3.3f %3.3f %3.3f\n",
+//        sac, sic, cat, timestamp, cuenta, media, stdev, moda, max, min, p99);
 
-/*mysql -u root cocir -e "REPLACE INTO availability3
-(sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) VALUES
-(\"$1\",\"${REGION}\",$2,$3,$4,$5,$6,$7,$8,now());" >> /home/eval/cocir/logs/${REGION}_${1}_v3.log 2>&1*/
+//    mem_free(sac_s); mem_free(sic_l);
+    
+    // escribe estadísticas
 
-    cmd = mem_alloc(512);
-    if (!stdout_output) { // == 0 ejecutando scripts
-    	sprintf(cmd, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat, 
-	    region_name, timestamp, cuenta, max, min, media, stdev, p99);
-	system(cmd);
-    } else { // == 1, sacando directamente los inserts
-    	sprintf(cmd, "REPLACE INTO availability3 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) "
-    	    "VALUES ('%03d_%03d_%03d', '%s', %ld, %3.0f, %f, %f, %f, %f, %f, now());", 
-    	sac, sic, cat,
-    	region_name, timestamp,
-    	cuenta, max, min, media, stdev, p99);
-    	log_printf(LOG_NORMAL,"%s\n",cmd);
-    }
-    mem_free(cmd);
+	    
+//    if (radar_delay[i].first_time[cat] == 0) {
+//        radar_delay[i].first_time[cat] = 1;
+        create_database(sac, sic, cat);
+//    }
+	
+//    pid = fork();
+//    if (pid) {
+//	int status;
+//	wait(&status);
+//    } else { // calculo e insercion!
+	tmp = mem_alloc(512);
+    	sprintf(tmp, "rrd_update.sh %03d_%03d_%03d %ld %3.3f %3.3f %3.3f %3.3f %3.3f %3.3f 2> /dev/null", sac, sic, cat, 
+	    timestamp, cuenta, max, min, media, stdev, p99);
+	system(tmp);
+	mem_free(tmp);
+//    	exit(EXIT_SUCCESS);
+//    }
+
     return;    
 }
-
+    

@@ -1,3 +1,0 @@
-log.o: log.c ../include/debug/log.h
-memory.o: memory.c ../include/debug/memory.h ../include/debug/log.h
-hex.o: hex.c ../include/debug/log.h ../include/debug/hex.h
