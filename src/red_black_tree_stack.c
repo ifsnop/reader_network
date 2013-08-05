@@ -1,3 +1,9 @@
+/*
+reader_network - A package of utilities to record and work with
+multicast radar data in ASTERIX format. (radar as in air navigation
+surveillance).
+*/
+
 #include "red_black_tree_stack.h"
 
 int StackNotEmpty(stk_stack * theStack) {

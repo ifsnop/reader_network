@@ -1,0 +1,50 @@
+Source: libconfig
+Section: devel
+Priority: optional
+Maintainer: Abraham vd Merwe <abz@debian.org>
+Build-Depends: debhelper (>> 3.0.0), libdebug0-dev (>= 0.3.1)
+Standards-Version: 3.5.2
+
+Package: libconfig0
+Architecture: any
+Section: libs
+Depends: ${shlibs:Depends}, libdebug0 (>= 0.3.1)
+Suggests: libconfig0-dev (>= 0.1.5)
+Description: Configuration file parser library
+ A parser library for a configuration file format used by most of
+ the author's programs.
+ .
+ The library provides support for parsing a configuration file format
+ which is a somewhat of a mix between the common GNU-like configuration
+ files and a C program.
+ .
+ Currently the configuration file support boolean values, integers, strings
+ (which can span multiple lines), and enumerations. Arrays and sections are
+ also supported and can be nested to unlimited depths.
+ .
+ This package contains files needed by programs linked against
+ this library.
+
+Package: libconfig0-dev
+Architecture: any
+Section: libdevel
+Depends: ${shlibs:Depends}, libconfig0 (>= 0.1.5), libdebug0 (>= 0.3.1), libdebug0-dev (>= 0.3.1)
+Description: Development files for the config library
+ A parser library for a configuration file format used by most of
+ the author's programs.
+ .
+ The library provides support for parsing a configuration file format
+ which is a somewhat of a mix between the common GNU-like configuration
+ files and a C program.
+ .
+ Currently the configuration file support boolean values, integers, strings
+ (which can span multiple lines), and enumerations. Arrays and sections are
+ also supported and can be nested to unlimited depths.
+ .
+ Please see the CAVEATS file included in this package for information on how
+ to construct configuration files and how to use this library in your own
+ programs.
+ .
+ This package contains files needed if you wish to use libconfig
+ in your own programs.
+

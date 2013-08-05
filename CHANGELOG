@@ -1,12 +1,23 @@
+0.62
+- BUG en reader_rrd y client_time, si las demoras son > 8segs se
+produce un acceso fuera de memoria.
+
+0.61
+- CLEANUP Limpieza del código fuente, preparación para su 
+publicación
+
 0.6
 - Añadido envio por ftp
 - SOPORTE nuevo nombre al usar timestamp (yymmdd-region-hhmmss.ast)
 - SOPORTE extensión del fichero editable
+
 0.54
 - Anadido reader_rrd para ejecutar directamente create/update_rrd
 sin necesidad de usar un cliente.
+
 0.53
 - SOPORTE demoras tiempos cat 34 y 48
+
 0.52
 - Anadido memresp para Modo-S (OJO! NO CAMBIA VERSION!)
 - Compilado para Solaris, update de los binarios
@@ -17,25 +28,30 @@ dinamicamente, pero cuesta mucho trabajo)
 - BUG GRAVE en el filtrado de datos recibidos. Se acaban grabando
 blancos de flujos que no se han definido en el fichero de configu-
 racion (mismo grupo mcast, distinto puerto, por ejemplo)
+
 0.51
 - BUG en estadisticas, cuando se graban varios flujos que vienen
 de un mismo scrm, las estadísticas no se muestran bien. Se hacía
 solo match por ip de origen, y no por socket.
 - SOPORTE de volcado de estadisticas de tiempo cada 5 minutos,
 sincronizando con los minutos multiplos de 5.
+
 0.50
 - Soporte de categorias 19 y 20, solo a efectos de cálculo de
 demoras, y un mínimo de información en el client.
 - Revisado el uso de file como origen de datos (solo .ast, falta
 probar la lectura de .gps).
+
 0.49
 - Soporte de categoria 10 y 21, solo a efectos de calculo de
 demoras.
+
 0.48a
 - La desconcatenacion solo funcionaba si dest_localhost estaba
 seleccionado. Ahora se amplia la excepcion a cuando se graba
 fechando con gps.
 - Se incorpora categoria 10 para SMR y SMMS, v1.0 (tiempos)
+
 0.48
 - SOPORTE del calculo de Percentil 99 para client_time, validacion
 con excel. No se usa stdev*3+media, porque da lugar a situaciones

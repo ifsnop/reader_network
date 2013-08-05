@@ -1,3 +1,26 @@
+/*
+reader_network - A package of utilities to record and work with
+multicast radar data in ASTERIX format. (radar as in air navigation
+surveillance).
+
+Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+
+This file is part of the reader_network utils.
+
+reader_network is free software: you can redistribute it and/or modify
+it under the terms of the Lesser GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+reader_network is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with reader_network. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include "includes.h"
 
 float current_time=0.0;
@@ -139,7 +162,7 @@ char *dest_file_format_string = NULL;
 	    if (!strcasecmp(source_file + strlen(source_file) - 3, "gps")) {
 		source_file_gps = true;
 		if (!cfg_get_int(&source_file_gps_version, "source_file_gps_version")) {
-		    log_printf(LOG_ERROR, "source_file entry missing\n");
+		    log_printf(LOG_ERROR, "source_file_gps_version entry missing\n");
 		    exit(EXIT_FAILURE);
 		} else {
                     if (source_file_gps_version == 0) {
@@ -369,8 +392,6 @@ int res=0;
     return;
 }
 
-#define REMOTE_URL "ftp://172.88.0.70/pub/swap/"
-
 void send_output_file() {
     CURL *ch = NULL;
     CURLcode res = 0;
@@ -560,17 +581,21 @@ unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
 
 #ifdef LINUX
-    printf("reader_network_LNX v%s\nsmrbarajasfix\tdestfiletimestamp\toutputcompress\n"
-    "renicev2\tscrm(rbtrees/queues/crc32)\nfullstatsv2\ttodrolloverfix\t\tdecoder\n", VERSION);
+    printf("reader_network_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
+    "This program comes with ABSOLUTELY NO WARRANTY.\n"
+    "This is free software, and you are welcome to redistribute it\n"
+    "under certain conditions; see COPYING file for details.\n\n", VERSION);
 #endif
 #ifdef SOLARIS
-    printf("reader_network_SOL v%s\nsmrbarajasfix\tdestfiletimestamp\toutputcompress\n"
-    "renicev2\tscrm(rbtrees/queues/crc32)\nfullstatsv2\ttodrolloverfix\t\tdecoder\n", VERSION);
+    printf("reader_network_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
+    "This program comes with ABSOLUTELY NO WARRANTY.\n"
+    "This is free software, and you are welcome to redistribute it\n"
+    "under certain conditions; see COPYING file for details.\n\n", VERSION);
 #endif    
     startup();
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
     if (argc!=2 || strlen(argv[1])<5) {
-	log_printf(LOG_ERROR, "usage: %s <config_file>\n", argv[0]);
+	log_printf(LOG_ERROR, "usage: %s <config_file>\n\n", argv[0]);
 	exit(EXIT_FAILURE);
     }
     parse_config(argv[1]);

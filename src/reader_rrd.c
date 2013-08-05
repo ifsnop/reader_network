@@ -1,3 +1,26 @@
+/*
+reader_network - A package of utilities to record and work with
+multicast radar data in ASTERIX format. (radar as in air navigation
+surveillance).
+
+Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+
+This file is part of the reader_network utils.
+
+reader_network is free software: you can redistribute it and/or modify
+it under the terms of the Lesser GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+reader_network is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with reader_network. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include "includes.h"
 #include "reader_rrd.h"
 
@@ -161,7 +184,7 @@ unsigned long count2_udp_received = 0;
 long timestamp = 0;
 
     mem_open(fail);
-    if (log_open(NULL, LOG_NORMAL, /*LOG_TIMESTAMP |*/
+    if (log_open(NULL, /*LOG_VERBOSE*/ LOG_NORMAL, /*LOG_TIMESTAMP |*/
 	LOG_HAVE_COLORS | LOG_PRINT_FUNCTION |
         LOG_DEBUG_PREFIX_ONLY /*| LOG_DETECT_DUPLICATES*/)) {
         fprintf(stderr, "log_open failed: %m\n");
@@ -170,8 +193,11 @@ long timestamp = 0;
     
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
     if (argc>3 || argc<2 || strlen(argv[1])<5) {
-        log_printf(LOG_ERROR, "reader_rrd_LNX v%s\n", VERSION);
-	log_printf(LOG_ERROR, "usage: %s <gps_file> [yyyymmdd]\n", argv[0]);
+        log_printf(LOG_ERROR, "reader_rrd_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
+            "This program comes with ABSOLUTELY NO WARRANTY.\n"
+            "This is free software, and you are welcome to redistribute it\n"
+            "under certain conditions; see COPYING file for details.\n\n", VERSION);
+	log_printf(LOG_ERROR, "usage: %s <gps_file> [yyyymmdd]\n\n", argv[0]);
 	exit(EXIT_FAILURE);
     }
     parse_config(/*argv[1]*/);
@@ -207,7 +233,7 @@ long timestamp = 0;
 	char * tmp1 = ast_get_SACSIC(&sac,&sic,GET_SAC_SHORT);
 	char * tmp2 = ast_get_SACSIC(&sic,&sic,GET_SIC_SHORT);
 	printf("sac(%s) sic(%s)\n",tmp1, tmp2);
-	exit(EXIT_FAILURE);
+	//exit(EXIT_FAILURE);
     }
 */
 
@@ -256,7 +282,12 @@ long timestamp = 0;
 	    //log_printf(LOG_VERBOSE, "%ld %d %3.3f plots_processed(%ld) plots_ignored(%ld) cat(%02X)\n", (long int)ast_pos, ast_size_datablock, 
 		//current_time, count2_plot_processed, count2_plot_ignored, ast_ptr_raw[ast_pos]);
 	    if (dest_localhost) {
-//		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock/* + offset*/, count2_plot_processed+1, 0);
+//		int l;
+		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock/* + offset*/, count2_plot_processed+1, 0);
+//		    for (l=0; l < ast_size_datablock; l++)
+//			printf("[%02X]", (unsigned char) ast_ptr_raw[ast_pos + l]);
+//		    printf("\n");
+		         
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
 		    ast_procesarCAT01(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
@@ -601,7 +632,8 @@ div_t d;
 	if (step == FIRST_STEP) {
     	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
 	}
-	//log_printf(LOG_VERBOSE, "%d %d %3.3f\n", dbp.sac, dbp.sic, diff);
+	//log_printf(LOG_VERBOSE, "sac:%d sic:%d tod:%3.3f tod_stamp:%3.3f diff:%3.3f\n", dbp.sac, dbp.sic, dbp.tod, dbp.tod_stamp, diff);
+	//printf("sac:%d sic:%d tod:%s tod_stamp:%s diff:%3.3f\n", dbp.sac, dbp.sic, parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff);
 	//log_printf(LOG_VERBOSE, "%3.7f\n", d.quot*UPDATE_TIME_RRD + UPDATE_TIME_RRD);
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
     }
@@ -917,7 +949,10 @@ div_t d;
 	if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
     	    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
         }
-        if (fabs(diff) >= 16.0) {
+
+	//printf("retardo de sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
+        if (fabs(diff) >= 8.0) { // jadpascual 121219 123600
+    	    //printf("retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
     	    log_printf(LOG_ERROR, "retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
     	    return;
 //          exit(EXIT_FAILURE);
