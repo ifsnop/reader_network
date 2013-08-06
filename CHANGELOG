@@ -1,3 +1,8 @@
+0.50
+- Soporte de categorias 19 y 20, solo a efectos de cálculo de
+demoras, y un mínimo de información en el client.
+- Revisado el uso de file como origen de datos (solo .ast, falta
+probar la lectura de .gps).
 0.49
 - Soporte de categoria 10 y 21, solo a efectos de calculo de
 demoras.

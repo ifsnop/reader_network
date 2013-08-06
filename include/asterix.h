@@ -7,6 +7,8 @@
 #define CAT_02 2
 #define CAT_08 8
 #define CAT_10 10
+#define CAT_19 19
+#define CAT_20 20
 #define CAT_21 21
 #define CAT_255 255
 
@@ -52,7 +54,6 @@
 #define TYPE_C10_PERIODIC_STATUS 4
 #define TYPE_C10_EVENT_STATUS 8
 
-
 #define TYPE_C10_PLOT_SSR_MULTI 1
 #define TYPE_C10_PLOT_SSRS_MULTI 2
 #define TYPE_C10_PLOT_ADSB 4
@@ -62,6 +63,10 @@
 #define TYPE_C10_PLOT_NOT_DEFINED 64
 #define TYPE_C10_PLOT_OTHER 164
 
+#define TYPE_C19_START_UPDATE_CYCLE 1
+#define TYPE_C19_PERIODIC_STATUS 2
+#define TYPE_C19_EVENT_STATUS 4
+
 unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
 void ttod_put_full(unsigned char sac, unsigned char sic, unsigned char *ptr_full_tod);
@@ -70,6 +75,8 @@ int ast_procesarCAT01(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 int ast_procesarCAT02(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT08(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT10(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
+int ast_procesarCAT19(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
+int ast_procesarCAT20(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index);

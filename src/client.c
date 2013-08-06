@@ -9,6 +9,7 @@ int main(int argc, char *argv[]) {
 //    long nHostAddress;
     int yes = 1, s, dbplen;
     socklen_t addrlen;
+    bool forced_exit = false;
 
     startup();
     
@@ -40,7 +41,7 @@ int main(int argc, char *argv[]) {
 	exit(1);
     }
 
-    while (1) {
+    while (!forced_exit) {
 	char *sac_s=0, *sic_l=0;
 	dbplen = sizeof(dbp);
 	addrlen = sizeof(addr);
@@ -50,7 +51,10 @@ int main(int argc, char *argv[]) {
 	    log_printf(LOG_ERROR, "recvfrom\n");
 	    exit(1);
 	}
-        
+	if (dbp.cat == CAT_255) {
+	    log_printf(LOG_ERROR, "fin de fichero\n");
+	    forced_exit = true;
+	}
 	if ( (dbp.cat == CAT_01) && (dbp.available & IS_TYPE)/* && (dbp.available & IS_TOD)*/ ) {
 	    char *hora1,*hora2;
 
@@ -158,6 +162,49 @@ int main(int argc, char *argv[]) {
 		mem_free(sac_s);
 		mem_free(sic_l);
 	    }
+	} else if (dbp.cat == CAT_19 ) {
+	    char *hora1, *hora2;
+
+	    hora1 = parse_hora(dbp.tod);
+	    hora2 = parse_hora(dbp.tod_stamp);
+	    if (dbp.available & IS_SACSIC) {
+		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
+		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l,
+		(dbp.type == TYPE_C19_START_UPDATE_CYCLE) ? "UPDATE" : "",
+		(dbp.type == TYPE_C19_PERIODIC_STATUS) ? "PERIODIC" : "",
+		(dbp.type == TYPE_C19_EVENT_STATUS) ? "EVENT" : "",
+		hora1, hora2,
+		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+	    mem_free(hora1);
+	    mem_free(hora2);
+	    if (dbp.available & IS_SACSIC) {
+		mem_free(sac_s);
+		mem_free(sic_l);
+	    }
+	} else if (dbp.cat == CAT_20 ) {
+	    char *hora1, *hora2;
+
+	    hora1 = parse_hora(dbp.tod);
+	    hora2 = parse_hora(dbp.tod_stamp);
+	    if (dbp.available & IS_SACSIC) {
+		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
+		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%04X] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l, dbp.type, 
+		hora1, hora2,
+		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+	    mem_free(hora1);
+	    mem_free(hora2);
+	    if (dbp.available & IS_SACSIC) {
+		mem_free(sac_s);
+		mem_free(sic_l);
+	    }
 	} else if (dbp.cat == CAT_21 ) {
 	    char *hora1, *hora2;
 
@@ -183,7 +230,6 @@ int main(int argc, char *argv[]) {
 		mem_free(sic_l);
 	    }
 	}
-
     }
 
     log_printf(LOG_NORMAL, "end...\n");

@@ -304,7 +304,7 @@ int pid = 0;
     } else {
         log_printf(LOG_VERBOSE, "we are NOT root!\n");
     }
-    return;									
+    return;
 }
 
 void close_output_file() {
@@ -392,7 +392,7 @@ ssize_t size;
     if ( (fd_in = open(source_file, O_RDONLY)) == -1) {
         log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
-    }        
+    }
     if ( (size = lseek(fd_in, 0, SEEK_END)) == -1) {
         log_printf(LOG_ERROR, "ERROR lseek (seek_end): %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -423,7 +423,7 @@ void DeleteQueue(void *a) {
 	q.count--;
     }
 }
-	
+
 int UIntComp(unsigned int a, unsigned int b) {
     if (a>b) return (1);
     if (a<b) return (-1);
@@ -459,7 +459,7 @@ unsigned long count_plot_ignored = 0; // old stats
     "renicev2\tscrm(rbtrees/queues/crc32)\nfullstatsv2\ttodrolloverfix\t\tdecoder\n", VERSION);
 #endif    
     startup();
-    memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);	
+    memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
     if (argc!=2 || strlen(argv[1])<5) {
 	log_printf(LOG_ERROR, "usage: %s <config_file>\n", argv[0]);
 	exit(EXIT_FAILURE);
@@ -479,14 +479,14 @@ unsigned long count_plot_ignored = 0; // old stats
     }
 
     gettimeofday(&timed_t_start, NULL);
-    
+
     if (!strncasecmp(source, "file", 4)) { 
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
 	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
 	    log_printf(LOG_ERROR, "ERROR read: %s\n", strerror(errno));
 	    exit(EXIT_FAILURE);
-	}    
+	}
 	log_printf(LOG_NORMAL, "readed %ld bytes\n", (unsigned long) ast_size_total);
         if (source_file_gps_version == 0) {
 	    unsigned char *memcmp1;
@@ -501,15 +501,16 @@ unsigned long count_plot_ignored = 0; // old stats
 	    }
 	    mem_free(memcmp1);
 	} else {
-	    if (source_file_gps_version == 1) 
+	    if (source_file_gps_version == 1)
 		ast_pos += 2200;
 	}
 
 	while (ast_pos < ast_size_total) {
 	    gettimeofday(&t, NULL);
-	    ast_size_datablock = ast_ptr_raw[ast_pos + 1]*256 + ast_ptr_raw[ast_pos + 2];
-	    
-    	    if (source_file_gps) {
+	    ast_size_datablock = (ast_ptr_raw[ast_pos + 1]<<8) + ast_ptr_raw[ast_pos + 2];
+	    count2_udp_received++;
+
+	    if (source_file_gps) {
 		if (source_file_gps_version == 1) {
 		    current_time = ((ast_ptr_raw[ast_pos + ast_size_datablock + 6]<<16 ) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 7] << 8) +
@@ -523,7 +524,7 @@ unsigned long count_plot_ignored = 0; // old stats
 	    } else {
 		current_time = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
 	    }
-/*	    
+/*
 	    // esto esta comentado porque al meter dest_file_format, hay que pensar como
 	    // se convierte de fichero gps a fichero .ast, y nada de esto esta validado.
 	    // introducido para las modificaciones en malaga/sevilla, grabador en tiempo 
@@ -593,20 +594,35 @@ unsigned long count_plot_ignored = 0; // old stats
 		    }
 		}
 	    }
-*/	    
+*/
 	    if (dest_localhost) {
-//		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock + offset, count_plot_processed, 0);
+//		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock + offset, 0, 0);
 		if (ast_ptr_raw[ast_pos] == '\x01') {
-		    count_plot_processed++;
-		    ast_procesarCAT01(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count_plot_processed);
+		    count2_plot_processed++;
+		    ast_procesarCAT01(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
 		} else if (ast_ptr_raw[ast_pos] == '\x02') {
-		    count_plot_processed++;
-		    ast_procesarCAT02(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count_plot_processed);
+		    count2_plot_processed++;
+		    ast_procesarCAT02(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
 		} else if (ast_ptr_raw[ast_pos] == '\x08') {
-		    count_plot_processed++;
-		    ast_procesarCAT08(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count_plot_processed);
+		    count2_plot_processed++;
+		    ast_procesarCAT08(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x0a') {
+		    count2_plot_processed++;
+		    ast_procesarCAT10(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x13') {
+		    count2_plot_processed++;
+		    ast_procesarCAT19(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x14') {
+		    count2_plot_processed++;
+		    ast_procesarCAT20(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x15') {
+		    count2_plot_processed++;
+		    ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
+		    count2_plot_processed++;
+		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
 		} else {
-		    count_plot_ignored++;
+		    count2_plot_ignored++;
 		}
 	    }
 	    ast_pos += ast_size_datablock + offset;
@@ -639,22 +655,22 @@ unsigned long count_plot_ignored = 0; // old stats
 		    radar_definition[i*5], radar_definition[(i*5)+1],
 		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
                     radar_definition[(i*5)+4] );
-    				    						    	     // no te suscribas
+				    						    	     // no te suscribas
 	    }  else {									     // else nos suscribimos
-    		log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i, 
+		log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i, 
 		    radar_definition[i*5], radar_definition[(i*5)+1],
 		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-                    radar_definition[(i*5)+4] );
+		    radar_definition[(i*5)+4] );
 		if ( (s_reader[socket_count] = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {        
 		    log_printf(LOG_ERROR, "socket reader %s\n", strerror(errno));
 		    exit(EXIT_FAILURE);
-        	}
+		}
 		if (!strncasecmp(source, "mult", 4)) {
 		    unsigned char ttl = 32;
 		    if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
 			log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
-    		    }
+		    }
 		    if ( setsockopt(s_reader[socket_count], IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
 			log_printf(LOG_ERROR, "ip_multicast_ttl setsockopt reader %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
@@ -709,7 +725,7 @@ unsigned long count_plot_ignored = 0; // old stats
 	timed_t_Xsecs.tv_usec = timed_t_current.tv_usec;
 	    	
 	while ( timed==0 || (timed_t_current.tv_sec <= (timed_t_start.tv_sec + timed))) {
-	    struct timeval timeout;	
+	    struct timeval timeout;
 	    int select_count;
 	    socklen_t addrlen = sizeof(struct sockaddr_in);
 	    gettimeofday(&timed_t_current, NULL);
@@ -809,6 +825,10 @@ unsigned long count_plot_ignored = 0; // old stats
 					    ast_procesarCAT08(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 					if (ast_ptr_raw[0] == '\x0a')
 					    ast_procesarCAT10(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x013')
+					    ast_procesarCAT19(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x014')
+					    ast_procesarCAT20(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 					if (ast_ptr_raw[0] == '\x15')
 					    ast_procesarCAT21(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 					if (ast_ptr_raw[0] == '\x3e')
@@ -894,7 +914,7 @@ unsigned long count_plot_ignored = 0; // old stats
 	mem_free(s_reader);
 	mem_free(ast_ptr_raw);
     }
-    
+
     {
 	int i;
 	if (timed_stats_interval > 0) 
@@ -904,13 +924,13 @@ unsigned long count_plot_ignored = 0; // old stats
     log_printf(LOG_NORMAL, "stats received[%ld] processed[%ld]/ignored[%ld] = unique[%ld]+duped[%ld]\n", 
 	count2_udp_received, count2_plot_processed, count2_plot_ignored, count2_plot_unique, count2_plot_duped);
     log_printf(LOG_NORMAL, "OLD plot proccessed: %ld\tplot ignored: %ld\n",
-         count_plot_processed, count_plot_ignored);
+	count_plot_processed, count_plot_ignored);
 
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;
 	dbp.cat = CAT_255;
 	if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
-    	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	}
     }
 

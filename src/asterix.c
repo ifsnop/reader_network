@@ -390,6 +390,160 @@ int index = 0;
     return T_OK;
 }
 
+int ast_procesarCAT19(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+int sizeFSPEC=0, pos=0;
+struct datablock_plot dbp;
+
+    dbp.plot_type = IS_ERROR;
+    dbp.tod_stamp = current_time;
+    dbp.flag_test = 0;
+    dbp.id = id;
+    dbp.index = 0;
+    sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+//    ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
+
+    if ( (ptr_raw[0] & 128) && // sac/sic
+	 (ptr_raw[0] & 64) &&  // msg type
+	 (ptr_raw[0] & 32) ) { // timeofday
+	
+	pos += sizeFSPEC + 3; //FSPEC SACSIC MSGTYPE
+	ttod_put_full(ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC + 1], ptr_raw + pos);
+
+	dbp.cat = CAT_19;
+	dbp.sac = ptr_raw[sizeFSPEC]; dbp.sic = ptr_raw[sizeFSPEC+1];
+	dbp.available = IS_TOD | IS_TYPE | IS_SACSIC;
+	dbp.tod = ((float)( (ptr_raw[pos]<<16) + (ptr_raw[pos+1]<<8) + ptr_raw[pos+2]))/128.0;
+	switch(ptr_raw[sizeFSPEC+2]) {
+	    case 1: dbp.type = TYPE_C19_START_UPDATE_CYCLE;		break;
+	    case 2: dbp.type = TYPE_C19_PERIODIC_STATUS;		break;
+	    case 3: dbp.type = TYPE_C19_EVENT_STATUS;			break;
+	    default: dbp.type = IS_ERROR;				break;
+
+	}
+	if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	}
+    }
+    return T_OK;
+}
+
+int ast_procesarCAT20(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+int size_current = 0, j = 0;
+int index = 0;
+
+    do {
+	int sizeFSPEC;
+	struct datablock_plot dbp;
+	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+/*	{ 
+	    int i=0; 
+	    for(i=0;i<sizeFSPEC;i++) {
+		log_printf(LOG_VERBOSE, "%02X ", ptr_raw[i]);
+	    }
+	    log_printf(LOG_VERBOSE, "\n");
+	}*/
+
+	dbp.cat = CAT_20;
+	dbp.available = IS_ERROR;
+	dbp.type = NO_DETECTION;
+	dbp.plot_type = IS_ERROR;
+	dbp.modea_status = 0;
+	dbp.modec_status = 0;
+	dbp.flag_test = T_NO;
+	dbp.flag_ground = T_NO;
+	dbp.flag_sim = T_NO;
+	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
+	dbp.radar_responses = 0;
+
+//	ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
+	if (sizeFSPEC == 0) {
+	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
+	    return T_ERROR;
+	}
+	
+	j = sizeFSPEC; size_current += sizeFSPEC;
+	if ( ptr_raw[0] & 128 ) { //I020/010
+	    dbp.sac = ptr_raw[j];
+	    dbp.sic = ptr_raw[j + 1];
+	    j += 2; size_current += 2;
+	    dbp.available |= IS_SACSIC;
+	}
+	if ( ptr_raw[0] & 64 ) { /* I020/020 */  // FIXME
+	    dbp.type = 0;
+	    while (ptr_raw[j] & 1) { 
+		dbp.type = dbp.type<<8; dbp.type += ptr_raw[j]; 
+		j++; size_current++; 
+	    }; 
+	    dbp.type = dbp.type<<8; dbp.type += ptr_raw[j]; 
+	    j++;size_current++; 
+	    dbp.available |= IS_TYPE;
+	}
+	if ( ptr_raw[0] & 32 ) { //I020/140
+	   dbp.tod = ((float)(ptr_raw[j]<<16) +
+	   (ptr_raw[j+1]<<8) +
+	   (ptr_raw[j+2])) / 128.0;
+	   j += 3; size_current += 3;
+	    dbp.available |= IS_TOD;
+	}
+	if ( ptr_raw[0] & 16 ) { /* I020/041 */ j += 8; size_current += 8; }
+	if ( ptr_raw[0] & 8 ) { /* I020/042 */ j += 6; size_current += 6; }
+	if ( ptr_raw[0] & 4 ) { /* I020/161 */ j += 2; size_current += 2; }
+	if ( ptr_raw[0] & 2 ) { /* I020/170 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+	if ( ptr_raw[0] & 1 ) { /* I020/FX1 */
+	    if ( ptr_raw[1] & 128 ) { /* I010/070 */ j += 2; size_current += 2; }
+	    if ( ptr_raw[1] & 64 ) { /* I010/202 */ j += 4; size_current += 4; }
+	    if ( ptr_raw[1] & 32 ) { /* I010/090 */ j += 2; size_current += 2; }
+	    if ( ptr_raw[1] & 16 ) { /* I020/100 */ j += 4; size_current += 4; }
+	    if ( ptr_raw[1] & 8 ) { /* I020/220 */ j += 3; size_current += 3; }
+	    if ( ptr_raw[1] & 4 ) { /* I020/245 */ j += 7; size_current += 7; }
+	    if ( ptr_raw[1] & 2 ) { /* I020/110 */ j += 2; size_current += 2; }
+	    if ( ptr_raw[1] & 1 ) { /* I020/FX2 */
+		if ( ptr_raw[2] & 128 ) { /* I020/105 */ j += 2; size_current += 2; }
+		if ( ptr_raw[2] & 64 ) { /* I020/210 */ j += 2; size_current += 2; }
+		if ( ptr_raw[2] & 32 ) { /* I020/300 */ j += 1; size_current += 1; }
+		if ( ptr_raw[2] & 16 ) { /* I020/310 */ j += 1; size_current += 1; }
+		if ( ptr_raw[2] & 8 ) { /* I020/500 */ 
+		    int p = j;
+		    if (ptr_raw[p] & 128) { j += 6; size_current += 6; }
+		    if (ptr_raw[p] & 64) { j += 6; size_current += 6; }
+		    if (ptr_raw[p] & 32) { j += 2; size_current += 2; }
+		    j++; size_current++;
+		}
+		if ( ptr_raw[2] & 4 ) { /* I020/400 */ int p = ptr_raw[j]+1; j += p; size_current += p; }
+		if ( ptr_raw[2] & 2 ) { /* I020/250 */ int p = ptr_raw[j]*8+1; j += p; size_current += p; }
+		if ( ptr_raw[2] & 1 ) { /* I020/FX3 */ 
+		    if ( ptr_raw[3] & 128 ) { /* I020/230 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 64 ) { /* I020/260 */ j += 7; size_current += 7; }
+		    if ( ptr_raw[3] & 32 ) { /* I020/030 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+		    if ( ptr_raw[3] & 16 ) { /* I020/055 */ j++; size_current++; }
+		    if ( ptr_raw[3] & 8 ) { /* I020/050 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 4 ) { /* RE */ int p = ptr_raw[j]; j += p; size_current += p; }
+		}
+	    }
+	}
+	
+//	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+//	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
+//	if ( dbp.available != IS_ERROR ) {
+//	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
+/*	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
+		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
+		exit(EXIT_FAILURE);
+//	    }
+*/	    if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	    }
+//	}
+	
+	ptr_raw += j;
+	index++;
+    } while ((size_current + 3) < size_datablock);
+
+    return T_OK;
+}
+
+
+
 int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
 int size_current = 0, j = 0;
 int index = 0;
