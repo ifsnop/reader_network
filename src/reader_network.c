@@ -41,6 +41,12 @@ struct Queue {
 
 struct Queue q;
 
+struct radar_destination_s {
+    int socket; // socket descriptor
+    char dest_ip[255]; // destination multicast address
+};
+
+struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
 
 void parse_config(char *conf_file) {
 char *dest_file_format_string = NULL;
@@ -112,7 +118,7 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "normal recording mode (no scrm/ha)\n");
     }
-    
+
     if (cfg_get_bool(&dest_screen_crc, "dest_screen_crc")) {
 	if (dest_screen_crc) {
 	    log_printf(LOG_VERBOSE, "outputing pkt crc\n");
@@ -129,20 +135,20 @@ char *dest_file_format_string = NULL;
     }
     if (!strncasecmp(source, "file", 4)) {
 	if (!cfg_get_str(&source_file, "source_file")) {
-    	    log_printf(LOG_ERROR, "source_file entry missing\n");
-    	    exit(EXIT_FAILURE);
+	    log_printf(LOG_ERROR, "source_file entry missing\n");
+	    exit(EXIT_FAILURE);
 	} else {
-    	    log_printf(LOG_VERBOSE, "input data from file: %s\n", source_file);
+	    log_printf(LOG_VERBOSE, "input data from file: %s\n", source_file);
 	    if (!strcasecmp(source_file + strlen(source_file) - 3, "gps")) {
 		source_file_gps = true;
 		if (!cfg_get_int(&source_file_gps_version, "source_file_gps_version")) {
-    		    log_printf(LOG_ERROR, "source_file entry missing\n");
-    	    	    exit(EXIT_FAILURE);
+		    log_printf(LOG_ERROR, "source_file entry missing\n");
+		    exit(EXIT_FAILURE);
 		} else {
                     if (source_file_gps_version == 0) {
 		        log_printf(LOG_VERBOSE, "AutoGPS input activated\n");
 		        offset = 0; //later
-		    } else if (source_file_gps_version == 1) {			
+		    } else if (source_file_gps_version == 1) {
 			log_printf(LOG_VERBOSE, "GPSv1 input activated\n");
 			offset = 10;
 		    } else if (source_file_gps_version == 2) {
@@ -150,7 +156,7 @@ char *dest_file_format_string = NULL;
 			offset = 4;
 		    } else {
 			log_printf(LOG_ERROR, "GPS version not supported\n");
-    	    		exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		    }
 		}
 	    } else {
@@ -159,14 +165,19 @@ char *dest_file_format_string = NULL;
 	}
     } else if (!strncasecmp(source, "mult", 4)) {
 	if (!cfg_get_str_array(&radar_definition, &radar_count, "radar_definition")) {
-    	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
-    	    exit(EXIT_FAILURE);
+	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
+	    exit(EXIT_FAILURE);
+	    if (radar_count>MAX_RADAR_NUMBER) {
+		log_printf(LOG_ERROR, "maximum number of entries in radar_definition (%d > %d)\n", radar_count, MAX_RADAR_NUMBER);
+		exit(EXIT_FAILURE);
+	    }
 	}
         log_printf(LOG_VERBOSE, "reading from multicast\n");
+        memset(radar_destination, 0, sizeof(struct radar_destination_s)*MAX_RADAR_NUMBER);
     } else if (!strncasecmp(source, "broa", 4)) {
 	if (!cfg_get_str_array(&radar_definition, &radar_count, "radar_definition")) {
-    	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
-    	    exit(EXIT_FAILURE);
+	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
+	    exit(EXIT_FAILURE);
 	}
         log_printf(LOG_VERBOSE, "reading from broadcast\n");
     }
@@ -183,10 +194,10 @@ char *dest_file_format_string = NULL;
     if (cfg_get_str(&dest_file, "dest_file")) {
         log_printf(LOG_VERBOSE, "output data to file (1): %s\n", dest_file);
 	if (cfg_get_bool(&dest_file_timestamp, "dest_file_timestamp")) {
-    	    if (dest_file_timestamp) log_printf(LOG_VERBOSE, "appending date+time to output file\n");
+	    if (dest_file_timestamp) log_printf(LOG_VERBOSE, "appending date+time to output file\n");
 	}
 	if (cfg_get_bool(&dest_file_compress, "dest_file_compress")) {
-    	    if (dest_file_compress) log_printf(LOG_VERBOSE, "compress output file at end of recording\n");
+	    if (dest_file_compress) log_printf(LOG_VERBOSE, "compress output file at end of recording\n");
 	}
 	if (cfg_get_str(&dest_file_format_string, "dest_file_format")) {
 	    log_printf(LOG_VERBOSE, "parsing output...");
@@ -195,7 +206,7 @@ char *dest_file_format_string = NULL;
 		log_printf(LOG_VERBOSE, "AST output activated");
 	    }
 	    if (!strcasecmp(dest_file_format_string, "gps")) {
-    		dest_file_format = DEST_FILE_FORMAT_GPS;
+		dest_file_format = DEST_FILE_FORMAT_GPS;
 		log_printf(LOG_VERBOSE, "GPS output activated");
 	    }
 	    if (!strcasecmp(dest_file_format_string, "both")) {
@@ -225,7 +236,7 @@ struct tm *t2;
     if (dest_file != NULL) {
 	if (dest_file_timestamp) {
 	    if (gettimeofday(&t, NULL) !=0 ) {
-    		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno));
+		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno));
 	    }
 	    if ((t2 = gmtime(&t.tv_sec))==NULL) {
 		log_printf(LOG_ERROR, "ERROR gmtime: %s\n", strerror(errno));
@@ -250,8 +261,8 @@ struct tm *t2;
 	    log_printf(LOG_VERBOSE, "output data to file (2): %s\n", dest_file_final_ast);
 	    if ( (fd_out_ast = open(dest_file_final_ast, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
-    		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
-    		exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
 	    }
 	}
 	if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
@@ -271,12 +282,12 @@ struct tm *t2;
 	    log_printf(LOG_VERBOSE, "output data to file (2): %s\n", dest_file_final_gps);
 	    if ( (fd_out_gps = open(dest_file_final_gps, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 	        | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
-    		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
-    		exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
 	    }
 	    if (write(fd_out_gps, gpsheader, 2200)!=2200) {
-    		log_printf(LOG_ERROR, "ERROR write gps file init: %s\n", strerror(errno));
-    		exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR write gps file init: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
 	    }
 	}
     }
@@ -650,21 +661,29 @@ unsigned long count_plot_ignored = 0; // old stats
 	    if (i>0 && 									     // si
 		    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
 		    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
-		
+//		strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
 		log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i, 
 		    radar_definition[i*5], radar_definition[(i*5)+1],
 		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-                    radar_definition[(i*5)+4] );
-				    						    	     // no te suscribas
+                    radar_definition[(i*5)+4]);
+
+                radar_destination[i].socket = s_reader[socket_count-1];
+		strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
+											     // no te suscribas
 	    }  else {									     // else nos suscribimos
-		log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i, 
-		    radar_definition[i*5], radar_definition[(i*5)+1],
-		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-		    radar_definition[(i*5)+4] );
 		if ( (s_reader[socket_count] = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {        
-		    log_printf(LOG_ERROR, "socket reader %s\n", strerror(errno));
+		    log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
 		    exit(EXIT_FAILURE);
 		}
+		log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s) socket(%d)\n", i, 
+		    radar_definition[i*5], radar_definition[(i*5)+1],
+		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
+		    radar_definition[(i*5)+4], s_reader[socket_count]);
+
+		//strncpy(radar_destination[s_reader[socket_count]].dest_ip, radar_definition[(i*5)+1], 255);
+		radar_destination[i].socket = s_reader[socket_count];
+		strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
+
 		if (!strncasecmp(source, "mult", 4)) {
 		    unsigned char ttl = 32;
 		    if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
@@ -712,18 +731,17 @@ unsigned long count_plot_ignored = 0; // old stats
 			//exit(EXIT_FAILURE);
 		    }
 		}
-//	    	log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
+//		log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
 //			radar_definition[i*5 + 1], radar_definition[i*5 + 2], radar_definition[i*5+3] );
 		socket_count++;
 	    }
 	    i++;
 	}
-	
 	ast_ptr_raw = (unsigned char *) mem_alloc(MAX_PACKET_LENGTH);
 	gettimeofday(&timed_t_current, NULL);
 	timed_t_Xsecs.tv_sec = timed_t_current.tv_sec;
 	timed_t_Xsecs.tv_usec = timed_t_current.tv_usec;
-	    	
+
 	while ( timed==0 || (timed_t_current.tv_sec <= (timed_t_start.tv_sec + timed))) {
 	    struct timeval timeout;
 	    int select_count;
@@ -752,11 +770,40 @@ unsigned long count_plot_ignored = 0; // old stats
 			}
 			if (udp_size > 0)
 			    count2_udp_received++;
-			j=0;
-			while (j<(radar_count/5)) {
-			    if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
+
+			for(j=0;(j<radar_count/5); j++) { // se comprueba con la ip de origen
+//			    log_printf(LOG_VERBOSE, "%d %d\n",
+//			        (s_reader[i]!=radar_destination[j].socket),
+//			        (strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])!=0));
+			    if ( (s_reader[i]==radar_destination[j].socket) &&
+			         (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) ) 
+			        break;
+			}
+			
+			if (j==(radar_count/5))
+			    break; // no ha aparecido ningun blanco que pertenezca a un radar definido en la configuracion
+
+//			while (j<(radar_count/5)) {
+
+//    cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
+
+//    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
+//    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
+//			log_printf(LOG_VERBOSE, "s(%d) %s->%s:%d\n", s_reader[i], 
+//			    radar_destination[s_reader[i]].dest_ip, 
+//			    inet_ntoa(cast_group.sin_addr), cast_group.sin_port);
+			    
+			    //if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
+			    {
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
 				int salir = 0;
+				
+//				for(k = j; k<socket_count; k++) {
+//				    log_printf(LOG_VERBOSE, ">%d\n", k);
+//				    if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[k*5+3])) {
+//					log_printf(LOG_VERBOSE, ">> %s %d\n", radar_definition[k*5+3], s_reader[k]);
+//				    }
+//				}
 
 //			        log_printf(LOG_VERBOSE, "*%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);
 
@@ -837,7 +884,6 @@ unsigned long count_plot_ignored = 0; // old stats
 
 				    if (dest_file != NULL && record) {
 					if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
-					    if (ast_ptr_raw[0] == '\x0a')
 					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == -1) {
 						log_printf(LOG_ERROR, "ERROR write_ast: %s (%d)\n", strerror(errno), fd_out_ast);
 					    }
@@ -867,12 +913,12 @@ unsigned long count_plot_ignored = 0; // old stats
 					salir=1;
 				    }
 				} while (salir==0);
-                                j=radar_count/5; // no seguir buscando, ya ha sido procesado
-			    } else {
+//                                j=radar_count/5; // no seguir buscando, ya ha sido procesado
+//			    } else {
 //			        log_printf(LOG_VERBOSE, "%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);
 		   	    }
-			    j++;
-			}
+//			    j++;
+//			}
 			if (!is_processed) count2_plot_ignored++;
 		    }
 		    i++;

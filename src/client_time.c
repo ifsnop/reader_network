@@ -252,7 +252,7 @@ int main(int argc, char *argv[]) {
     struct datablock_plot dbp;
     int dbplen, i, j;
     socklen_t addrlen;
-    struct timeval t,t2;
+    struct timeval t2, old_t2;
 
     startup();
     
@@ -262,10 +262,11 @@ int main(int argc, char *argv[]) {
     server_connect();
     radar_delay_alloc();
     radar_delay_clear();
-    if (gettimeofday(&t, NULL) == -1) {
+    if (gettimeofday(&t2, NULL) == -1) {
 	log_printf(LOG_ERROR, "gettimeofday %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
     }
+    old_t2.tv_sec = t2.tv_sec - (t2.tv_sec % ((int)UPDATE_TIME));
 
 /* // TESTEO DE INSERCION EN LISTA, OK
     {
@@ -438,9 +439,14 @@ int main(int argc, char *argv[]) {
 	    exit(EXIT_FAILURE);
 	}
 
-	if ( ( ((float)t2.tv_sec + t2.tv_usec/1000000.0) -
-	    ((float)t.tv_sec + t.tv_usec/1000000.0) > UPDATE_TIME ) ||
-	    forced_exit) {
+	// t2 is current_date
+	
+	t2.tv_sec -= (t2.tv_sec % ((int)UPDATE_TIME));
+
+//	if ( ( ((float)t2.tv_sec + t2.tv_usec/1000000.0) -
+//	    ((float)t.tv_sec + t.tv_usec/1000000.0) > UPDATE_TIME ) ||
+//	    forced_exit) {
+	if ( (t2.tv_sec >= (old_t2.tv_sec + UPDATE_TIME)) || forced_exit ) {
 	    struct timeval calcdelay1; struct timeval calcdelay2; float calcdelay = 0.0;
 	    char *sac_s=0, *sic_l=0;
 	    float l1=0.0, l2=0.0, l8=0.0, l10=0.0;
@@ -452,6 +458,9 @@ int main(int argc, char *argv[]) {
 	    float sc21_1=0.0, sc21_2=0.0, sc21_3=0.0;
 	    float moda=0.0, p99_cat1=0.0, p99_cat2=0.0;
 	    float p99_cat8=0.0, p99_cat10=0.0, p99_cat21=0.0;
+//	    struct current_time_tm tm;
+	    
+	    old_t2.tv_sec = t2.tv_sec;
 
 	    gettimeofday(&calcdelay1, NULL);
 	    log_printf(LOG_NORMAL, "%s\t\tCAT\tplots\tmedia\tdesv\tmoda\tmax\tmin\tp99\n", "RADAR");
@@ -645,11 +654,11 @@ int main(int argc, char *argv[]) {
 		    mem_free(sic_l);
 		}
 	    }	
-	    t.tv_sec = t2.tv_sec; t.tv_usec = t2.tv_usec;
+//	    t.tv_sec = t2.tv_sec; t.tv_usec = t2.tv_usec;
 	    radar_delay_clear();
 	    gettimeofday(&calcdelay2, NULL);
 	    calcdelay = ((float)calcdelay2.tv_sec + calcdelay2.tv_usec/1000000.0)-((float)calcdelay1.tv_sec + calcdelay1.tv_usec/1000000.0);
-	    log_printf(LOG_NORMAL, "==%03.4f==\n", calcdelay);
+	    log_printf(LOG_NORMAL, "==%03.4f==%s", calcdelay, asctime(gmtime(&t2.tv_sec)));
 	    
 	}
 //	log_flush();

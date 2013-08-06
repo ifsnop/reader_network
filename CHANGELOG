@@ -1,3 +1,17 @@
+0.52
+- BUG en max_number_radar. El programa no avisa de que se ha al-
+canzado el limite de radares definidos y acaba en violacion de
+segmento. (struct radar_definition_s habria que definirla
+dinamicamente, pero cuesta mucho trabajo)
+- BUG GRAVE en el filtrado de datos recibidos. Se acaban grabando
+blancos de flujos que no se han definido en el fichero de configu-
+racion (mismo grupo mcast, distinto puerto, por ejemplo)
+0.51
+- BUG en estadisticas, cuando se graban varios flujos que vienen
+de un mismo scrm, las estadísticas no se muestran bien. Se hacía
+solo match por ip de origen, y no por socket.
+- SOPORTE de volcado de estadisticas de tiempo cada 5 minutos,
+sincronizando con los minutos multiplos de 5.
 0.50
 - Soporte de categorias 19 y 20, solo a efectos de cálculo de
 demoras, y un mínimo de información en el client.

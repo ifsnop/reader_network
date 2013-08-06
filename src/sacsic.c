@@ -30,6 +30,7 @@ char *tmp;
 			    case 104: { strncpy(tmp, "SMMS-BAR", TEXT_LENGTH_SHORT); break; }
 			    case 105: { strncpy(tmp, "SMMS-AST", TEXT_LENGTH_SHORT); break; }
 			    case 106: { strncpy(tmp, "SMMS-STG", TEXT_LENGTH_SHORT); break; }
+			    default: sprintf(tmp, "%03d", sic[0]);
 		        }
 		     } else if (action == GET_SIC_LONG) {
 		        switch (sic[0]) {
@@ -44,6 +45,7 @@ char *tmp;
 			    case 104: { strncpy(tmp, "SMMS-Baraj..", TEXT_LENGTH_LONG); break; }
 			    case 105: { strncpy(tmp, "SMMS-Astur..", TEXT_LENGTH_LONG); break; }
 			    case 106: { strncpy(tmp, "SMMS-Santi..", TEXT_LENGTH_LONG); break; }
+			    default: sprintf(tmp, "%03d", sic[0]);
 		        }
 		     }
 		     break;
@@ -118,6 +120,7 @@ char *tmp;
 			    case 196:{ strncpy(tmp, "LPM", TEXT_LENGTH_SHORT); break; }
 			    case 197:{ strncpy(tmp, "TBN", TEXT_LENGTH_SHORT); break; }
 			    case 201:{ strncpy(tmp, "AST", TEXT_LENGTH_SHORT); break; }
+			    default: sprintf(tmp, "%03d", sic[0]);
 			}
 		    } else if (action == GET_SIC_LONG) {
 		        switch (sic[0]) {
@@ -164,6 +167,7 @@ char *tmp;
 			    case 195:{ strncpy(tmp, "Penas d..", TEXT_LENGTH_LONG); break; }
 			    case 196:{ strncpy(tmp, "La Palma", TEXT_LENGTH_LONG); break; }
 			    case 201:{ strncpy(tmp, "Asturias", TEXT_LENGTH_LONG); break; }
+			    default: sprintf(tmp, "%03d", sic[0]);
 		        }
 		    }
 		    break;

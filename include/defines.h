@@ -1,5 +1,5 @@
 
-#define VERSION "0.50"
+#define VERSION "0.52"
 
 #define TEXT_LENGTH_SHORT 4
 #define TEXT_LENGTH_LONG  32
@@ -12,7 +12,7 @@
 
 #define MAX_PACKET_LENGTH 65532
 
-#define MAX_RADAR_NUMBER 32
+#define MAX_RADAR_NUMBER 64
 #define MAX_SEGMENT_NUMBER 3200
 
 #define UPDATE_TIME 300.0
