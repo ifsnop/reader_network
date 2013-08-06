@@ -1,0 +1,46 @@
+0.48a
+- La desconcatenacion solo funcionaba si dest_localhost estaba
+seleccionado. Ahora se amplia la excepcion a cuando se graba
+fechando con gps.
+0.48
+- SOPORTE del calculo de Percentil 99 para client_time, validacion
+con excel. No se usa stdev*3+media, porque da lugar a situaciones
+ridiculas como que el P99 > MAX. 
+Podria implementarse http://rajjain.com/papers/ftp/psqr.pdf
+para no tener que almacenar los segmentos de forma ordenada.
+- SOPORTE de medidas de uso de ancho de banda en bytes/sec para
+cada flujo suscrito por reader_network. 
+- BUG en la suscripcion, la forma de apuntarse a un grupo con
+INADDR_ANY hacia que se recibiesen los paquetes duplicados o
+triplicados.
+
+0.47
+- BUG de suscripcion multicast de SOLARIS corregido, se anyade un 
+nuevo parametro al fichero de configuracion, con ip del interfaz
+
+0.46.1
+- Se evita recorrer la lista de direcciones suscritas una vez
+que el paquete ya ha sido procesado con exito (se le ha identi-
+ficado un origen valido). Aumenta velocidad y disminuye carga
+de CPU (LNX/SOL)
+
+0.46
+- Se corrige un BUG en la suscripcion multicast que afecta a
+la version de SOLARIS (reader_network) No, la culpa es de g_mensr
+
+0.45.1
+- Ahora el reader_network_SOL se puede ejecutar como demonio.
+- Las dos versiones (LNX/SOL) son iguales.
+- se modifica client_rrd para que pase a ser un demonio SIEMPRE.
+- Se anade memresp, (LNX/SOL) para grabar memoria de respuestas
+  (usar target si no se activa el volcado)
+- Se aniade cleanast (LNX/SOL) para eliminar cabeceras GPS...
+
+0.45
+- la opcion "dest_localhost" activa la decodificacion de asterix. 
+no se puede usar para grabar asterix sacta o lo que sea. solo asterix.
+- se aniade la version en defines.h para que todos los programas la
+usen.
+- se aniade la opcion "dest_screen_crc" que muestra por pantalla un crc 
+por cada paquete con un timstamp en segundos.
+

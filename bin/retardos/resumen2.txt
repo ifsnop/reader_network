@@ -1,0 +1,61 @@
+
+
+GRABACION SIMULTANEA CON SOFT PAGE
+
+RADAR                   CAT     plots   media   desv    moda    max     min
+ESP Paracuellos I       1       8238    0.085   0.163   0.215   0.445   -0.195
+ESP Paracuellos I       2       80      -0.255  0.022   -0.246  -0.203  -0.301
+ESP Paracuellos I       8       28      -0.233  0.017   -0.247  -0.203  -0.258
+ESP Paracuellos I       10      0       nan     nan     0.000   0.000   0.000
+-----------------------------------------------------------------------------
+
+GRABACION SIMULTANEA CON SOFT LINUX
+
+RADAR                   CAT     plots   media   desv    moda    max     min
+ESP Paracuellos I       1       8489    0.427   0.162   0.587   0.777   0.148
+ESP Paracuellos I       2       82      0.087   0.020   0.087   0.125   0.043
+ESP Paracuellos I       8       28      0.109   0.014   0.105   0.141   0.090
+ESP Paracuellos I       10      0       nan     nan     0.000   0.000   0.000
+-----------------------------------------------------------------------------
+
+=============================================================================
+
+
+GRABACION SIMULTANEA CON SOFT INDRA
+
+RADAR                   CAT     plots   media   desv    moda    max     min
+ESP Paracuellos I       1       5193    0.457   0.160   0.589   0.891   0.164
+ESP Paracuellos I       2       53      0.094   0.020   0.107   0.141   0.055
+ESP Paracuellos I       8       18      0.128   0.009   0.128   0.148   0.109
+ESP Paracuellos I       10      0       nan     nan     0.000   0.000   0.000
+-----------------------------------------------------------------------------
+
+GRABACION SIMULTANEA CON SOFT LINUX
+
+RADAR                   CAT     plots   media   desv    moda    max     min
+ESP Paracuellos I       1       5333    0.450   0.160   0.573   0.883   0.164
+ESP Paracuellos I       2       54      0.087   0.019   0.073   0.125   0.043
+ESP Paracuellos I       8       18      0.119   0.009   0.127   0.141   0.102
+ESP Paracuellos I       10      0       nan     nan     0.000   0.000   0.000
+-----------------------------------------------------------------------------
+
+
+=============================================================================
+
+GRABACION DEL EXTACTOR 1 de BARCELONA CON SOFT DE INDRA (SIN COMBINADOR)
+
+RADAR                   CAT     plots   media   desv    moda    max     min
+ESP Barcelona   1       783139  0.075   0.016   0.074   0.766   0.031
+ESP Barcelona   2       10665   0.009   0.008   0.006   0.156   -0.016
+ESP Barcelona   8       0       nan     nan     0.000   0.000   0.000
+ESP Barcelona   10      0       nan     nan     0.000   0.000   0.000
+-----------------------------------------------------------------------------
+
+GRABACION DEL EXTACTOR 2 de BARCELONA CON SOFT DE INDRA (SIN COMBINADOR)
+
+RADAR                   CAT     plots   media   desv    moda    max     min
+ESP Barcelona   1       781283  0.077   0.018   0.074   0.766   0.031
+ESP Barcelona   2       10672   0.009   0.008   0.006   0.156   -0.016
+ESP Barcelona   8       0       nan     nan     0.000   0.000   0.000
+ESP Barcelona   10      0       nan     nan     0.000   0.000   0.000
+-----------------------------------------------------------------------------

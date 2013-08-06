@@ -1,0 +1,3 @@
+usr/include/debug
+usr/lib/libdebug.{a,so}
+usr/share/man/man3/*

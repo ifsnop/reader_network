@@ -1,0 +1,181 @@
+.\"
+.\" -*- nroff -*-
+.\"
+.\"  Copyright (c) Abraham vd Merwe <abz@blio.com>
+.\"  All rights reserved.
+.\"
+.\"  Redistribution and use in source and binary forms, with or without
+.\"  modification, are permitted provided that the following conditions
+.\"  are met:
+.\"  1. Redistributions of source code must retain the above copyright
+.\"     notice, this list of conditions and the following disclaimer.
+.\"
+.\"  2. Redistributions in binary form must reproduce the above copyright
+.\"     notice, this list of conditions and the following disclaimer in the
+.\"     documentation and/or other materials provided with the distribution.
+.\"  3. Neither the name of the author nor the names of other contributors
+.\"     may be used to endorse or promote products derived from this software
+.\"     without specific prior written permission.
+.\"
+.\"  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+.\"  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+.\"  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\"  ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+.\"  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\"  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+.\"  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+.\"  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+.\"  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+.\"  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+.TH LOG_OPEN 3debug  "August 2004" Unix "Library calls"
+.SH NAME
+log routines
+.SH LIBRARIES
+Debug Library (-ldebug)
+.SH SYNOPSIS
+.nf
+.B #include <debug/log.h>
+.sp
+.BI "int log_open(const char *" logfile ", int " level ", int " flags ");
+.nl
+.BI "void log_close(void);
+.nl
+.BI "int log_reset(void);
+.nl
+.BI "int log_flush(void);
+.nl
+.BI "int log_printf(int " level ", const char *" fmt ", ...);
+.nl
+.BI "int log_vprintf(int " level ", const char *" fmt ", va_list " ap ");
+.nl
+.BI "int log_putc(int " level ", int " c ");
+.nl
+.BI "int log_puts(int " level ", const char *" str ");
+.fi
+.SH DESCRIPTION
+\fBlog_open()\fP initializes the logging system. The filename of the file to
+which messages are logged should be specified by \fIlogfile\fP, or
+\fBNULL\fP if messages should be printed to the console. The values for
+\fIlevel\fP and \fIflags\fP are given in the next section.
+.PP
+From version 0.4.1 onwards the debug library also supports logging to syslog
+instead of a file. Instead of specifying a file, just specify a string in
+the form \fIident.facility\fP, where \fIident\fP is a string which will be
+prepended to each syslog message and is usually the program name. The
+\fIfacility\fP should be the facility to which messages should be logged.
+.PP
+\fBlog_close()\fP flushes all pending messages, and closes the file descriptor
+of the log file (if any).
+.PP
+\fBlog_reset()\fP reinitializes the logging system. If any files are
+currently opened for writing, it will be closed and reopened. This is useful
+if you need to rotate log files.
+.PP
+\fBlog_flush()\fP flushes all pending messages (if any).
+.PP
+\fBlog_printf()\fP and \fBlog_vprintf()\fP are replacements for
+\fBprintf\fP(3) and \fBvprintf\fP(3) respectively.
+.PP
+\fBlog_putc()\fP will log a single character. This is the equivalent of
+\fBputchar\fP(3).
+.PP
+\fBlog_puts()\fP will log a string. It is the equivalent of \fBputs\fP(3),
+except that is does not append a trailing newline.
+.SH PARAMETERS
+This section lists the parameters used to set the values of \fIlevel\fP and
+\fIflags\fP.
+.SS level
+This determines the importance of the message. The levels are, in order of
+decreasing verbosity:
+.TP
+.B LOG_NOISY
+verbose debug messages
+.TP
+.B LOG_DEBUG
+debug messages
+.TP
+.B LOG_VERBOSE
+informational messages
+.TP
+.B LOG_NORMAL
+normal, but significant, conditions
+.TP
+.B LOG_WARNING
+warning conditions
+.TP
+.B LOG_ERROR
+error conditions
+.TP
+.B LOG_QUIET
+no messages are printed
+.PP
+The \fIlevel\fP argument to \fBlog_printf()\fP, \fBlog_vprintf()\fP,
+\fBlog_putc()\fP, and \fBlog_puts()\fP specify the level at which the
+message should be printed. It does not make sense to specify \fBLOG_QUIET\fP
+to these functions.
+.PP
+The \fIlevel\fP argument to \fBlog_open()\fP sets the verbosity of the
+program. Any messages printed with a \fIlevel\fP higher (more verbose) than
+that specified to the \fBlog_open()\fP function, will be discarded.
+.SS flags
+The \fIflags\fP argument to \fBlog_open()\fP is an OR of any of these:
+.TP
+.B LOG_HAVE_COLORS
+If this flag is specified and messages are printed to the console (i.e. no
+log file is specified), messages will be printed in different colors,
+depending on their log level.
+.TP
+.B LOG_PRINT_FUNCTION
+If this flag is specified, the function in which the print function was
+called would be printed in addition to the filename and line number.
+.TP
+.B LOG_DEBUG_PREFIX_ONLY
+If this flag is specified, only messages with a level higher or equal to
+(i.e. more or as verbose) \fBLOG_DEBUG\fP will be printed in color and with
+file, line number, and (if necessary), the function.
+.TP
+.B LOG_DETECT_DUPLICATES
+If this flag is specified, messages would be buffered and duplicate lines
+would not be printed. Instead, the first message would be printed, followed
+by a line describing the number of times the message repeated. This is a
+great way to prevent flooding, but unfortunately it has the side effect of
+always being one statement behind.
+.TP
+.B LOG_DETECT_FLOODING
+If specified, the rate at which messages are printed would be limited in
+order to avoid flooding. This feature have not been implemented yet, and is
+currently ignored.
+.SH RETURN VALUE
+All functions except \fBlog_close()\fP return 0 if successful, -1 if some
+error occurred. Check errno to see which error occurred.
+.PP
+If \fBlog_reset()\fP or \fBlog_open()\fP fails, behaviour is undefined and
+it should be assumed that no logging is possible.
+.PP
+The \fBlog_close()\fP function returns no value.
+.SH "NOTES"
+If this routines are combined with the memory routines, care should be taken
+to call open and close functions in the right order. The correct order is as
+follows:
+
+.RS
+.nf
+.ta 4n 11n 17n
+mem_open (NULL);
+log_open (NULL,LOG_NORMAL,LOG_HAVE_COLORS | LOG_PRINT_FUNCTION);
+atexit (mem_close);
+atexit (log_close);
+.fi
+.RE
+
+Of course, \fBatexit\fP(3) should only be used if the program will not
+forked.
+.PP
+None of the libdebug routines are thread-safe. I'm not planning to change this
+either! For more information, please see http://threading.2038bug.com/
+.SH "SEE ALSO"
+mem_open(3), errno(3), atexit(3), printf(3), vprintf(3), putchar(3), puts(3)
+.br
+logrotate(8), syslog(3), logger(1)
+.SH "AUTHOR"
+Written by Abraham vd Merwe <abz@blio.com>
