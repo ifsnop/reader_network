@@ -125,8 +125,67 @@ int main(int argc, char *argv[]) {
     		mem_free(sac_s);
 		mem_free(sic_l);
 	    }
+	} else if (dbp.cat == CAT_10 ) {
+	    char *hora1, *hora2;
+
+	    hora1 = parse_hora(dbp.tod);
+	    hora2 = parse_hora(dbp.tod_stamp);
+	    if (dbp.available & IS_SACSIC) {
+		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
+		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s%s%s%s%s%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l,
+		(dbp.type == TYPE_C10_TARGET_REPORT) ? "PLOT" : "",
+		(dbp.type == TYPE_C10_START_UPDATE_CYCLE) ? "UPDATE" : "",
+		(dbp.type == TYPE_C10_PERIODIC_STATUS) ? "PERIODIC" : "",
+		(dbp.type == TYPE_C10_EVENT_STATUS) ? "EVENT" : "",
+		(dbp.plot_type == NO_DETECTION) ? "na" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_SSR_MULTI) ? "SSRM" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_SSRS_MULTI) ? "SMMS" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_ADSB) ? "ADS" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_PSR) ? "SMR" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_MAGNETIC) ? "MAG" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_HF_MULTI) ? "HFM" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_NOT_DEFINED) ? "und" : "",
+		(dbp.plot_type == TYPE_C10_PLOT_OTHER) ? "OTHER" : "",
+		hora1, hora2,
+		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+	    mem_free(hora1);
+	    mem_free(hora2);
+	    if (dbp.available & IS_SACSIC) {
+		mem_free(sac_s);
+		mem_free(sic_l);
+	    }
+	} else if (dbp.cat == CAT_21 ) {
+	    char *hora1, *hora2;
+
+	    hora1 = parse_hora(dbp.tod);
+	    hora2 = parse_hora(dbp.tod_stamp);
+	    if (dbp.available & IS_SACSIC) {
+		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
+		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l,
+		(dbp.flag_test == T_YES) ? "TEST" : "",
+		(dbp.flag_ground == T_YES) ? "GROUND" : "",
+		(dbp.flag_sim == T_YES) ? "SIM" : "",
+		(dbp.flag_fixed == T_YES) ? "FIXED" : "",
+		hora1, hora2,
+		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+	    mem_free(hora1);
+	    mem_free(hora2);
+	    if (dbp.available & IS_SACSIC) {
+		mem_free(sac_s);
+		mem_free(sic_l);
+	    }
 	}
+
     }
+
     log_printf(LOG_NORMAL, "end...\n");
 //    log_flush();
 

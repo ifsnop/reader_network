@@ -487,7 +487,7 @@ unsigned long count_plot_ignored = 0; // old stats
 	    log_printf(LOG_ERROR, "ERROR read: %s\n", strerror(errno));
 	    exit(EXIT_FAILURE);
 	}    
-	log_printf(LOG_NORMAL, "readed %d bytes\n", ast_size_total);
+	log_printf(LOG_NORMAL, "readed %ld bytes\n", (unsigned long) ast_size_total);
         if (source_file_gps_version == 0) {
 	    unsigned char *memcmp1;
 	    memcmp1 = (unsigned char *) mem_alloc(20);
@@ -667,26 +667,26 @@ unsigned long count_plot_ignored = 0; // old stats
 		    //cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
 		    cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]); //htonl(INADDR_ANY);
 		    cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //multicast group port
-    		    if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
+		    if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
 			log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
-    		    }
+		    }
 		    
 		    mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
 		    mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
-    		    if (setsockopt(s_reader[socket_count], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-    	    		log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
+		    if (setsockopt(s_reader[socket_count], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+			log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		    }
 		} else if (!strncasecmp(source, "broa", 4)) {
 		    if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
 			log_printf(LOG_ERROR, "reuseaddr setsockopt reader: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
-    		    }
+		    }
 		    cast_group.sin_family = AF_INET;
 		    cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
 		    cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
-    		    if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
+		    if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
 			// error happens when suscribing broadcast addresses
 			// suscribing 214.25.250.255 for 214.25.250.10 &
 			//            214.25.250.255 for 214.25.250.11
@@ -694,7 +694,7 @@ unsigned long count_plot_ignored = 0; // old stats
 			// problem is that SO_BROADCAST ignores SO_REUSEADDR
 			//log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
 			//exit(EXIT_FAILURE);
-    		    }
+		    }
 		}
 //	    	log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
 //			radar_definition[i*5 + 1], radar_definition[i*5 + 2], radar_definition[i*5+3] );
@@ -723,17 +723,17 @@ unsigned long count_plot_ignored = 0; // old stats
 
 	    select_count = select(s_reader[socket_count - 1] + 1, &reader_set, NULL, NULL, &timeout);
 	    if ( select_count > 0 ) {
-    		gettimeofday(&t, NULL);
+		gettimeofday(&t, NULL);
 		i=0;
 		while (i<socket_count) {
 		    if (FD_ISSET(s_reader[i], &reader_set)) {
 			int udp_size=0; bool record = true, is_processed = false;
-	    		memset(&cast_group, 0, sizeof(cast_group));
+			memset(&cast_group, 0, sizeof(cast_group));
 			addrlen = sizeof(struct sockaddr);
-		        if ((udp_size = recvfrom(s_reader[i], ast_ptr_raw, MAX_PACKET_LENGTH, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
-	    		    log_printf(LOG_ERROR, "ERROR recvfrom: %s\n", strerror(errno));
-	    	    	    exit(EXIT_FAILURE);
-    			}
+			if ((udp_size = recvfrom(s_reader[i], ast_ptr_raw, MAX_PACKET_LENGTH, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
+			    log_printf(LOG_ERROR, "ERROR recvfrom: %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
 			if (udp_size > 0)
 			    count2_udp_received++;
 			j=0;
@@ -741,15 +741,15 @@ unsigned long count_plot_ignored = 0; // old stats
 			    if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
 				int salir = 0;
-		
+
 //			        log_printf(LOG_VERBOSE, "*%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);
 
 				if (timed_stats_interval) {
 				    radar_counter[j]++;
-//    	    			    log_printf(LOG_NORMAL, "adding(%d) to radar %d\n\n", udp_size,j);
+//				    log_printf(LOG_NORMAL, "adding(%d) to radar %d\n\n", udp_size,j);
 				    radar_counter_bytes[j] += udp_size;
 				}
-				if ( dest_localhost || 
+				if ( dest_localhost ||
 				    ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) ) {
 				    // solo si se descodifica tenemos que tomar precauciones con el ast 
 				    // cat 10 del smr de barajas y con scr mal configurados
@@ -773,11 +773,11 @@ unsigned long count_plot_ignored = 0; // old stats
 				    if (mode_scrm || dest_screen_crc) {
 					crc = crc32(ast_ptr_raw_tmp, ast_size_datablock);
 				    }
-				    			
+
 				    if (dest_screen_crc) {
-				    	log_printf(LOG_VERBOSE, "%3.4f [%08X]\n", current_time, crc);
+					log_printf(LOG_VERBOSE, "%3.4f [%08X]\n", current_time, crc);
 				    }
-				    
+
 				    if (mode_scrm) {
 					rb_red_blk_node *node = RBExactQuery(tree,crc);
 					if (!node) { // no existe en arbol
@@ -797,7 +797,7 @@ unsigned long count_plot_ignored = 0; // old stats
 					}
 //					RBTreePrint(tree);
 				    }
-				    
+
 //				    ast_output_datablock(ast_ptr_raw, ast_size_datablock, count2_plot_processed, 0);
 //				    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 				    if (dest_localhost && record) {
@@ -807,20 +807,27 @@ unsigned long count_plot_ignored = 0; // old stats
 					    ast_procesarCAT02(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 					if (ast_ptr_raw[0] == '\x08')
 					    ast_procesarCAT08(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x0a')
+					    ast_procesarCAT10(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x15')
+					    ast_procesarCAT21(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x3e')
+					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 				    }
 
-			    	    if (dest_file != NULL && record) {
+				    if (dest_file != NULL && record) {
 					if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
+					    if (ast_ptr_raw[0] == '\x0a')
 					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == -1) {
 						log_printf(LOG_ERROR, "ERROR write_ast: %s (%d)\n", strerror(errno), fd_out_ast);
 					    }
 					}
 					if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
-				    	    unsigned long timegps;
+					    unsigned long timegps;
 					    unsigned char byte;
 					    unsigned char output_ptr[MAX_PACKET_LENGTH];
 					    memcpy(output_ptr, ast_ptr_raw_tmp, ast_size_datablock);
-				    
+
 					    timegps = current_time * 128.0;
 					    byte = (timegps >> 16) & 0xFF;
 					    memcpy(output_ptr + ast_size_datablock + 6, &byte, 1);

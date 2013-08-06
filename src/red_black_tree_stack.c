@@ -1,7 +1,8 @@
 #include "red_black_tree_stack.h"
 
 int StackNotEmpty(stk_stack * theStack) {
-  return( theStack ? (int) theStack->top : 0);
+  return( theStack ? (theStack->top == NULL ? 0 : 1) : (0) );
+//  ((int) (theStack->top)) :  ((int)0) );
 }
 
 stk_stack * StackJoin(stk_stack * stack1, stk_stack * stack2) {

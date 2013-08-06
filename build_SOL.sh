@@ -3,7 +3,7 @@ CUR_DIR=`pwd`
 
 #gcc -Wall -g -o bin/subscriber_SOL src/subscriber.c -L${CUR_DIR}/libs/lib/ -I${CUR_DIR}/include/ -I${CUR_DIR}/libs/include/ -lm -lconfig -ldebug -lsocket -lnsl -DSOLARIS
 
-gcc -Wall -g -o bin/reader_network_SOL src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c -L${CUR_DIR}/libs/lib/ -I${CUR_DIR}/include/ -I${CUR_DIR}/libs/include/ -lm -lconfig -ldebug -lsocket -lnsl -DSOLARIS
+gcc -Wall -g -o bin/reader_network_SOL src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c -L${CUR_DIR}/libs/lib_SOL/ -I${CUR_DIR}/include/ -I${CUR_DIR}/libs/include/ -lm -lconfig -ldebug -lsocket -lnsl -DSOLARIS
 exit
 #gcc -Wall -g -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c -L/aplic/reader/conversor_asterix0.45.1/libs/lib/ -Iinclude -Ilibs/include -lm -lconfig -ldebug -lsocket -lnsl -v
 

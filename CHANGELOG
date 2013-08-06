@@ -1,7 +1,11 @@
+0.49
+- Soporte de categoria 10 y 21, solo a efectos de calculo de
+demoras.
 0.48a
 - La desconcatenacion solo funcionaba si dest_localhost estaba
 seleccionado. Ahora se amplia la excepcion a cuando se graba
 fechando con gps.
+- Se incorpora categoria 10 para SMR y SMMS, v1.0 (tiempos)
 0.48
 - SOPORTE del calculo de Percentil 99 para client_time, validacion
 con excel. No se usa stdev*3+media, porque da lugar a situaciones

@@ -1,7 +1,0 @@
-scan.o: scan.c ../libdebug-0.4.2/tmp/usr/local/include/debug/memory.h \
-  ../libdebug-0.4.2/tmp/usr/local/include/debug/log.h scan.h
-parse.o: parse.c ../libdebug-0.4.2/tmp/usr/local/include/debug/memory.h \
-  ../libdebug-0.4.2/tmp/usr/local/include/debug/log.h scan.h parse.h
-config.o: config.c ../libdebug-0.4.2/tmp/usr/local/include/debug/memory.h \
-  ../libdebug-0.4.2/tmp/usr/local/include/debug/log.h typedefs.h parse.h \
-  scan.h config.h config/typedefs.h

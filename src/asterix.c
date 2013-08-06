@@ -44,20 +44,24 @@ int sizeFSPEC = 0;
     if ( ptr_raw[0] & 1 ) {
 	if ( size_datablock < 5) { return -1; }
 	if ( ptr_raw[1] & 1 ) {
-    	    if ( size_datablock < 6) { return -1; }
+	    if ( size_datablock < 6) { return -1; }
 	    if ( ptr_raw[2] & 1 ) {
 		if ( size_datablock < 7 ) { return -1; }
-		sizeFSPEC = 4;
-    	    } else {
+		if ( ptr_raw[3] & 1 ) {
+		    if (size_datablock < 8) { return -1; }
+		    sizeFSPEC = 5;
+		} else {
+		    sizeFSPEC = 4;
+		}
+	    } else {
 		sizeFSPEC = 3;
-    	    }
+	    }
         } else {
-    	    sizeFSPEC = 2;
+	    sizeFSPEC = 2;
 	}
     } else  {
 	sizeFSPEC = 1;
     }
-    
     return sizeFSPEC;
 }
 
@@ -74,8 +78,9 @@ int index = 0;
 	dbp.cat = CAT_01;
 	dbp.available = IS_ERROR;
 	dbp.type = NO_DETECTION;
-        dbp.modea_status = 0;
-        dbp.modec_status = 0;
+	dbp.plot_type = IS_ERROR;
+	dbp.modea_status = 0;
+	dbp.modec_status = 0;
 	dbp.flag_test = 0;
 	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
@@ -191,6 +196,7 @@ int ast_procesarCAT02(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 int sizeFSPEC=0, pos=0;
 struct datablock_plot dbp;
 
+    dbp.plot_type = IS_ERROR;
     dbp.tod_stamp = current_time;
     dbp.flag_test = 0;
     dbp.id = id;
@@ -266,6 +272,253 @@ struct datablock_plot dbp;
     return T_OK;
 }
 
+int ast_procesarCAT10(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+int size_current = 0, j = 0;
+int index = 0;
+
+    do {
+	int sizeFSPEC;
+	struct datablock_plot dbp;
+	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+
+	dbp.cat = CAT_10;
+	dbp.available = IS_ERROR;
+	dbp.type = NO_DETECTION;
+	dbp.plot_type = IS_ERROR;
+	dbp.modea_status = 0;
+	dbp.modec_status = 0;
+	dbp.flag_test = T_NO;
+	dbp.flag_ground = T_NO;
+	dbp.flag_sim = T_NO;
+	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
+	dbp.radar_responses = 0;
+
+	if (sizeFSPEC == 0) {
+	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
+	    return T_ERROR;
+	}
+	
+	j = sizeFSPEC; size_current += sizeFSPEC;
+	if ( ptr_raw[0] & 128 ) { //I010/010
+	    dbp.sac = ptr_raw[j];
+	    dbp.sic = ptr_raw[j + 1];
+	    j += 2; size_current += 2;
+	    dbp.available |= IS_SACSIC;
+	}
+	
+	if ( ptr_raw[0] & 64 ) { //I010/000
+	    dbp.available |= IS_TYPE;
+	    switch ( ptr_raw[j] ) {
+		case 1 : dbp.type = TYPE_C10_TARGET_REPORT; break;
+		case 2 : dbp.type = TYPE_C10_START_UPDATE_CYCLE; break;
+		case 3 : dbp.type = TYPE_C10_PERIODIC_STATUS; break;
+		case 4 : dbp.type = TYPE_C10_EVENT_STATUS; break;
+		default: dbp.type = IS_ERROR; break;
+	    }
+	    j++; size_current++;
+	}
+	if ( ptr_raw[0] & 32 ) { //I010/020
+	    int tmp = ptr_raw[j]>>5;
+	    dbp.available |= IS_PLOT;
+	    switch (tmp) {
+		case 0: dbp.plot_type = TYPE_C10_PLOT_SSR_MULTI; break;
+		case 1: dbp.plot_type = TYPE_C10_PLOT_SSRS_MULTI; break;
+		case 2: dbp.plot_type = TYPE_C10_PLOT_ADSB; break;
+		case 3: dbp.plot_type = TYPE_C10_PLOT_PSR; break;
+		case 4: dbp.plot_type = TYPE_C10_PLOT_MAGNETIC; break;
+		case 5: dbp.plot_type = TYPE_C10_PLOT_HF_MULTI; break;
+		case 6: dbp.plot_type = TYPE_C10_PLOT_NOT_DEFINED; break;
+		case 7: dbp.plot_type = TYPE_C10_PLOT_OTHER; break;
+		default: dbp.plot_type = NO_DETECTION;
+	    }
+	    while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++;
+	}
+	if ( ptr_raw[0] & 16 ) { //I010/140
+	   dbp.tod = ((float)(ptr_raw[j]<<16) +
+	   (ptr_raw[j+1]<<8) +
+	   (ptr_raw[j+2])) / 128.0;
+	   j += 3; size_current += 3;
+	    dbp.available |= IS_TOD;
+	}
+	if ( ptr_raw[0] & 8 ) { /* I010/041 */ j +=8; size_current += 8; }
+	if ( ptr_raw[0] & 4 ) { /* I010/040 */ j += 4; size_current += 4;}
+	if ( ptr_raw[0] & 2 ) { /* I010/042 */ j += 4; size_current += 4;}
+	if ( ptr_raw[0] & 1 ) { /* FX1 */ 
+	    if ( ptr_raw[1] & 128 ) { /* I010/200 */ j +=4; size_current += 4; }
+	    if ( ptr_raw[1] & 64 ) { /* I010/202 */ j +=4; size_current += 4; }
+	    if ( ptr_raw[1] & 32 ) { /* I010/161 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 16 ) { /* I010/170 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+	    if ( ptr_raw[1] & 8 ) { /* I010/060 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 4 ) { /* I010/220 */ j +=3; size_current += 3; }
+	    if ( ptr_raw[1] & 2 ) { /* I010/245 */ j +=7; size_current += 7; }
+	    if ( ptr_raw[1] & 1 ) { /* FX2 */  
+		if ( ptr_raw[2] & 128 ) { /* I010/250 */ size_current += ptr_raw[j] * 8 + 1; j += ptr_raw[j] * 8 + 1; }
+		if ( ptr_raw[2] & 64 ) { /* I010/300 */ j++; size_current++; }
+		if ( ptr_raw[2] & 32 ) { /* I010/090 */ j +=2; size_current += 2; }
+		if ( ptr_raw[2] & 16 ) { /* I010/091 */ j +=2; size_current += 2; }
+		if ( ptr_raw[2] & 8 ) { /* I010/270 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++; size_current++; }
+		if ( ptr_raw[2] & 4 ) { /* I010/550 */ j++; size_current++; }
+		if ( ptr_raw[2] & 2 ) { /* I010/310 */ j++; size_current++; }
+		if ( ptr_raw[2] & 1 ) { /* FX3 */
+		    if ( ptr_raw[3] & 128 ) { /* I010/500 */ j += 4; size_current += 4; }
+		    if ( ptr_raw[3] & 64 ) { /* I010/280 */ size_current += ptr_raw[j] * 2 + 1; j += ptr_raw[j] * 2 + 1; }
+		    if ( ptr_raw[3] & 32 ) { /* I010/131 */ j++; size_current++; }
+		    if ( ptr_raw[3] & 16 ) { /* I010/210 */ j +=2; size_current += 2; }
+		    if ( ptr_raw[3] & 8 ) { /* SPARE */ }
+		    if ( ptr_raw[3] & 4 ) { /* SP */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+		    if ( ptr_raw[3] & 2 ) { /* RE */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+		}
+	    }
+	}
+//	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+//	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
+	if ( dbp.available != IS_ERROR ) {
+/*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
+	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
+		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
+		exit(EXIT_FAILURE);
+	    }
+*/	    if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	    }
+	}
+	
+	ptr_raw += j;
+	index++;
+    } while ((size_current + 3) < size_datablock);
+
+    return T_OK;
+}
+
+int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+int size_current = 0, j = 0;
+int index = 0;
+
+    do {
+	int sizeFSPEC;
+	struct datablock_plot dbp;
+	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+
+	dbp.cat = CAT_21;
+	dbp.available = IS_ERROR;
+	dbp.type = NO_DETECTION;
+	dbp.plot_type = IS_ERROR;
+	dbp.modea_status = 0;
+	dbp.modec_status = 0;
+	dbp.flag_test = T_NO;
+	dbp.flag_ground = T_NO;
+	dbp.flag_sim = T_NO;
+	dbp.flag_fixed = T_NO;
+	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
+	dbp.radar_responses = 0;
+
+	if (sizeFSPEC == 0) {
+	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
+	    return T_ERROR;
+	}
+	
+	j = sizeFSPEC; size_current += sizeFSPEC;
+	if ( ptr_raw[0] & 128 ) { //I021/010
+	    dbp.sac = ptr_raw[j];
+	    dbp.sic = ptr_raw[j + 1];
+	    j += 2; size_current += 2;
+	    dbp.available |= IS_SACSIC;
+	}
+	
+	if ( ptr_raw[0] & 64 ) { //I021/040
+	    dbp.available |= IS_TYPE;
+	    if ( (ptr_raw[j] & 64) == 64 ) dbp.flag_ground = T_YES;
+	    if ( (ptr_raw[j] & 32) == 32 ) dbp.flag_sim = T_YES;
+	    if ( (ptr_raw[j] & 16) == 16 ) dbp.flag_test = T_YES;
+	    if ( (ptr_raw[j] & 8) == 8 ) dbp.flag_fixed = T_YES;
+	    j+=2; size_current+=2;
+	}
+	if ( ptr_raw[0] & 32 ) { //I021/030
+	   dbp.tod = ((float)(ptr_raw[j]<<16) +
+	   (ptr_raw[j+1]<<8) +
+	   (ptr_raw[j+2])) / 128.0;
+	   j += 3; size_current += 3;
+	    dbp.available |= IS_TOD;
+	}
+	if ( ptr_raw[0] & 16 ) { /* I021/130 */ j +=8; size_current += 8; }
+	if ( ptr_raw[0] & 8 ) { /* I021/080 */ j +=3; size_current += 3; }
+	if ( ptr_raw[0] & 4 ) { /* I021/140 */ j += 2; size_current += 2;}
+	if ( ptr_raw[0] & 2 ) { /* I021/090 */ j += 2; size_current += 2;}
+	if ( ptr_raw[0] & 1 ) { /* FX1 */ 
+	    if ( ptr_raw[1] & 128 ) { /* I021/210 */ j++; size_current++; }
+	    if ( ptr_raw[1] & 64 ) { /* I021/230 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 32 ) { /* I021/145 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 16 ) { /* I021/150 */ j +=2; size_current += 2; } //while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+	    if ( ptr_raw[1] & 8 ) { /* I021/151 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 4 ) { /* I021/152 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 2 ) { /* I021/155 */ j +=2; size_current += 2; }
+	    if ( ptr_raw[1] & 1 ) { /* FX2 */
+		if ( ptr_raw[2] & 128 ) { /* I021/157 */ j +=2; size_current += 2; } //size_current += ptr_raw[j] * 8 + 1; j += ptr_raw[j] * 8 + 1; }
+		if ( ptr_raw[2] & 64 ) { /* I021/160 */ j +=4; size_current += 4; }
+		if ( ptr_raw[2] & 32 ) { /* I021/165 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+		if ( ptr_raw[2] & 16 ) { /* I021/170 */ j +=6; size_current += 6; }
+		if ( ptr_raw[2] & 8 ) { /* I021/095 */ j++; size_current++; }
+		if ( ptr_raw[2] & 4 ) { /* I021/032 */ j++; size_current++; }
+		if ( ptr_raw[2] & 2 ) { /* I021/200 */ j++; size_current++; }
+		if ( ptr_raw[2] & 1 ) { /* FX3 */
+		    if ( ptr_raw[3] & 128 ) { /* I021/020 */ j++; size_current++; }
+		    if ( ptr_raw[3] & 64 ) { /* I021/220 */ 
+			int add=0;
+			if ( (ptr_raw[j] & 128) == 128 ) add += 2;
+			if ( (ptr_raw[j] & 64) == 64 ) add += 2;
+			if ( (ptr_raw[j] & 32) == 32 ) add += 2;
+			if ( (ptr_raw[j] & 16) == 16 ) add++;
+			j += add; size_current += add;
+		    }
+		    if ( ptr_raw[3] & 32 ) { /* I021/146 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 16 ) { /* I021/148 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 8 ) { /* I021/110 */
+			int add = 0;
+			if ( (ptr_raw[j] & 128) == 128 ) add += 2;
+			if ( (ptr_raw[j] & 64) == 64 ) { 
+			    add += ptr_raw[j + add]*15 + 1;
+			}
+			j += add; size_current += add;
+		     }
+		    if ( ptr_raw[3] & 4 ) { /* I021/070 */ j += 2; size_current += 2; }
+		    if ( ptr_raw[3] & 2 ) { /* I021/131 */ j++; size_current++; }
+		    if ( ptr_raw[3] & 1 ) { /* FX4 */
+			if ( ptr_raw[4] & 4 ) { while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+			if ( ptr_raw[4] & 2 ) { while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
+		    }
+		}
+	    }
+	}
+//	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+//	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
+	if ( dbp.available != IS_ERROR ) {
+/*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
+	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
+		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
+		exit(EXIT_FAILURE);
+	    }
+*/	    if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	    }
+	}
+	
+	ptr_raw += j;
+	index++;
+    } while ((size_current + 3) < size_datablock);
+
+    return T_OK;
+}
+
+int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+/*int sizeFSPEC=0;
+struct datablock_plot dbp;
+
+    dbp.tod_stamp = current_time; dbp.id = id; dbp.index = 0;
+    sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+//    ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
+*/    return T_OK;
+}
+
 void printTOD() {
     struct timeval t;
     if (gettimeofday(&t, NULL)==0) {
@@ -273,7 +526,7 @@ void printTOD() {
     } else {
         log_printf(LOG_VERBOSE, "error gettimeofday %s\n", strerror(errno));
     }
-    return;			
+    return;
 }
 
 void ttod_put_full(unsigned char sac, unsigned char sic, unsigned char *ptr_full_tod) {
