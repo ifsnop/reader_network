@@ -1,5 +1,5 @@
 
-#define VERSION "0.52"
+#define VERSION "0.53"
 
 #define TEXT_LENGTH_SHORT 4
 #define TEXT_LENGTH_LONG  32

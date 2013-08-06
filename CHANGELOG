@@ -1,4 +1,8 @@
+0.53
+- SOPORTE demoras tiempos cat 34 y 48
 0.52
+- Anadido memresp para Modo-S (OJO! NO CAMBIA VERSION!)
+- Compilado para Solaris, update de los binarios
 - BUG en max_number_radar. El programa no avisa de que se ha al-
 canzado el limite de radares definidos y acaba en violacion de
 segmento. (struct radar_definition_s habria que definirla

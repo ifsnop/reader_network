@@ -629,6 +629,12 @@ unsigned long count_plot_ignored = 0; // old stats
 		} else if (ast_ptr_raw[ast_pos] == '\x15') {
 		    count2_plot_processed++;
 		    ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x22') {
+		    count2_plot_processed++;
+		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
+		} else if (ast_ptr_raw[ast_pos] == '\x30') {
+		    count2_plot_processed++;
+		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
 		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
 		    count2_plot_processed++;
 		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed);
@@ -878,6 +884,10 @@ unsigned long count_plot_ignored = 0; // old stats
 					    ast_procesarCAT20(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 					if (ast_ptr_raw[0] == '\x15')
 					    ast_procesarCAT21(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x22')
+					    ast_procesarCAT34(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
+					if (ast_ptr_raw[0] == '\x30')
+					    ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 					if (ast_ptr_raw[0] == '\x3e')
 					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed);
 				    }

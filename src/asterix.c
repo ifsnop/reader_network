@@ -663,6 +663,133 @@ int index = 0;
     return T_OK;
 }
 
+int ast_procesarCAT34(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+int size_current = 0, j = 0;
+int index = 0;
+
+    do {
+	int sizeFSPEC;
+	struct datablock_plot dbp;
+	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+
+	dbp.cat = CAT_34;
+	dbp.available = IS_ERROR;
+	dbp.type = NO_DETECTION;
+	dbp.plot_type = IS_ERROR;
+	dbp.modea_status = 0;
+	dbp.modec_status = 0;
+	dbp.flag_test = T_NO;
+	dbp.flag_ground = T_NO;
+	dbp.flag_sim = T_NO;
+	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
+	dbp.radar_responses = 0;
+
+	//ast_output_datablock(ptr_raw, size_datablock, dbp.id, dbp.index);
+	if (sizeFSPEC == 0) {
+	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
+	    return T_ERROR;
+	}
+	
+	j = sizeFSPEC; size_current += sizeFSPEC;
+
+	if ( (ptr_raw[0] & 128) && // sac/sic
+	     (ptr_raw[0] & 64) &&  // msg type
+	    (ptr_raw[0] & 32) ) { // timeofday
+	
+	    dbp.cat = CAT_34;
+	    dbp.sac = ptr_raw[j]; dbp.sic = ptr_raw[j+1];
+
+	    switch(ptr_raw[j+2]) {
+		case 1: dbp.type = TYPE_C34_NORTH_MARKER;		break;
+		case 2: dbp.type = TYPE_C34_SECTOR_CROSSING;		break;
+		case 3: dbp.type = TYPE_C34_GEOGRAPHICAL_FILTERING;	break;
+		case 4: dbp.type = TYPE_C34_JAMMING_STROBE;		break;
+		default: dbp.type = NO_DETECTION;				break;
+	    }
+
+	    dbp.available = IS_TOD | IS_TYPE | IS_SACSIC;
+	    size_current += 3; j += 3;
+	    dbp.tod = ((float)(ptr_raw[j]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]))/128.0;
+	    size_current += 3; j += 3;
+	    if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	    }
+	    ptr_raw += j;
+	    index++;
+	}
+	
+	// FIXME // el resto de dataitems los ignoramos	
+	size_current = size_datablock - 3;
+
+    } while ((size_current + 3) < size_datablock);
+
+    return T_OK;
+}
+
+int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
+int size_current = 0, j = 0;
+int index = 0;
+
+    do {
+	int sizeFSPEC;
+	struct datablock_plot dbp;
+
+//	log_printf(LOG_NORMAL, "fspec %02X\n", ptr_raw[0]);
+
+	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
+	dbp.cat = CAT_48;
+	dbp.available = IS_ERROR;
+	dbp.type = NO_DETECTION;
+	dbp.plot_type = IS_ERROR;
+	dbp.modea_status = 0;
+	dbp.modec_status = 0;
+	dbp.flag_test = 0;
+	dbp.tod_stamp = current_time; dbp.id = id; dbp.index = index;
+	dbp.radar_responses = 0;
+    
+	if (sizeFSPEC == 0) {
+	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
+	    return T_ERROR;
+	}
+	
+	j = sizeFSPEC;
+	size_current += sizeFSPEC;
+	if ( ptr_raw[0] & 128 ) { //I048/010
+	    dbp.sac = ptr_raw[sizeFSPEC];
+	    dbp.sic = ptr_raw[sizeFSPEC + 1];
+	    j += 2; size_current += 2;
+	    dbp.available |= IS_SACSIC;
+	}
+	if ( ptr_raw[0] & 64  ) { //I048/140
+	    //log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
+	    dbp.tod = ((float)(ptr_raw[j]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]))/128.0;
+	    size_current += 3; j += 3;
+	    dbp.available |= IS_TOD;
+	}
+
+	if ( dbp.available & IS_TOD ) {
+/*	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
+	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
+		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
+		exit(EXIT_FAILURE);
+	    }
+*/	    if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
+	    }
+	}
+	
+	// FIXME
+	
+        ptr_raw += j;
+	index++;
+	size_current = size_datablock - 3;
+	
+    } while ((size_current + 3) < size_datablock);
+
+    return T_OK;
+}
+
+
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id) {
 /*int sizeFSPEC=0;
 struct datablock_plot dbp;

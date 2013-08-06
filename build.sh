@@ -16,7 +16,7 @@ echo reader_network
 rm bin/reader_network 2> /dev/null
 #rm bin/reader_network64 2> /dev/null
 gcc -Wall -g -o bin/reader_network src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params32
-#gcc -Wall -g -o bin/reader_network64 src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params64
+gcc -Wall -g -o bin/reader_network64 src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c $params64
 #strip bin/reader_network bin/reader_network64
 echo client_time
 gcc -g -o bin/client_time src/client_time.c src/sacsic.c src/helpers.c src/startup.c $params32
@@ -27,6 +27,10 @@ gcc -g -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c $para
 echo cleanast
 gcc -Wall -Iinclude/ src/cleanast.c -o bin/cleanast
 strip bin/cleanast
+
+gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX
+gcc -Wall -Iinclude/ src/memresp/memresps.c -o bin/memresps -DLINUX
+
 exit
 
 gcc -Wall -g -Iinclude/ src/memresp/memresp_parse.c -o bin/memresp_parse -DLINUX

@@ -14,38 +14,47 @@ struct radar_delay_s {
     long cuenta_plot_cat8, cuenta_plot_cat10;
     long cuenta_plot_cat19, cuenta_plot_cat20;
     long cuenta_plot_cat21;
+    long cuenta_plot_cat34, cuenta_plot_cat48;
     float suma_retardos_cat1, suma_retardos_cat2;
     float suma_retardos_cat8, suma_retardos_cat10;
     float suma_retardos_cat19, suma_retardos_cat20;
     float suma_retardos_cat21;
+    float suma_retardos_cat34, suma_retardos_cat48;
     float suma_retardos_cuad_cat1, suma_retardos_cuad_cat2;
     float suma_retardos_cuad_cat8, suma_retardos_cuad_cat10;
     float suma_retardos_cuad_cat19, suma_retardos_cuad_cat20;
     float suma_retardos_cuad_cat21;
+    float suma_retardos_cuad_cat34, suma_retardos_cuad_cat48;
     float max_retardo_cat1, max_retardo_cat2;
     float max_retardo_cat8, max_retardo_cat10;
     float max_retardo_cat19, max_retardo_cat20;
     float max_retardo_cat21;
+    float max_retardo_cat34, max_retardo_cat48;
     float min_retardo_cat1, min_retardo_cat2;
     float min_retardo_cat8, min_retardo_cat10;
     float min_retardo_cat19, min_retardo_cat20;
     float min_retardo_cat21;
+    float min_retardo_cat34, min_retardo_cat48;
     int *segmentos_cat1, *segmentos_cat2;
     int *segmentos_cat8, *segmentos_cat10;
     int *segmentos_cat19, *segmentos_cat20;
     int *segmentos_cat21;
+    int *segmentos_cat34, *segmentos_cat48;
     int segmentos_max_cat1, segmentos_max_cat2;
     int segmentos_max_cat8, segmentos_max_cat10;
     int segmentos_max_cat19, segmentos_max_cat20;
     int segmentos_max_cat21;
+    int segmentos_max_cat34, segmentos_max_cat48;
     int segmentos_ptr_cat1, segmentos_ptr_cat2;
     int segmentos_ptr_cat8, segmentos_ptr_cat10;
     int segmentos_ptr_cat19, segmentos_ptr_cat20;
     int segmentos_ptr_cat21;
+    int segmentos_ptr_cat34, segmentos_ptr_cat48;
     struct sorted_list *sorted_list_cat1, *sorted_list_cat2;
     struct sorted_list *sorted_list_cat8, *sorted_list_cat10;
     struct sorted_list *sorted_list_cat19, *sorted_list_cat20;
     struct sorted_list *sorted_list_cat21;
+    struct sorted_list *sorted_list_cat34, *sorted_list_cat48;
 };
 
 struct radar_delay_s *radar_delay;
@@ -149,10 +158,13 @@ int i;
 	radar_delay[i].segmentos_cat19 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
 	radar_delay[i].segmentos_cat20 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
 	radar_delay[i].segmentos_cat21 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat34 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat48 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
 	radar_delay[i].sorted_list_cat1 = radar_delay[i].sorted_list_cat2 = NULL;
 	radar_delay[i].sorted_list_cat8 = radar_delay[i].sorted_list_cat10 = NULL;
 	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
 	radar_delay[i].sorted_list_cat21 = NULL;
+	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
     }
     return;
 }
@@ -188,10 +200,19 @@ int i;
 	    struct sorted_list *p = radar_delay[i].sorted_list_cat21;
 	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
 	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat34;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat48;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
 	radar_delay[i].sorted_list_cat1 = radar_delay[i].sorted_list_cat2 = NULL;
 	radar_delay[i].sorted_list_cat8 = radar_delay[i].sorted_list_cat10 = NULL;
 	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
 	radar_delay[i].sorted_list_cat21 = NULL;
+	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
 	
 	bzero(radar_delay[i].segmentos_cat1, sizeof(int) * MAX_SEGMENT_NUMBER);
 	bzero(radar_delay[i].segmentos_cat2, sizeof(int) * MAX_SEGMENT_NUMBER);
@@ -200,35 +221,44 @@ int i;
 	bzero(radar_delay[i].segmentos_cat19, sizeof(int) * MAX_SEGMENT_NUMBER);
 	bzero(radar_delay[i].segmentos_cat20, sizeof(int) * MAX_SEGMENT_NUMBER);
 	bzero(radar_delay[i].segmentos_cat21, sizeof(int) * MAX_SEGMENT_NUMBER);
+	bzero(radar_delay[i].segmentos_cat34, sizeof(int) * MAX_SEGMENT_NUMBER);
+	bzero(radar_delay[i].segmentos_cat48, sizeof(int) * MAX_SEGMENT_NUMBER);
 	radar_delay[i].sac = '\0'; radar_delay[i].sic = '\0';
 	radar_delay[i].cuenta_plot_cat1 = 0; radar_delay[i].cuenta_plot_cat2 = 0;
 	radar_delay[i].cuenta_plot_cat8 = 0; radar_delay[i].cuenta_plot_cat10 = 0;
 	radar_delay[i].cuenta_plot_cat19 = 0; radar_delay[i].cuenta_plot_cat20 = 0;
 	radar_delay[i].cuenta_plot_cat21 = 0;
+	radar_delay[i].cuenta_plot_cat34 = 0; radar_delay[i].cuenta_plot_cat48 = 0;
 	radar_delay[i].suma_retardos_cat1 = 0; radar_delay[i].suma_retardos_cat2 = 0;
 	radar_delay[i].suma_retardos_cat8 = 0; radar_delay[i].suma_retardos_cat10 = 0;
 	radar_delay[i].suma_retardos_cat19 = 0; radar_delay[i].suma_retardos_cat20 = 0;
 	radar_delay[i].suma_retardos_cat21 = 0;
+	radar_delay[i].suma_retardos_cat34 = 0; radar_delay[i].suma_retardos_cat48 = 0;
 	radar_delay[i].suma_retardos_cuad_cat1 = 0; radar_delay[i].suma_retardos_cuad_cat2 = 0;
 	radar_delay[i].suma_retardos_cuad_cat8 = 0; radar_delay[i].suma_retardos_cuad_cat10 = 0;
 	radar_delay[i].suma_retardos_cuad_cat19 = 0; radar_delay[i].suma_retardos_cuad_cat20 = 0;
 	radar_delay[i].suma_retardos_cuad_cat21 = 0;
+	radar_delay[i].suma_retardos_cuad_cat34 = 0; radar_delay[i].suma_retardos_cuad_cat48 = 0;
 	radar_delay[i].max_retardo_cat1 = -10000.0; radar_delay[i].max_retardo_cat2 = -10000.0;
 	radar_delay[i].max_retardo_cat8 = -10000.0; radar_delay[i].max_retardo_cat10 = -10000.0;
 	radar_delay[i].max_retardo_cat19 = -10000.0; radar_delay[i].max_retardo_cat20 = -10000.0;
 	radar_delay[i].max_retardo_cat21 = -10000.0;
+	radar_delay[i].max_retardo_cat34 = -10000.0; radar_delay[i].max_retardo_cat48 = -10000.0;
 	radar_delay[i].min_retardo_cat1 = 10000.0; radar_delay[i].min_retardo_cat2 = 10000.0;
 	radar_delay[i].min_retardo_cat8 = 10000.0; radar_delay[i].min_retardo_cat10 = 10000.0;
 	radar_delay[i].min_retardo_cat19 = 10000.0; radar_delay[i].min_retardo_cat20 = 10000.0;
 	radar_delay[i].min_retardo_cat21 = 10000.0;
+	radar_delay[i].min_retardo_cat34 = 10000.0; radar_delay[i].min_retardo_cat48 = 10000.0;
 	radar_delay[i].segmentos_max_cat1 = 0; radar_delay[i].segmentos_max_cat2 = 0;
 	radar_delay[i].segmentos_max_cat8 = 0; radar_delay[i].segmentos_max_cat10 = 0;
 	radar_delay[i].segmentos_max_cat19 = 0; radar_delay[i].segmentos_max_cat20 = 0;
 	radar_delay[i].segmentos_max_cat21 = 0;
+	radar_delay[i].segmentos_max_cat34 = 0; radar_delay[i].segmentos_max_cat48 = 0;
 	radar_delay[i].segmentos_ptr_cat1 = 0; radar_delay[i].segmentos_ptr_cat2 = 0;
 	radar_delay[i].segmentos_ptr_cat8 = 0; radar_delay[i].segmentos_ptr_cat10 = 0;
 	radar_delay[i].segmentos_ptr_cat19 = 0; radar_delay[i].segmentos_ptr_cat20 = 0;
 	radar_delay[i].segmentos_ptr_cat21 = 0;
+	radar_delay[i].segmentos_ptr_cat34 = 0; radar_delay[i].segmentos_ptr_cat48 = 0;
     }
 }
 
@@ -243,6 +273,8 @@ int i;
 	mem_free(radar_delay[i].segmentos_cat19);
 	mem_free(radar_delay[i].segmentos_cat20);
 	mem_free(radar_delay[i].segmentos_cat21);
+	mem_free(radar_delay[i].segmentos_cat34);
+	mem_free(radar_delay[i].segmentos_cat48);
     }
     mem_free(radar_delay);
 }
@@ -418,6 +450,26 @@ int main(int argc, char *argv[]) {
 				    radar_delay[i].min_retardo_cat21 = diff;
 				radar_delay[i].segmentos_cat21[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 				break; }
+		case CAT_34 : { 
+				radar_delay[i].cuenta_plot_cat34++;
+			        radar_delay[i].suma_retardos_cat34+=diff;
+				radar_delay[i].suma_retardos_cuad_cat34+=pow(diff,2);
+				if (diff > radar_delay[i].max_retardo_cat34)
+				    radar_delay[i].max_retardo_cat34 = diff;
+				if (diff < radar_delay[i].min_retardo_cat34)
+				    radar_delay[i].min_retardo_cat34 = diff;
+				radar_delay[i].segmentos_cat34[(int) floorf((diff+8.0)*10000.0/50.0)]++;
+				break; }
+		case CAT_48 : { 
+				radar_delay[i].cuenta_plot_cat48++;
+			        radar_delay[i].suma_retardos_cat48+=diff;
+				radar_delay[i].suma_retardos_cuad_cat48+=pow(diff,2);
+				if (diff > radar_delay[i].max_retardo_cat48)
+				    radar_delay[i].max_retardo_cat48 = diff;
+				if (diff < radar_delay[i].min_retardo_cat48)
+				    radar_delay[i].min_retardo_cat48 = diff;
+				radar_delay[i].segmentos_cat48[(int) floorf((diff+8.0)*10000.0/50.0)]++;
+				break; }
 		default : {
 				log_printf(LOG_ERROR, "categoria desconocida %08X", dbp.cat);
 				exit(EXIT_FAILURE);
@@ -450,14 +502,17 @@ int main(int argc, char *argv[]) {
 	    struct timeval calcdelay1; struct timeval calcdelay2; float calcdelay = 0.0;
 	    char *sac_s=0, *sic_l=0;
 	    float l1=0.0, l2=0.0, l8=0.0, l10=0.0;
-	    float l21=0.0;
+	    float l21=0.0, l34=0.0, l48=0.0;
 	    float sc1_1=0.0, sc1_2=0.0, sc1_3=0.0;
 	    float sc2_1=0.0, sc2_2=0.0, sc2_3=0.0;
 	    float sc8_1=0.0, sc8_2=0.0, sc8_3=0.0;
 	    float sc10_1=0.0, sc10_2=0.0, sc10_3=0.0;
 	    float sc21_1=0.0, sc21_2=0.0, sc21_3=0.0;
+	    float sc34_1=0.0, sc34_2=0.0, sc34_3=0.0;
+	    float sc48_1=0.0, sc48_2=0.0, sc48_3=0.0;
 	    float moda=0.0, p99_cat1=0.0, p99_cat2=0.0;
 	    float p99_cat8=0.0, p99_cat10=0.0, p99_cat21=0.0;
+	    float p99_cat34=0.0, p99_cat48=0.0;
 //	    struct current_time_tm tm;
 	    
 	    old_t2.tv_sec = t2.tv_sec;
@@ -516,6 +571,24 @@ int main(int argc, char *argv[]) {
 			    }
 			    if (radar_delay[i].segmentos_cat21[j]>0) {
 				insertList(&radar_delay[i].sorted_list_cat21, j, radar_delay[i].segmentos_cat21[j]);
+			    }
+			}
+			if (radar_delay[i].cuenta_plot_cat34>0) {
+			    if (radar_delay[i].segmentos_cat34[j] > radar_delay[i].segmentos_max_cat34) {
+				radar_delay[i].segmentos_ptr_cat34 = j;
+				radar_delay[i].segmentos_max_cat34 = radar_delay[i].segmentos_cat34[j];
+			    }
+			    if (radar_delay[i].segmentos_cat34[j]>0) {
+				insertList(&radar_delay[i].sorted_list_cat34, j, radar_delay[i].segmentos_cat34[j]);
+			    }
+			}
+			if (radar_delay[i].cuenta_plot_cat48>0) {
+			    if (radar_delay[i].segmentos_cat48[j] > radar_delay[i].segmentos_max_cat48) {
+				radar_delay[i].segmentos_ptr_cat48 = j;
+				radar_delay[i].segmentos_max_cat48 = radar_delay[i].segmentos_cat48[j];
+			    }
+			    if (radar_delay[i].segmentos_cat48[j]>0) {
+				insertList(&radar_delay[i].sorted_list_cat48, j, radar_delay[i].segmentos_cat48[j]);
 			    }
 			}
 		    }
@@ -648,6 +721,58 @@ int main(int argc, char *argv[]) {
 			    radar_delay[i].max_retardo_cat21 == -10000 ? 0 : radar_delay[i].max_retardo_cat21,
 			    radar_delay[i].min_retardo_cat21 ==  10000 ? 0 : radar_delay[i].min_retardo_cat21,
 			    p99_cat21);
+		    }
+		    if (radar_delay[i].cuenta_plot_cat34>0) {
+			l34 =    ( ((float) radar_delay[i].segmentos_ptr_cat34) / 10000.0*50.0 ) - 8.0;
+			sc34_1 = ( ((float) radar_delay[i].segmentos_cat34[radar_delay[i].segmentos_ptr_cat34]) / 10000.0*50.0 ) - 8.0;
+			sc34_2 = ( ((float) radar_delay[i].segmentos_cat34[radar_delay[i].segmentos_ptr_cat34 + 1]) / 10000.0*50.0 ) - 8.0;
+			sc34_3 = ( ((float) radar_delay[i].segmentos_cat34[radar_delay[i].segmentos_ptr_cat34 - 1]) / 10000.0*50.0 ) - 8.0;
+			if(radar_delay[i].sorted_list_cat34!=NULL) {
+			    struct sorted_list *p = radar_delay[i].sorted_list_cat34;
+			    struct sorted_list *p_old = NULL;
+			    long count = 0;
+			    float count_percentil_99 = ((float)radar_delay[i].cuenta_plot_cat34)*99.0/100.0;
+			    while(p!=NULL) {
+				if ((count + p->count)>count_percentil_99) { break; }
+				count += p->count; p_old = p; p = p->next;
+			    }
+			    if (p!=NULL && p_old!=NULL) { p99_cat34 = p->segment; }
+			}
+			moda = l34 + ( (sc34_1 - sc34_3) / ( (sc34_1 - sc34_3) + (sc34_1 - sc34_2) ) ) * 0.005;
+			log_printf(LOG_NORMAL, "%s %s\t34\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat34,
+			    radar_delay[i].suma_retardos_cat34/radar_delay[i].cuenta_plot_cat34,
+			    sqrt((radar_delay[i].suma_retardos_cuad_cat34 / radar_delay[i].cuenta_plot_cat34) - pow(radar_delay[i].suma_retardos_cat34 / radar_delay[i].cuenta_plot_cat34,2)),
+			    (moda < -7.994) || (moda > 7.996) ? 0 : moda,
+			    radar_delay[i].max_retardo_cat34 == -10000 ? 0 : radar_delay[i].max_retardo_cat34,
+			    radar_delay[i].min_retardo_cat34 ==  10000 ? 0 : radar_delay[i].min_retardo_cat34,
+			    p99_cat34);
+		    }
+		    if (radar_delay[i].cuenta_plot_cat48>0) {
+			l48 =    ( ((float) radar_delay[i].segmentos_ptr_cat48) / 10000.0*50.0 ) - 8.0;
+			sc48_1 = ( ((float) radar_delay[i].segmentos_cat48[radar_delay[i].segmentos_ptr_cat48]) / 10000.0*50.0 ) - 8.0;
+			sc48_2 = ( ((float) radar_delay[i].segmentos_cat48[radar_delay[i].segmentos_ptr_cat48 + 1]) / 10000.0*50.0 ) - 8.0;
+			sc48_3 = ( ((float) radar_delay[i].segmentos_cat48[radar_delay[i].segmentos_ptr_cat48 - 1]) / 10000.0*50.0 ) - 8.0;
+			if(radar_delay[i].sorted_list_cat48!=NULL) {
+			    struct sorted_list *p = radar_delay[i].sorted_list_cat48;
+			    struct sorted_list *p_old = NULL;
+			    long count = 0;
+			    float count_percentil_99 = ((float)radar_delay[i].cuenta_plot_cat48)*99.0/100.0;
+			    while(p!=NULL) {
+				if ((count + p->count)>count_percentil_99) { break; }
+				count += p->count; p_old = p; p = p->next;
+			    }
+			    if (p!=NULL && p_old!=NULL) { p99_cat48 = p->segment; }
+			}
+			moda = l48 + ( (sc48_1 - sc48_3) / ( (sc48_1 - sc48_3) + (sc48_1 - sc48_2) ) ) * 0.005;
+			log_printf(LOG_NORMAL, "%s %s\t48\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat48,
+			    radar_delay[i].suma_retardos_cat48/radar_delay[i].cuenta_plot_cat48,
+			    sqrt((radar_delay[i].suma_retardos_cuad_cat48 / radar_delay[i].cuenta_plot_cat48) - pow(radar_delay[i].suma_retardos_cat48 / radar_delay[i].cuenta_plot_cat48,2)),
+			    (moda < -7.994) || (moda > 7.996) ? 0 : moda,
+			    radar_delay[i].max_retardo_cat48 == -10000 ? 0 : radar_delay[i].max_retardo_cat48,
+			    radar_delay[i].min_retardo_cat48 ==  10000 ? 0 : radar_delay[i].min_retardo_cat48,
+			    p99_cat48);
 		    }
 		    log_printf(LOG_NORMAL, "-----------------------------------------------------------------------------\n");
 		    mem_free(sac_s);

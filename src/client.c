@@ -229,6 +229,50 @@ int main(int argc, char *argv[]) {
 		mem_free(sac_s);
 		mem_free(sic_l);
 	    }
+	} else if (dbp.cat == CAT_34 ) {
+	    char *hora1, *hora2;
+
+	    hora1 = parse_hora(dbp.tod);
+	    hora2 = parse_hora(dbp.tod_stamp);
+	    if (dbp.available & IS_SACSIC) {
+		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
+		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l,
+		(dbp.type == TYPE_C34_NORTH_MARKER) ? "NORTE" : "",
+		(dbp.type == TYPE_C34_SECTOR_CROSSING) ? "SECTOR" : "",
+		(dbp.type == TYPE_C34_GEOGRAPHICAL_FILTERING) ? "FILTER" : "",
+		(dbp.type == TYPE_C34_JAMMING_STROBE) ? "JAMM" : "",
+		hora1, hora2,
+		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+	    mem_free(hora1);
+	    mem_free(hora2);
+	    if (dbp.available & IS_SACSIC) {
+		mem_free(sac_s);
+		mem_free(sic_l);
+	    }
+	} else if (dbp.cat == CAT_48 ) {
+	    char *hora1, *hora2;
+
+	    hora1 = parse_hora(dbp.tod);
+	    hora2 = parse_hora(dbp.tod_stamp);
+	    if (dbp.available & IS_SACSIC) {
+		sac_s = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SAC_SHORT);
+		sic_l = ast_get_SACSIC((unsigned char *) &dbp.sac, (unsigned char *) &dbp.sic, GET_SIC_LONG);
+	    }
+
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l, "PLOT?",
+		hora1, hora2,
+		(dbp.available & IS_TOD) ? dbp.tod_stamp - dbp.tod : 0.0);
+	    mem_free(hora1);
+	    mem_free(hora2);
+	    if (dbp.available & IS_SACSIC) {
+		mem_free(sac_s);
+		mem_free(sic_l);
+	    }
 	}
     }
 

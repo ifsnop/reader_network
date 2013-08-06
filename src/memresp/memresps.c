@@ -16,7 +16,7 @@
 #include <time.h>
 #include "defines.h"
 #define LAP_TIME 600
-	 
+
 int do_exit=0;
 int s_in;
 struct ip_mreq mreq;
@@ -36,8 +36,8 @@ void subscribe() {
     if (s_in<0) {printf("error socket in:%s\n",strerror(errno)); exit(EXIT_FAILURE);}
     memset(&cast_group, 0, sizeof(cast_group));
     cast_group.sin_family = AF_INET;
-    cast_group.sin_addr.s_addr = inet_addr("225.25.250.9"); //multicast group ip
-    cast_group.sin_port = htons((unsigned short int)5020);  //multicast group port
+    cast_group.sin_addr.s_addr = inet_addr("225.25.250.8"); //multicast group ip
+    cast_group.sin_port = htons((unsigned short int)0);  //multicast group port
     if ( bind(s_in, (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
         printf("error bind: %s\n", strerror(errno)); exit(EXIT_FAILURE);
     }
@@ -55,8 +55,11 @@ void subscribe() {
 }
 
 int main(int argc, char *argv[]) {
-    unsigned char dump_start[] = {0x00,0x06,0x00,0x02,0x01,0x01,0x03,0xe8,0x53,0x69,0x52,0x73};
-    unsigned char dump_stop[]  = {0x00,0x06,0x00,0x02,0x01,0x01,0x03,0xe8,0x4e,0x6f,0x52,0x73};
+//    unsigned char dump_start[] = {0x00,0x06,0x00,0x02,0x01,0x01,0x03,0xe8,0x53,0x69,0x52,0x73};
+//    unsigned char dump_stop[]  = {0x00,0x06,0x00,0x02,0x01,0x01,0x03,0xe8,0x4e,0x6f,0x52,0x73};
+    unsigned char dump_start[] = {0x00,0x00,0x00,0xae,0x04,0x00,0x00,0x19,0x00,0x00,0x01,0x01};
+    unsigned char dump_stop[] =  {0x00,0x00,0x00,0xae,0x04,0x00,0x80,0x40,0x00,0xf0,0x01,0x01};
+    //                                                       ^num extractor
     char ptr_destdir[256], ptr_mkdir[256], ptr_bzip[256], *ptr_filename;
 //    00,06 -> tamano en words
 //    00 -> 
@@ -100,8 +103,8 @@ int main(int argc, char *argv[]) {
 	// child (daemon) continues
 	setsid(); // obtain a new process group
 	// close all open filehandlers
-	{
-	    int fd = 0; long retcode;
+	{ 
+	    long retcode; int fd=0;
 	    if ( (retcode = sysconf(_SC_OPEN_MAX)) <0 ) {
 		printf("ERROR sysconf: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
@@ -128,13 +131,16 @@ int main(int argc, char *argv[]) {
     if (s_out<0) {printf("error socket out:%s\n",strerror(errno)); exit(EXIT_FAILURE);}
     
     addr1.sin_family = AF_INET;
-    addr1.sin_port = htons(2030); // puerto
-    addr1.sin_addr.s_addr = inet_addr("214.25.250.255"); // ip destino
+    addr1.sin_port = htons(8000); // puerto
+    addr1.sin_addr.s_addr = inet_addr("214.25.250.1"); // ip destino
     addr2.sin_family = AF_INET;
-    addr2.sin_port = htons(5001); // puerto
-    addr2.sin_addr.s_addr = inet_addr("214.25.250.255"); // ip destino
-    ret = setsockopt(s_out, SOL_SOCKET, SO_BROADCAST, (const char*)&val, sizeof(val)); // obligado para escribir en broadcast
-    if (ret<0) {printf("error setsockopt(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
+    addr2.sin_port = htons(8000); // puerto
+    addr2.sin_addr.s_addr = inet_addr("214.25.250.1"); // ip destino
+//    ret = setsockopt(s_out, SOL_SOCKET, SO_BROADCAST, (const char*)&val, sizeof(val)); // obligado para escribir en broadcast
+//    if (ret<0) {printf("error setsockopt(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
+
+    dump_start[9] = (val++ % 9);
+    dump_stop[9] = (val++ % 9);
     ret = sendto(s_out, dump_start, 12, 0, (struct sockaddr*)&addr1, sizeof(addr1));
     if (ret!=12) {printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
     ret = sendto(s_out, dump_start, 12, 0, (struct sockaddr*)&addr2, sizeof(addr2));

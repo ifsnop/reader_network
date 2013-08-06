@@ -10,6 +10,8 @@
 #define CAT_19 19
 #define CAT_20 20
 #define CAT_21 21
+#define CAT_34 34
+#define CAT_48 48
 #define CAT_255 255
 
 #define NO_DETECTION 0
@@ -67,6 +69,11 @@
 #define TYPE_C19_PERIODIC_STATUS 2
 #define TYPE_C19_EVENT_STATUS 4
 
+#define TYPE_C34_NORTH_MARKER 1
+#define TYPE_C34_SECTOR_CROSSING 2
+#define TYPE_C34_GEOGRAPHICAL_FILTERING 4
+#define TYPE_C34_JAMMING_STROBE 8
+
 unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
 void ttod_put_full(unsigned char sac, unsigned char sic, unsigned char *ptr_full_tod);
@@ -78,6 +85,8 @@ int ast_procesarCAT10(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 int ast_procesarCAT19(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT20(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
+int ast_procesarCAT34(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
+int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id);
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index);
 int ast_get_size_FSPEC(unsigned char *ptr_raw, ssize_t size_datablock);
