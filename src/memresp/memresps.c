@@ -40,6 +40,10 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include "defines.h"
 #define LAP_TIME 600
 
+#define MCAST_SOURCE_IP "214.25.250.2"
+#define MCAST_DEST_PORT 8008
+#define MCAST_GROUP_IP "225.25.250.8"
+
 int do_exit=0;
 int s_in;
 struct ip_mreq mreq;
@@ -59,8 +63,8 @@ void subscribe() {
     if (s_in<0) {printf("error socket in:%s\n",strerror(errno)); exit(EXIT_FAILURE);}
     memset(&cast_group, 0, sizeof(cast_group));
     cast_group.sin_family = AF_INET;
-    cast_group.sin_addr.s_addr = inet_addr("225.25.250.8"); //multicast group ip
-    cast_group.sin_port = htons((unsigned short int)0);  //multicast group port
+    cast_group.sin_addr.s_addr = inet_addr(MCAST_GROUP_IP); //multicast group ip
+    cast_group.sin_port = htons((unsigned short int)MCAST_DEST_PORT);  //multicast group port
     if ( bind(s_in, (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
         printf("error bind: %s\n", strerror(errno)); exit(EXIT_FAILURE);
     }
@@ -78,10 +82,12 @@ void subscribe() {
 }
 
 int main(int argc, char *argv[]) {
+// FASE3
 //    unsigned char dump_start[] = {0x00,0x06,0x00,0x02,0x01,0x01,0x03,0xe8,0x53,0x69,0x52,0x73};
 //    unsigned char dump_stop[]  = {0x00,0x06,0x00,0x02,0x01,0x01,0x03,0xe8,0x4e,0x6f,0x52,0x73};
-    unsigned char dump_start[] = {0x00,0x00,0x00,0xae,0x04,0x00,0x00,0x19,0x00,0x00,0x01,0x01};
-    unsigned char dump_stop[] =  {0x00,0x00,0x00,0xae,0x04,0x00,0x80,0x40,0x00,0xf0,0x01,0x01};
+// MODOS
+//    unsigned char dump_start[] = {0x00,0x00,0x00,0xae,0x04,0x00,0x00,0x19,0x00,0x00,0x01,0x01};
+//    unsigned char dump_stop[] =  {0x00,0x00,0x00,0xae,0x04,0x00,0x80,0x40,0x00,0xf0,0x01,0x01};
     //                                                       ^num extractor
     char ptr_destdir[256], ptr_mkdir[256], ptr_bzip[256], *ptr_filename;
 //    00,06 -> tamano en words
@@ -95,7 +101,7 @@ int main(int argc, char *argv[]) {
 //    214.25.250.14:1044 -> 214.25.250.255:5001 UDP (12 bytes)    
 //    214.25.250.14:1044 -> 214.25.250.255:2030 UDP (12 bytes)    
     
-    int s_out,ret,val=1,fd_out;
+    int s_out,ret,/*val=1,*/fd_out;
     struct sockaddr_in addr1,addr2;
     unsigned char* ptr_in;
     struct timeval current_date,old_date;
@@ -150,25 +156,31 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM,gotsig);
     
 // envio del paquete para empezar el volcado
-    s_out = socket(AF_INET, SOCK_DGRAM, 0);
+// desativado, ya no es necesario pedir que empiece el volcado, la suscripción se hace 
+// a través del webbrowser
+
+    s_out = 0; //socket(AF_INET, SOCK_DGRAM, 0);
     if (s_out<0) {printf("error socket out:%s\n",strerror(errno)); exit(EXIT_FAILURE);}
     
     addr1.sin_family = AF_INET;
     addr1.sin_port = htons(8000); // puerto
-    addr1.sin_addr.s_addr = inet_addr("214.25.250.1"); // ip destino
+    addr1.sin_addr.s_addr = inet_addr(MCAST_SOURCE_IP); // ip destino
     addr2.sin_family = AF_INET;
     addr2.sin_port = htons(8000); // puerto
-    addr2.sin_addr.s_addr = inet_addr("214.25.250.1"); // ip destino
+    addr2.sin_addr.s_addr = inet_addr(MCAST_SOURCE_IP); // ip destino
 //    ret = setsockopt(s_out, SOL_SOCKET, SO_BROADCAST, (const char*)&val, sizeof(val)); // obligado para escribir en broadcast
 //    if (ret<0) {printf("error setsockopt(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
 
+/*
+
+    // deshabilitado, la petición de inicio de volcado se hace ahora desde el webbrowser
     dump_start[9] = (val++ % 9);
     dump_stop[9] = (val++ % 9);
     ret = sendto(s_out, dump_start, 12, 0, (struct sockaddr*)&addr1, sizeof(addr1));
     if (ret!=12) {printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
     ret = sendto(s_out, dump_start, 12, 0, (struct sockaddr*)&addr2, sizeof(addr2));
     if (ret!=12) {printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
-
+*/
     subscribe();
 
 // sacar la fecha actual para el nombre del fichero
@@ -233,7 +245,7 @@ int main(int argc, char *argv[]) {
                     close(s_in);
                     subscribe();
         	}
-		if (( udp_size > 0) && (!strcasecmp(inet_ntoa(cast_group.sin_addr), "214.25.250.1"))) {
+		if (( udp_size > 0) && (!strcasecmp(inet_ntoa(cast_group.sin_addr), MCAST_SOURCE_IP))) {
 		    // write to file
 		    write(fd_out, ptr_in, udp_size);
 		} else {
@@ -250,12 +262,14 @@ int main(int argc, char *argv[]) {
 //	if (do_exit) { printf("salir\n"); }
     }    
 //    printf("salido\n");
-    
+/*
+    // no es necesario enviar un "para el envio", porque lo controlamos desde el webbrowser
+
     ret = sendto(s_out, dump_stop, 12, 0, (struct sockaddr*)&addr1, sizeof(addr1));
     if (ret<12) { printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE); }
     ret = sendto(s_out, dump_stop, 12, 0, (struct sockaddr*)&addr2, sizeof(addr2));
     if (ret<12) { printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE); }
-
+*/
     close(fd_out);
     close(s_in);
     close(s_out);
