@@ -248,7 +248,7 @@ long timestamp = 0;
         }
     }
     
-    if (source_file == NULL || timestamp == 0 || rrd_directory == NULL) {
+    if (source_file == NULL || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
         log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
 	            "This program comes with ABSOLUTELY NO WARRANTY.\n"
 	            "This is free software, and you are welcome to redistribute it\n"
