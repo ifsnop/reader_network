@@ -22,7 +22,11 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#define VERSION "0.64"
+#define VERSION "0.65"
+#define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2014 Diego Torres\n\n" \
+    "This program comes with ABSOLUTELY NO WARRANTY.\n" \
+    "This is free software, and you are welcome to redistribute it\n" \
+    "under certain conditions; see COPYING file for details.\n\n"
 
 #define TEXT_LENGTH_SHORT 4
 #define TEXT_LENGTH_LONG  32
@@ -42,7 +46,10 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 //#define UPDATE_TIME 10.0
 #define UPDATE_TIME_RRD 300.0
 
-#define MAX_SCRM_SIZE 5000
+#define SELECT_TIMEOUT 5
+
+#define SCRM_MAX_QUEUE_SIZE 5000
+#define SCRM_OLD_TIME 30
 
 #define DEST_FILE_FORMAT_UNKNOWN 1
 #define DEST_FILE_FORMAT_AST 2

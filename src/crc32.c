@@ -4,17 +4,15 @@ multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 */
 
-
 #include "crc32.h"
 
 crc32_t crc32_table[256];      /* CRCs of all 8-bit messages.    */
 //static crc32_t crc32_table[256];      /* CRCs of all 8-bit messages.    */
 //static int crc32_table_computed = 0;  /* Flag: Has table been computed? */
 
-
 /* Make the table: */
 
-//static 
+//static
 void setup_crc32_table(void)
 {
   crc32_t c;

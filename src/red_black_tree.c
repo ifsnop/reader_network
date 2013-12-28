@@ -190,7 +190,7 @@ void TreeInsertHelp(rb_red_blk_tree* tree, rb_red_blk_node* z) {
   rb_red_blk_node* x;
   rb_red_blk_node* y;
   rb_red_blk_node* nil=tree->nil;
-  
+
   z->left=z->right=nil;
   y=tree->root;
   x=tree->root->left;
@@ -244,7 +244,7 @@ rb_red_blk_node * RBTreeInsert(rb_red_blk_tree* tree, unsigned int crc32, float 
   x->crc32 = crc32;
   x->timestamp = timestamp;
   x->access = 0;
-  
+
   tree->AddQueue(x);
   tree->count+=1;
 
@@ -267,7 +267,7 @@ rb_red_blk_node * RBTreeInsert(rb_red_blk_tree* tree, unsigned int crc32, float 
 	x->parent->red=0;
 	x->parent->parent->red=1;
 	RightRotate(tree,x->parent->parent);
-      } 
+      }
     } else { /* case for x->parent == x->parent->parent->right */
       y=x->parent->parent->left;
       if (y->red) {

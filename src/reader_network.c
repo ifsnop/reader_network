@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -29,6 +29,7 @@ float current_time=0.0;
 struct sockaddr_in cliaddr,srvaddr;
 
 bool enabled = false;
+long dest_free_space = -1;
 bool dest_file_gps = false, source_file_gps = false;
 bool dest_file_compress = false;
 bool dest_file_timestamp = false;
@@ -41,22 +42,24 @@ long timed_stats_interval = 0;
 time_t t3; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
 char *source, *dest_file = NULL, *dest_file_region = NULL,
     *dest_file_extension = NULL,
-    *dest_file_final_ast = NULL, *dest_file_final_gps = NULL, 
+    *dest_file_final_ast = NULL, *dest_file_final_gps = NULL,
     *dest_ftp_uri = NULL,  *dest_ftp_host = NULL,
     *source_file = NULL, **radar_definition;
 int *radar_counter = NULL; // plots recibidos por cada flujo
 int *radar_counter_bytes = NULL; // bytes recibidos por cada flujo
 int dest_file_format = DEST_FILE_FORMAT_AST;
-int radar_count = 0; // numero de entradas en el array de definicion de radares. 
+int radar_count = 0; // numero de entradas en el array de definicion de radares.
     // para saber el numero de radares, hay que dividir entre 5! (5 columnas por radar)
 int socket_count = 0, s, offset = 0;
 int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
+char *asterix_versions = NULL;
+char *digest_hex = NULL;
 
 struct Queue {
     rb_red_blk_node **node;
-    //[MAX_SCRM_SIZE];
+    //[SCRM_MAX_QUEUE_SIZE];
     int front, rear;
     int count;
 };
@@ -70,17 +73,74 @@ struct radar_destination_s {
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
 
+void setup_asterix_versions() {
+    int read_size = 0, i;
+    FILE *fd = NULL;
+    struct stat sb;
+    unsigned char *buf = NULL;
+    MD5_CTX ctx;
+    unsigned char digest[16];
+/*
+    FILE* fstab = setmntent("/etc/mtab", "r");
+    struct mntent *e;
+    const char *devname = NULL;
+    while ((e = getmntent(fstab))) {
+        if (strcmp("/", e->mnt_dir) == 0) {
+            devname = e->mnt_fsname;
+            break;
+        }
+    }
+    printf("root devname is %s\n", devname);
+    endmntent(fstab);
+*/
+// "/var/lib/dbus/machine-id"
+// "/sys/class/dmi/id/board_serial"
+    if ( stat("/var/lib/dbus/machine-id", &sb) == -1 ) { /* To obtain file size */
+	log_printf(LOG_VERBOSE, "asterix_versions fstat error (%s)\n", strerror(errno)); return; // exit(EXIT_FAILURE);
+    }
+    if (!S_ISREG (sb.st_mode)) {
+	log_printf(LOG_VERBOSE, "asterix_versions file error (not a file)\n"); return; // exit(EXIT_FAILURE);
+    }
+    buf = mem_alloc(sb.st_size + 1);
+
+    if ( (fd = fopen("/var/lib/dbus/machine-id", "r")) == NULL ) {
+	log_printf(LOG_VERBOSE, "asterix_versions open error (%s)\n", strerror(errno)); free(buf); return; // exit(EXIT_FAILURE);
+    }
+    if ( (read_size = fread(buf, 1, sb.st_size, fd)) != sb.st_size ) {
+	if ( !feof(fd) ) {
+	    log_printf(LOG_VERBOSE, "asterix_versions fread error (%s)\n", strerror(errno));
+	    mem_free(buf); fclose(fd); // exit(EXIT_FAILURE);
+	}
+    }
+    buf[read_size] = '\0';
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, buf, read_size);
+    MD5_Final(digest, &ctx);
+    mem_free(buf);
+    //sprintf(digest_hex, "%s", digest);
+    digest_hex = (char *) mem_alloc(16*2 + 1); //md5 length in ascii + null terminator3
+
+    for(i=0; i<16; i++)
+	sprintf(digest_hex + i*2, "%02x", digest[i]);
+    digest_hex[16*2] = '\0';
+
+    if ( fclose(fd) != 0 ) {
+	log_printf(LOG_ERROR, "asterix_versions close error\n"); exit(EXIT_FAILURE);
+    }
+    return;
+}
+
 void parse_config(char *conf_file) {
 char *dest_file_format_string = NULL;
 
     if (!cfg_open(conf_file)) {
-        log_printf(LOG_ERROR, "please create reader_network.conf or check for duplicate entry\n");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_ERROR, "please create reader_network.conf or check for duplicate entry\n");
+	exit(EXIT_FAILURE);
     }
     cfg_get_bool(&enabled, "enabled");
     if (enabled == false) {
-        log_printf(LOG_ERROR, "please modify your config.file\n");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_ERROR, "please modify your config.file\n");
+	exit(EXIT_FAILURE);
     }
 
     cfg_get_bool(&mode_daemon, "mode_daemon");
@@ -90,9 +150,9 @@ char *dest_file_format_string = NULL;
 	long retcode; int fd;
 #endif
         log_printf(LOG_VERBOSE, "going to daemon mode\n");
-	if (timed_stats_interval>0) { 
+	if (timed_stats_interval>0) {
 	    log_printf(LOG_VERBOSE, "advanced stats disabled in daemon mode\n"); 
-	    timed_stats_interval = 0; 
+	    timed_stats_interval = 0;
 	}
 	log_flush();
 	log_close();
@@ -128,7 +188,7 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "interactive version\n");
 	if (timed_stats_interval>0)
-	    log_printf(LOG_VERBOSE, "displaying advanced stats every %ld secs only\n", timed_stats_interval);
+	    log_printf(LOG_VERBOSE, "displaying advanced stats every %ld secs\n", timed_stats_interval);
     }
 
     if (cfg_get_bool(&mode_scrm, "mode_scrm")) {
@@ -150,10 +210,33 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "not displaying pkt crc\n");
     }
-    
+
+    if ( !cfg_get_str(&asterix_versions, "asterix_versions") ||
+	strlen(asterix_versions) != 32 ) {
+	log_printf(LOG_ERROR, "asterix_versions entry missing\n");
+	exit(EXIT_FAILURE);
+    } else {
+	if ( digest_hex != NULL ) {
+	    int i = 0, equal = 1;
+	    //printf("%s\n", digest_hex); printf("%s\n", asterix_versions);
+	    for(i=0; i<(16*2); i++)
+		if ( digest_hex[i] != asterix_versions[i] )
+		    equal = 0;
+
+	    if ( equal == 0 ) {
+		log_printf(LOG_ERROR, "asterix_versions mismatch\n");
+		exit(EXIT_FAILURE);
+	    } else {
+		log_printf(LOG_VERBOSE, "asterix_versions match\n");
+	    }
+	} else {
+	    log_printf(LOG_VERBOSE, "asterix_versions not parsed\n");
+	}
+    }
+
     if (!cfg_get_str(&source, "source")) {
-        log_printf(LOG_VERBOSE, "source must be file, multicast or broadcast\n");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_VERBOSE, "source must be file, multicast or broadcast\n");
+	exit(EXIT_FAILURE);
     }
     if (!strncasecmp(source, "file", 4)) {
 	if (!cfg_get_str(&source_file, "source_file")) {
@@ -174,7 +257,7 @@ char *dest_file_format_string = NULL;
 			log_printf(LOG_VERBOSE, "GPSv1 input activated\n");
 			offset = 10;
 		    } else if (source_file_gps_version == 2) {
-		    	log_printf(LOG_VERBOSE, "GPSv2 input activated\n");
+			log_printf(LOG_VERBOSE, "GPSv2 input activated\n");
 			offset = 4;
 		    } else {
 			log_printf(LOG_ERROR, "GPS version not supported\n");
@@ -206,6 +289,10 @@ char *dest_file_format_string = NULL;
     if (cfg_get_int(&timed, "timed")) {
 	log_printf(LOG_VERBOSE, "recording for %ld secs only\n", timed);
     }
+    if ( cfg_get_int(&dest_free_space, "dest_free_space") ) {
+	log_printf(LOG_VERBOSE, "minimum free space configured at %ld Mb\n", dest_free_space);
+    }
+
     if (cfg_get_bool(&dest_localhost, "dest_localhost")) {
 	if (dest_localhost) {
 	    log_printf(LOG_VERBOSE, "enable localhost decoding for stats\n");
@@ -215,19 +302,19 @@ char *dest_file_format_string = NULL;
     }
 
     if (cfg_get_str(&dest_file_region, "dest_file_region")) {
-        log_printf(LOG_VERBOSE, "output file region: %s\n", dest_file_region);
+	log_printf(LOG_VERBOSE, "output file region: %s\n", dest_file_region);
     } else {
-        log_printf(LOG_VERBOSE, "no region prefix\n");
+	log_printf(LOG_VERBOSE, "no region prefix\n");
     }
-    
+
     if (cfg_get_str(&dest_file_extension, "dest_file_extension")) {
-        log_printf(LOG_VERBOSE, "output file extension: %s\n", dest_file_extension);
+	log_printf(LOG_VERBOSE, "output file extension: %s\n", dest_file_extension);
     } else {
-        log_printf(LOG_VERBOSE, "no extension\n");
+	log_printf(LOG_VERBOSE, "no extension\n");
     }
 
     if (cfg_get_str(&dest_file, "dest_file")) {
-        log_printf(LOG_VERBOSE, "output data to file (1):%s\n", dest_file);
+	log_printf(LOG_VERBOSE, "output data to file (1):%s\n", dest_file);
 	if (cfg_get_bool(&dest_file_timestamp, "dest_file_timestamp")) {
 	    if (dest_file_timestamp) log_printf(LOG_VERBOSE, "appending date+time to output file\n");
 	}
@@ -243,7 +330,7 @@ char *dest_file_format_string = NULL;
 		dest_file_format = DEST_FILE_FORMAT_AST;
 		log_printf(LOG_VERBOSE, "AST output activated");
 	    } else {
-	    	    dest_file_format = DEST_FILE_FORMAT_AST;
+		    dest_file_format = DEST_FILE_FORMAT_AST;
 		    log_printf(LOG_VERBOSE, "AST output activated (default)");
 	    }
 	    log_printf(LOG_VERBOSE, "\n");
@@ -265,7 +352,7 @@ char *dest_file_format_string = NULL;
 }
 
 void setup_output_file(void) {
-char *gpsheader = NULL;
+char *gpsheader = NULL, *dest_file_region_parsed = NULL;
 struct timeval t;
 struct tm *t2 = NULL;
 
@@ -273,6 +360,27 @@ struct tm *t2 = NULL;
     gpsheader = memset(gpsheader, 0xcd, 2200);
 
     if (dest_file != NULL) {
+	if ( dest_free_space != -1 ) {
+	    double result = 0;
+	    struct statvfs sfs;
+	    if ( statvfs(dest_file, &sfs) == -1 ) {
+		log_printf(LOG_ERROR, "ERROR statvfs: %s\n", strerror(errno)); exit(EXIT_FAILURE);
+	    } else
+		result = (double)((unsigned long long)sfs.f_bsize * sfs.f_bfree)/(1024*1024);
+	    if (result > 0) {
+		if ( result < dest_free_space ) {
+		    log_printf(LOG_ERROR, "not enough free space %.2f Mb / %ld Mb\n", result, dest_free_space);
+		    exit(EXIT_FAILURE);
+		}
+	    }
+	}
+	
+
+	if ( (dest_file_region != NULL) && (strlen(dest_file_region)>0) ) {
+	    dest_file_region_parsed = (char *) mem_alloc(strlen(dest_file_region)+1+2);
+	    snprintf(dest_file_region_parsed, (strlen(dest_file_region) + 4), "-%s-", dest_file_region);
+	}
+
 	if (dest_file_timestamp) {
 	    if (gettimeofday(&t, NULL) !=0 ) {
 		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno)); exit(EXIT_FAILURE);
@@ -288,12 +396,12 @@ struct tm *t2 = NULL;
 		//sprintf(dest_file_final_ast, "%s_%04d%02d%02d%02d%02d%02d.ast", dest_file, t2->tm_year+1900, t2->tm_mon+1, t2->tm_mday,
 		//    t2->tm_hour, t2->tm_min, t2->tm_sec);
 		snprintf(dest_file_final_ast, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
-		if ((res = system(dest_file_final_ast)) == -1) {
-		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
+		if ( ((res = system(dest_file_final_ast)) == -1) || (WEXITSTATUS(res) != 0) ) {
+		    log_printf(LOG_ERROR, "ERROR makdir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
 		}
-		snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d-%s-%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
+		snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
 		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
-		    (dest_file_region != NULL ? dest_file_region : "na"),
+		    (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
 		    t2->tm_hour, t2->tm_min, t2->tm_sec,
 		    (dest_file_extension != NULL ? dest_file_extension : "ast"));
 	    } else {
@@ -310,13 +418,12 @@ struct tm *t2 = NULL;
 	    if (dest_file_timestamp) {
 		int res = 0;
 		snprintf(dest_file_final_gps, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
-		if ((res = system(dest_file_final_gps)) == -1) {
-		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
+		if ( ((res = system(dest_file_final_gps)) == -1) || (WEXITSTATUS(res) != 0) ) {
+		    log_printf(LOG_ERROR, "ERROR mkdir: %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
 		}
-		//
-		snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d-%s-%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
+		snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
 		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
-		    (dest_file_region != NULL ? dest_file_region : "na"),
+		    (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
 		    t2->tm_hour, t2->tm_min, t2->tm_sec,
 		    (dest_file_extension != NULL ? dest_file_extension : "gps"));
 		//sprintf(dest_file_final_gps, "%s/%02d/%02d/%02d%02d%02d.gps", dest_file, t2->tm_mon+1, t2->tm_mday,
@@ -326,7 +433,7 @@ struct tm *t2 = NULL;
 	    }
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_gps);
 	    if ( (fd_out_gps = open(dest_file_final_gps, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
-	        | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
+		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
 		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	    if (write(fd_out_gps, gpsheader, 2200)!=2200) {
@@ -334,6 +441,8 @@ struct tm *t2 = NULL;
 	    }
 	}
     }
+    if (dest_file_region_parsed != NULL)
+	mem_free(dest_file_region_parsed);
     mem_free(gpsheader);
     return;
 }
@@ -350,13 +459,13 @@ int pid = 0;
 	} else {
 	    log_printf(LOG_VERBOSE, " %d => %d", ret, i);
 	    if ( setpriority(PRIO_PROCESS, pid , i) == -1 ) {
-	        log_printf(LOG_VERBOSE, "\nERROR setpriority: %s\n", strerror(errno));
+		log_printf(LOG_VERBOSE, "\nERROR setpriority: %s\n", strerror(errno));
 	    } else {
-	        log_printf(LOG_VERBOSE, "...done!\n");
+		log_printf(LOG_VERBOSE, "...done!\n");
 	    }
 	}
     } else {
-        log_printf(LOG_VERBOSE, "we are NOT root!\n");
+	log_printf(LOG_VERBOSE, "we are NOT root!\n");
     }
     return;
 }
@@ -399,18 +508,18 @@ void send_output_file() {
     //char buff_active[1024];
     struct stat file_info;
     curl_off_t fsize;
-    
+
     //bzero(buff_active, 1024);
     //snprintf(buff_active, "-");
-    
+
     if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
 	snprintf(file, 1023, "%s%s", dest_file_final_ast, (dest_file_compress ? ".bz2" : "") );
     } else if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
-    	snprintf(file, 1023, "%s%s", dest_file_final_gps, (dest_file_compress ? ".bz2" : "") );
+	snprintf(file, 1023, "%s%s", dest_file_final_gps, (dest_file_compress ? ".bz2" : "") );
     }
 
     snprintf(buff_1, 1023, "%s%s", dest_ftp_uri, basename(file));
-    
+
     if (stat(file, &file_info)) {
 	log_printf(LOG_ERROR, "ERROR stat '%s': %s\n", file, strerror(errno));
 	exit(EXIT_FAILURE);
@@ -421,56 +530,55 @@ void send_output_file() {
 	log_printf(LOG_ERROR, "ERROR opening '%s': %s\n", file, strerror(errno));
 	exit(EXIT_FAILURE);
     }
-    
+
     if (setenv("NO_PROXY",dest_ftp_host,1)==-1) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");    
     if (unsetenv("http_proxy")==-1) log_printf(LOG_ERROR, "ERROR unsetenv http_proxy\n");
     if (unsetenv("ftp_proxy")==-1) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
-    
+
 //    system("echo poniendo noproxy\n"); system("echo $NO_PROXY\n"); exit(EXIT_FAILURE);
 
     curl_global_init(CURL_GLOBAL_ALL);
     ch = curl_easy_init();
     if(ch) {
-        curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
+	curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
 
-        /* enable uploading */
-        curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
-                 
-        /* specify target */
-        curl_easy_setopt(ch, CURLOPT_URL, buff_1);
-        
+	/* enable uploading */
+	curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
+
+	/* specify target */
+	curl_easy_setopt(ch, CURLOPT_URL, buff_1);
 	curl_easy_setopt(ch, CURLOPT_HTTPPROXYTUNNEL, 0L);
-                                     
+
 	/* disable PASSIVE transfers */
 	// NOT TESTED
 	// curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_active);
 
-        /* now specify which file to upload */
-        curl_easy_setopt(ch, CURLOPT_READDATA, fh);
-                                                     
-        /* Set the size of the file to upload (optional).  If you give a *_LARGE
-        option you MUST make sure that the type of the passed-in argument is a
-        curl_off_t. If you use CURLOPT_INFILESIZE (without _LARGE) you must
-        make sure that to pass in a type 'long' argument. */
-        //curl_easy_setopt(ch, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
-        curl_easy_setopt(ch, CURLOPT_INFILESIZE, (long)(curl_off_t)fsize);
-    
+	/* now specify which file to upload */
+	curl_easy_setopt(ch, CURLOPT_READDATA, fh);
+
+	/* Set the size of the file to upload (optional).  If you give a *_LARGE
+	option you MUST make sure that the type of the passed-in argument is a
+	curl_off_t. If you use CURLOPT_INFILESIZE (without _LARGE) you must
+	make sure that to pass in a type 'long' argument. */
+	//curl_easy_setopt(ch, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
+	curl_easy_setopt(ch, CURLOPT_INFILESIZE, (long)(curl_off_t)fsize);
+
 	curl_easy_setopt(ch, CURLOPT_ERRORBUFFER, buff_2);
-                           
+
 	/* Now run off and do what you've been told! */
-        res = curl_easy_perform(ch);
-        
-        if (res != CURLE_OK) {
-    	    log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
-        }
-        
-        /* always cleanup */
-        curl_easy_cleanup(ch);
+	res = curl_easy_perform(ch);
+
+	if (res != CURLE_OK) {
+	    log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
+	}
+
+	/* always cleanup */
+	curl_easy_cleanup(ch);
     }
-    
+
     fclose(fh); /* close the local file */
     curl_global_cleanup();
-    
+
     return;
 }
 
@@ -506,7 +614,7 @@ int loop=1;
 void setup_time(void) {
 struct timeval t;
 struct tm *t2;
-    
+
     if (gettimeofday(&t, NULL)==-1) {
 	log_printf(LOG_ERROR, "ERROR gettimeofday (setup_time): %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
@@ -541,22 +649,21 @@ ssize_t size;
     return size;
 }
 
-
 void AddQueue(void* a) {
     // printf("add addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
-    if (q.count != MAX_SCRM_SIZE) {
+    if (q.count != SCRM_MAX_QUEUE_SIZE) {
 	q.node[q.rear] = (rb_red_blk_node *) a;
-	q.rear = (q.rear + 1) % MAX_SCRM_SIZE;
+	q.rear = (q.rear + 1) % SCRM_MAX_QUEUE_SIZE;
 	q.count++;
     }
     return;
 }
-    
+
 void DeleteQueue(void *a) {
     // printf("delete addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
     // item = queue.node[queue.front];
     if (q.count != 0) {
-	q.front = (q.front + 1) % MAX_SCRM_SIZE;
+	q.front = (q.front + 1) % SCRM_MAX_QUEUE_SIZE;
 	q.count--;
     }
 }
@@ -566,7 +673,6 @@ int UIntComp(unsigned int a, unsigned int b) {
     if (a<b) return (-1);
     return 0;
 }
-
 
 int main(int argc, char *argv[]) {
 
@@ -586,21 +692,20 @@ unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
 
 #ifdef LINUX
-    printf("reader_network_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
-    "This program comes with ABSOLUTELY NO WARRANTY.\n"
-    "This is free software, and you are welcome to redistribute it\n"
-    "under certain conditions; see COPYING file for details.\n\n", VERSION);
+    printf("reader_network_LNX" COPYRIGHT_NOTICE, VERSION);
 #endif
 #ifdef SOLARIS
-    printf("reader_network_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
-    "This program comes with ABSOLUTELY NO WARRANTY.\n"
-    "This is free software, and you are welcome to redistribute it\n"
-    "under certain conditions; see COPYING file for details.\n\n", VERSION);
-#endif    
+    printf("reader_network_SOL" COPYRIGHT_NOTICE, VERSION);
+#endif
     startup();
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
-    if (argc!=2 || strlen(argv[1])<5) {
+    if ( argc!=2 ) {
 	log_printf(LOG_ERROR, "usage: %s <config_file>\n\n", argv[0]);
+	exit(EXIT_FAILURE);
+    }
+    setup_asterix_versions();
+    if ( !strncmp(argv[1], "-r", 2) ) {
+	log_printf(LOG_ERROR, "%s\n", digest_hex);
 	exit(EXIT_FAILURE);
     }
     parse_config(argv[1]);
@@ -610,11 +715,11 @@ unsigned long count2_udp_received = 0;
 	setup_output_multicast();
     setup_output_file();
     setup_crc32_table();
-    if (mode_scrm) { 
+    if (mode_scrm) {
 	tree = RBTreeCreate(UIntComp,AddQueue,DeleteQueue);
-	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * MAX_SCRM_SIZE);
+	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * SCRM_MAX_QUEUE_SIZE);
 	q.rear = q.front = q.count = 0;
-//	q.node =  mem_alloc(rb_red_blk_node);
+	// q.node =  mem_alloc(rb_red_blk_node);
     }
 
     gettimeofday(&timed_t_start, NULL);
@@ -672,10 +777,10 @@ unsigned long count2_udp_received = 0;
 		if (dest_file_gps) {
 		    if (source_file_gps && (source_file_gps_version == 2) ) {
 			if ( (write (fd_out, ast_ptr_raw + ast_pos, ast_size_datablock + offset)) == -1 ) {
-		    	    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
+			    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
 			}
 		    } else {
-    			unsigned long sec;
+			unsigned long sec;
 			unsigned char byte;
 			unsigned char *datablock_tmp;
 			datablock_tmp = (unsigned char *) mem_alloc(ast_size_datablock+4);
@@ -698,7 +803,7 @@ unsigned long count2_udp_received = 0;
 		} else {
 //IFSNOP
 		    int volcar=1;
-		    
+
 		    if ((ast_size_datablock == 9) && (ast_ptr_raw[0+ast_pos] == '\x02')) {
 			volcar=0;
 		    }
@@ -707,7 +812,7 @@ unsigned long count2_udp_received = 0;
 			if (ast_ptr_raw[0+ast_pos] == '\x01') {
 			    char *p;
 			    do {
-//    				log_printf(LOG_VERBOSE, "1 vamos a ver [%x] [%x]\n", ast_ptr_raw+ast_pos, p);
+//				log_printf(LOG_VERBOSE, "1 vamos a ver [%x] [%x]\n", ast_ptr_raw+ast_pos, p);
 				p = (char *) memmem(ast_ptr_raw+ast_pos, ast_size_datablock, "\x0FD\x44\x14\x0C9\x0A0",5);
 //				log_printf(LOG_VERBOSE, "3 vamos a ver [%x] [%x]\n", ast_ptr_raw+ast_pos, p);				
 				if (p!=NULL) {
@@ -726,7 +831,7 @@ unsigned long count2_udp_received = 0;
 			}
 
 			if ( (write(fd_out, ast_ptr_raw + ast_pos, ast_size_datablock) ) == -1) {
-		    	    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
+			    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
 			}
 		    } else {
 			count_plot_ignored++;
@@ -883,7 +988,7 @@ unsigned long count2_udp_received = 0;
 	    gettimeofday(&timed_t_current, NULL);
 
 	    memset(ast_ptr_raw, 0x00, MAX_PACKET_LENGTH);
-	    timeout.tv_sec = 10; timeout.tv_usec = 0;
+	    timeout.tv_sec = SELECT_TIMEOUT; timeout.tv_usec = 0;
 	    FD_ZERO(&reader_set);
 	    for (i=0; i<socket_count; i++) {
 		FD_SET(s_reader[i], &reader_set);
@@ -926,11 +1031,11 @@ unsigned long count2_udp_received = 0;
 //			log_printf(LOG_VERBOSE, "s(%d) %s->%s:%d\n", s_reader[i], 
 //			    radar_destination[s_reader[i]].dest_ip, 
 //			    inet_ntoa(cast_group.sin_addr), cast_group.sin_port);
-			    
 			    //if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
 			    {
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
 				int salir = 0;
+				float current_timestamp = 0;
 				
 //				for(k = j; k<socket_count; k++) {
 //				    log_printf(LOG_VERBOSE, ">%d\n", k);
@@ -961,6 +1066,7 @@ unsigned long count2_udp_received = 0;
 				
 				// se usa en scrm insert y write gps
 				current_time = ((t.tv_sec - t3) % 86400) + t.tv_usec / 1000000.0;
+				current_timestamp = t.tv_sec + t.tv_usec / 1000000.0;
 
 				do {
 				    unsigned int crc = 0;
@@ -979,14 +1085,22 @@ unsigned long count2_udp_received = 0;
 					rb_red_blk_node *node = RBExactQuery(tree,crc);
 					if (!node) { // no existe en arbol
 					    count2_plot_unique++;
-					    if (tree->count>=MAX_SCRM_SIZE) { // borrar nodo mas antiguo
+					    if (tree->count>=SCRM_MAX_QUEUE_SIZE) { // si arbol lleno, borrar nodo mas antiguo
 						rb_red_blk_node *node_old = q.node[q.front];
 //						if (node_old->access==0) {
 //						    log_printf(LOG_ERROR,"borrando sin dupe crc32[%08x] count[%d]\n", node_old->crc32, node_old->access);
 //						}
-						RBDelete(tree,node_old);						
+						RBDelete(tree, node_old);
 					    }
-					    RBTreeInsert(tree,crc,current_time);
+					    while (q.node[q.rear]->timestamp < (current_timestamp - SCRM_OLD_TIME) ) {
+						// borrar todos los nodos con fecha > SCRM_OLD_TIME
+						rb_red_blk_node *node_old = q.node[q.rear];
+						log_printf(LOG_ERROR, "borrando ahora (%3.3f) nodo que tiene el timestamp (%3.3f) de hace mas de (%d) segundos, tenemos (%d) elementos", 
+						    current_timestamp, node_old->timestamp, SCRM_OLD_TIME, q.count);
+						RBDelete(tree, node_old);
+						log_printf(LOG_ERROR, "despues de borrar, nos quedan (%d) elementos", q.count);
+					    }
+					    RBTreeInsert(tree, crc, current_timestamp /* current_time */);
 					} else {
 					    node->access++;
 					    record = false; // so dupes are ignored
@@ -1044,7 +1158,7 @@ unsigned long count2_udp_received = 0;
 						log_printf(LOG_ERROR, "ERROR write_gps: %s (fd:%d)\n", strerror(errno), fd_out_gps);
 					    }
 					}
-			    	    }
+				    }
 				    ast_ptr_raw_tmp += ast_size_datablock;
 				    if (ast_ptr_raw_tmp < (ast_ptr_raw+udp_size)) {
 					ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ast_ptr_raw_tmp[2];
@@ -1055,7 +1169,7 @@ unsigned long count2_udp_received = 0;
 //                                j=radar_count/5; // no seguir buscando, ya ha sido procesado
 //			    } else {
 //			        log_printf(LOG_VERBOSE, "%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);
-		   	    }
+			    }
 //			    j++;
 //			}
 			if (!is_processed) count2_plot_ignored++;
@@ -1073,7 +1187,7 @@ unsigned long count2_udp_received = 0;
 	    // PRINT STATS
 	    if ( (timed_stats_interval > 0) && (
 		(t.tv_sec+t.tv_usec/1000000.0) > (timed_t_Xsecs.tv_sec + timed_t_Xsecs.tv_usec/1000000.0 + timed_stats_interval)
-		) ) { 
+		) ) {
 		float secs = t.tv_sec + t.tv_usec/1000000.0 - // tiempo del ultimo dato recibido
 		  (timed_t_Xsecs.tv_sec + timed_t_Xsecs.tv_usec / 1000000.0); // tiempo del ultimo stat volcado 
 		float total_bw = 0; int total_bytes = 0, total_packets = 0;
@@ -1119,7 +1233,7 @@ unsigned long count2_udp_received = 0;
 
 //    log_flush();
     if (mode_scrm) {
-        mem_free(q.node);
+	mem_free(q.node);
 	RBTreeDestroy(tree);
     }
     close(s);
@@ -1127,10 +1241,10 @@ unsigned long count2_udp_received = 0;
     close(fd_out_ast);
     close(fd_out_gps);
     close_output_file();
-    if (dest_ftp_uri!=NULL && dest_ftp_host!=NULL)
+    if (dest_ftp_uri != NULL && dest_ftp_host != NULL)
 	send_output_file();
     if (dest_file_final_ast != NULL) mem_free(dest_file_final_ast);
     if (dest_file_final_gps != NULL) mem_free(dest_file_final_gps);
+    if (digest_hex != NULL) mem_free(digest_hex);
     return 0;
-
 }

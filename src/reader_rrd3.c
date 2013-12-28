@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -105,7 +105,7 @@ struct tm *t2;
 	exit(EXIT_FAILURE);
     }
     if (timestamp>0) {
-	midnight_t = timestamp;    
+	midnight_t = timestamp;
 	return;
     }
     if (gettimeofday(&t, NULL)==-1) {
@@ -148,19 +148,19 @@ ssize_t size;
 
 void AddQueue(void* a) {
     // printf("add addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
-    if (q.count != MAX_SCRM_SIZE) {
+    if (q.count != SCRM_MAX_QUEUE_SIZE) {
 	q.node[q.rear] = (rb_red_blk_node *) a;
-	q.rear = (q.rear + 1) % MAX_SCRM_SIZE;
+	q.rear = (q.rear + 1) % SCRM_MAX_QUEUE_SIZE;
 	q.count++;
     }
     return;
 }
-    
+
 void DeleteQueue(void *a) {
     // printf("delete addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
     // item = queue.node[queue.front];
     if (q.count != 0) {
-	q.front = (q.front + 1) % MAX_SCRM_SIZE;
+	q.front = (q.front + 1) % SCRM_MAX_QUEUE_SIZE;
 	q.count--;
     }
 }
@@ -192,20 +192,20 @@ long timestamp = 0;
     int opt = 0; // getopt
     int long_index = 0; // getopt
     static struct option long_options[] = {
-        {"timestamp", 	  required_argument, 0,  't' },
-        {"source_file",   required_argument, 0,  'f' },
-        {"ouput",  	  no_argument, 	     0,  'o' },
-        {"region_name",   required_argument, 0,  'r' },
+        {"timestamp",	  required_argument, 0,  't' },
+        {"source_file",	  required_argument, 0,  'f' },
+        {"ouput", 	  no_argument,	     0,  'o' },
+        {"region_name",	  required_argument, 0,  'r' },
         {"rrd_directory", required_argument, 0,  'd' },
-        {0,         	  0,		     0,  0   }
+        {0,		  0,		     0,  0   }
     };
 
     mem_open(fail);
     if (log_open(NULL, /*LOG_VERBOSE*/ LOG_NORMAL, /*LOG_TIMESTAMP |*/
 	LOG_HAVE_COLORS | LOG_PRINT_FUNCTION |
-        LOG_DEBUG_PREFIX_ONLY /*| LOG_DETECT_DUPLICATES*/)) {
-        fprintf(stderr, "log_open failed: %m\n");
-        exit (EXIT_FAILURE);
+	LOG_DEBUG_PREFIX_ONLY /*| LOG_DETECT_DUPLICATES*/)) {
+	fprintf(stderr, "log_open failed: %m\n");
+	exit (EXIT_FAILURE);
     }
 
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
@@ -213,79 +213,70 @@ long timestamp = 0;
     while ((opt = getopt_long(argc, argv,"t:s:or:d:",
 	long_options, &long_index )) != -1) {
         switch (opt) {
-    	    case 't' :
-    	    	errno = 0;
+	    case 't' :
+		errno = 0;
 		timestamp = strtol(optarg, NULL, 10);
 		if (errno != 0) {
-    		    log_printf(LOG_ERROR, "invalid timestamp (%s)!\n", optarg);
+		    log_printf(LOG_ERROR, "invalid timestamp (%s)!\n", optarg);
 		    exit(EXIT_FAILURE);
 		}
-        	break;
-    	    case 's' : 
+		break;
+	    case 's' :
 		source_file = optarg;
-        	break;
-    	    case 'r' : 
+		break;
+	    case 'r' :
 		region_name = optarg;
-        	break;
+		break;
             case 'o' : stdout_output = 1; 
-                break;
-    	    case 'd' : 
+		break;
+	    case 'd' :
 		rrd_directory = optarg;
-        	break;
-    	    default: 
-	        log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
-	            "This program comes with ABSOLUTELY NO WARRANTY.\n"
-	            "This is free software, and you are welcome to redistribute it\n"
-	            "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    		log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
-    		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
-    		    "\t-s asterix input source file\n"
-    		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
+		break;
+	    default:
+		log_printf(LOG_ERROR, "reader_rrd3_LNX" COPYRIGHT_NOTICE, VERSION);
+		log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
+		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
+		    "\t-s asterix input source file\n"
+		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
 		    "\t-d rrd directory\n\n"
-    		    , argv[0]);
-        	exit(EXIT_FAILURE);
-        }
+		    , argv[0]);
+		exit(EXIT_FAILURE);
+	}
     }
-    
+
     if (source_file == NULL || timestamp == 0 || rrd_directory == NULL) {
-        log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
-	            "This program comes with ABSOLUTELY NO WARRANTY.\n"
-	            "This is free software, and you are welcome to redistribute it\n"
-	            "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    	log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
-    		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
-    		    "\t-s asterix input source file\n"
-    		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
+	log_printf(LOG_ERROR, "reader_rrd3_LNX" COPYRIGHT_NOTICE, VERSION);
+	log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
+		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
+		    "\t-s asterix input source file\n"
+		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
 		    "\t-d rrd directory\n\n"
 	    , argv[0]);
-        exit(EXIT_FAILURE);
+	exit(EXIT_FAILURE);
     }
 
     if (stdout_output == 0) {
-        log_printf(LOG_ERROR, "reader_rrd3_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n"
-            "This program comes with ABSOLUTELY NO WARRANTY.\n"
-            "This is free software, and you are welcome to redistribute it\n"
-            "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    }    
+	log_printf(LOG_ERROR, "reader_rrd3_LNX" COPYRIGHT_NOTICE, VERSION);
+    }
 /*
     log_printf(LOG_ERROR, "timestamp (%ld)\n", timestamp);
     log_printf(LOG_ERROR, "source_file (%s)\n", source_file);
     log_printf(LOG_ERROR, "stdout_output (%d)\n", stdout_output);
     log_printf(LOG_ERROR, "region_name (%s)\n", region_name);
     log_printf(LOG_ERROR, "rrd_directory (%s)\n", rrd_directory);
-    
+
     exit(EXIT_SUCCESS);
-*/        
+*/
     parse_config(/*argv[1]*/);
 //    log_printf(LOG_ERROR, "init...\n");
 
     setup_time(timestamp);
     setup_crc32_table();
-    if (mode_scrm) { 
+    if (mode_scrm) {
 	tree = RBTreeCreate(UIntComp,AddQueue,DeleteQueue);
-	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * MAX_SCRM_SIZE);
+	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * SCRM_MAX_QUEUE_SIZE);
 	q.rear = q.front = q.count = 0;
 //	q.node =  mem_alloc(rb_red_blk_node);
     }
@@ -348,7 +339,7 @@ long timestamp = 0;
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 2] << 16) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 3] << 24) ) / 1000.0;
 		}
-	    } 
+	    }
 
 	    //log_printf(LOG_VERBOSE, "%ld %d %3.3f plots_processed(%ld) plots_ignored(%ld) cat(%02X)\n", (long int)ast_pos, ast_size_datablock, 
 		//current_time, count2_plot_processed, count2_plot_ignored, ast_ptr_raw[ast_pos]);
@@ -707,7 +698,7 @@ div_t d;
 	}
         d = div( dbp.tod_stamp, UPDATE_TIME_RRD);
 	if (step == FIRST_STEP) {
-    	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
+	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
 	}
 	//log_printf(LOG_VERBOSE, "sac:%d sic:%d tod:%3.3f tod_stamp:%3.3f diff:%3.3f\n", dbp.sac, dbp.sic, dbp.tod, dbp.tod_stamp, diff);
 	//printf("sac:%d sic:%d tod:%s tod_stamp:%s diff:%3.3f\n", dbp.sac, dbp.sic, parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff);
@@ -715,9 +706,6 @@ div_t d;
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
     }
 
-
-
-	
     //printf("tod:%ld mod:%03d b:%d\n",t.tv_sec, d.rem, write_stats); printf("\033[1A");
     if (forced_exit || (step<FIRST_STEP && ((dbp.tod_stamp + midnight_t) > step)) ) {
 	int i,j;
@@ -734,20 +722,20 @@ div_t d;
 	double moda=0.0, p99_cat1=0.0, p99_cat2=0.0;
 	double p99_cat8=0.0, p99_cat10=0.0, p99_cat21=0.0;
 	double p99_cat34=0.0, p99_cat48=0.0;
-    
+
 	if (!forced_exit) {
 	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
 	    last_tod_stamp = dbp.tod_stamp;
 	} else {
 	    dbp.tod_stamp = last_tod_stamp + UPDATE_TIME_RRD;
 	}
-    
+
 	//log_printf(LOG_NORMAL, "RADAR CAT timestamp    plts media dsv   moda   max   min   p99\n");
 
 	for(i=0; i<MAX_RADAR_NUMBER; i++) {
 	    if (radar_delay[i].sac || radar_delay[i].sic) {
 	        sac_s = ast_get_SACSIC((unsigned char *) &radar_delay[i].sac,
-	    	    (unsigned char *) &radar_delay[i].sic, GET_SAC_SHORT);
+		    (unsigned char *) &radar_delay[i].sic, GET_SAC_SHORT);
 		sic_l = ast_get_SACSIC((unsigned char *) &radar_delay[i].sac, 
 		    (unsigned char *) &radar_delay[i].sic, GET_SIC_LONG);
 
@@ -766,7 +754,7 @@ div_t d;
 			    radar_delay[i].segmentos_max_cat2 = radar_delay[i].segmentos_cat2[j];
 			}
 			if (radar_delay[i].segmentos_cat2[j]>0)
-				insertList(&radar_delay[i].sorted_list_cat2, j, radar_delay[i].segmentos_cat2[j]);
+			    insertList(&radar_delay[i].sorted_list_cat2, j, radar_delay[i].segmentos_cat2[j]);
 		    }
 		    if (radar_delay[i].cuenta_plot_cat8>0) {
 		        if (radar_delay[i].segmentos_cat8[j] > radar_delay[i].segmentos_max_cat8) {
@@ -809,7 +797,6 @@ div_t d;
 			    insertList(&radar_delay[i].sorted_list_cat48, j, radar_delay[i].segmentos_cat48[j]);
 		    }
 		}
-		    
 		// 1
 		if (radar_delay[i].cuenta_plot_cat1>0) {
 		    l1 =    ( ((double) radar_delay[i].segmentos_ptr_cat1) / 10000.0*50.0 ) - 8.0;
@@ -832,7 +819,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 1, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat1, radar_delay[i].max_retardo_cat1, radar_delay[i].min_retardo_cat1,
-    			media, stdev, moda, p99_cat1);
+			media, stdev, moda, p99_cat1);
 		}
 		// 2
 		if (radar_delay[i].cuenta_plot_cat2>0) {
@@ -856,7 +843,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 2, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat2, radar_delay[i].max_retardo_cat2, radar_delay[i].min_retardo_cat2,
-    			media, stdev, moda, p99_cat2);
+			media, stdev, moda, p99_cat2);
 		}
 		// 8
 		if (radar_delay[i].cuenta_plot_cat8>0) {
@@ -880,7 +867,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 8, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat8, radar_delay[i].max_retardo_cat8, radar_delay[i].min_retardo_cat8,
-    			media, stdev, moda, p99_cat8);
+			media, stdev, moda, p99_cat8);
 		}
 		// 10
 		if (radar_delay[i].cuenta_plot_cat10>0) {
@@ -904,7 +891,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 10, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat10, radar_delay[i].max_retardo_cat10, radar_delay[i].min_retardo_cat10,
-    			media, stdev, moda, p99_cat10);
+			media, stdev, moda, p99_cat10);
 		}
 		// 21
 		if (radar_delay[i].cuenta_plot_cat21>0) {
@@ -928,7 +915,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 21, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat21, radar_delay[i].max_retardo_cat21, radar_delay[i].min_retardo_cat21,
-    			media, stdev, moda, p99_cat21);
+			media, stdev, moda, p99_cat21);
 		}
 		// 34
 		if (radar_delay[i].cuenta_plot_cat34>0) {
@@ -952,7 +939,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 34, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat34, radar_delay[i].max_retardo_cat34, radar_delay[i].min_retardo_cat34,
-    			media, stdev, moda, p99_cat34);
+			media, stdev, moda, p99_cat34);
 		}
 		// 48
 		if (radar_delay[i].cuenta_plot_cat48>0) {
@@ -976,7 +963,7 @@ div_t d;
 		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 48, i,
 			((long) dbp.tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat48, radar_delay[i].max_retardo_cat48, radar_delay[i].min_retardo_cat48,
-    			media, stdev, moda, p99_cat48);
+			media, stdev, moda, p99_cat48);
 		}
 //		log_printf(LOG_NORMAL, "-----------------------------------------------------------------------------\n");
 		mem_free(sac_s);
@@ -991,8 +978,6 @@ div_t d;
 //	log_printf(LOG_NORMAL, "==%03.4f==%s", calcdelay, asctime(gmtime(&t2.tv_sec)));
     } // if (forced_exit || ((dbp.tod_stamp) > step)) {
 
-        
-    
     //log_printf(LOG_NORMAL,"0) %03d %03d\n", dbp.sac, dbp.sic);
     if (dbp.available & IS_TOD) {
 	int i=0;
@@ -1008,9 +993,9 @@ div_t d;
 	//}
         for(i=0;i<MAX_RADAR_NUMBER;i++) {
 	    if ( (radar_delay[i].sac == 0) && (radar_delay[i].sic == 0) )
-                break;
-            if ( (radar_delay[i].sac == dbp.sac) && (radar_delay[i].sic == dbp.sic) )
-                break;
+		break;
+	    if ( (radar_delay[i].sac == dbp.sac) && (radar_delay[i].sic == dbp.sic) )
+		break;
         //      log_printf(LOG_ERROR, "f)CAT02] (-) %02X %02X array[%02X%02X] i(%d)\n", sac, sic, full_tod[i], full_tod[i+1],i);
         }
 
@@ -1022,20 +1007,30 @@ div_t d;
 		radar_delay[i].sac = dbp.sac; radar_delay[i].sic = dbp.sic;
 	    }
 	}
+	/*
 	if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
-    	    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
-        }
+	    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+	}
+	*/
+
+	if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
+	    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
+	} else if (diff >= (86400-512)) { // añadido para solucionar un bug v0.63
+	    diff -= 86400;
+	}
+
+
 
 	//printf("retardo de sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
         if (fabs(diff) >= 8.0) { // jadpascual 121219 123600
-    	    //printf("retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
-    	    log_printf(LOG_ERROR, "retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
-    	    return;
+	    //printf("retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
+	    log_printf(LOG_ERROR, "retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
+	    return;
 //          exit(EXIT_FAILURE);
         }
-									
+
 	switch (dbp.cat) {
-	    case CAT_01 : { 
+	    case CAT_01 : {
 		//if (dbp.flag_test == 1) continue;
 		radar_delay[i].cuenta_plot_cat1++; radar_delay[i].suma_retardos_cat1+=diff;
 		radar_delay[i].suma_retardos_cuad_cat1+=pow(diff,2);

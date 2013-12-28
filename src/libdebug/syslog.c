@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) Abraham vd Merwe <abz@blio.com>
+ * Copyright (c) 2002-2004  Abraham vd Merwe <abz@blio.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
