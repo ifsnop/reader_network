@@ -31,7 +31,7 @@ surveillance).
 
 typedef struct rb_red_blk_node {
   unsigned int crc32;
-  float timestamp;
+  double timestamp;
   int access;
   int red; /* if red=0 then the node is black */
   struct rb_red_blk_node* left;
@@ -69,7 +69,7 @@ rb_red_blk_tree* RBTreeCreate(int  (*CompFunc)(const unsigned int, const unsigne
 			     void (*PrintInfo)(void*),*/
 			     void (*AddQueue)(void*),
 			     void (*DeleteQueue)(void*));
-rb_red_blk_node * RBTreeInsert(rb_red_blk_tree*, unsigned int crc32, float timestamp);
+rb_red_blk_node * RBTreeInsert(rb_red_blk_tree*, unsigned int crc32, double timestamp);
 void RBTreePrint(rb_red_blk_tree*);
 void RBDelete(rb_red_blk_tree* , rb_red_blk_node* );
 void RBTreeDestroy(rb_red_blk_tree*);

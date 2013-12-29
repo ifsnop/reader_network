@@ -21,12 +21,13 @@ fi
 
 for destarch in $destarchs; do
 
-    gccopts="-m${destarch} -O2 -pipe -Iinclude -Llibs -static \
-	-Wall -Wno-trigraphs -fno-strict-aliasing -fno-common -ggdb"
+    gccopts="-Wl,-Bstatic -m${destarch} -O2 -pipe -Iinclude -Llibs -Bstatic \
+	-Wall -Wno-trigraphs -fno-strict-aliasing -fno-common -ggdb -Wl,-Bdynamic"
 
     ## quarrantined options:
     ## "-fPIC" (only works for shared libraries, not used)
     ## useful options:
+    ## "-O2" to enable optimizations
     ## "-ggdb" to enable debug symbols
     ## "-DDEBUG_LOG -DDEBUG_MEM" to enable debuging of memory allocation
     ## unknown what they do, even if the are used "-DGETHOSTBYNAME -DGETSERVBYNAME"
@@ -91,10 +92,10 @@ for destarch in $destarchs; do
 
     gcc $gccopts -o bin/reader_network${destarch} $rncfiles src/reader_network.c $rnopts
     #strip bin/reader_network${destarch} 2> /dev/null
-    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch} $rncfiles src/reader_rrd3.c $rnopts
+    #gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch} $rncfiles src/reader_rrd3.c $rnopts
 
 done
-
+exit
 gcc $gccopts -o bin/client_time src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
 gcc $gccopts -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
 gcc $gccopts -o bin/cleanast src/utils/cleanast.c $rnopts

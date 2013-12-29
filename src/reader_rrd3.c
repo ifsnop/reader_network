@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -33,7 +33,7 @@ extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null,
 
 //date --utc --date "2012-03-02 00:00:00" +%s
 // date -d @1193144433
-float current_time=0.0;
+float current_time_today = 0.0;
 struct sockaddr_in cliaddr,srvaddr;
 
 bool enabled = false;
@@ -330,11 +330,11 @@ long timestamp = 0;
 
 	    if (source_file_gps) {
 		if (source_file_gps_version == 1) {
-		    current_time = ((ast_ptr_raw[ast_pos + ast_size_datablock + 6]<<16 ) +
+		    current_time_today = ((ast_ptr_raw[ast_pos + ast_size_datablock + 6]<<16 ) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 7] << 8) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 8]) ) / 128.0;
 		} else if (source_file_gps_version == 2) {
-		    current_time = ((ast_ptr_raw[ast_pos + ast_size_datablock] ) +
+		    current_time_today = ((ast_ptr_raw[ast_pos + ast_size_datablock] ) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 1] << 8) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 2] << 16) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 3] << 24) ) / 1000.0;

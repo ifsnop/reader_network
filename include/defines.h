@@ -46,10 +46,10 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 //#define UPDATE_TIME 10.0
 #define UPDATE_TIME_RRD 300.0
 
-#define SELECT_TIMEOUT 5
+#define SELECT_TIMEOUT 10
 
 #define SCRM_MAX_QUEUE_SIZE 5000
-#define SCRM_OLD_TIME 30
+#define SCRM_TIMEOUT 4
 
 #define DEST_FILE_FORMAT_UNKNOWN 1
 #define DEST_FILE_FORMAT_AST 2

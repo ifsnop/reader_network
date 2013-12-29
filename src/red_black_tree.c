@@ -235,7 +235,7 @@ void TreeInsertHelp(rb_red_blk_tree* tree, rb_red_blk_node* z) {
 /*            info pointers and inserts it into the tree. */
 /***********************************************************************/
 
-rb_red_blk_node * RBTreeInsert(rb_red_blk_tree* tree, unsigned int crc32, float timestamp) {
+rb_red_blk_node * RBTreeInsert(rb_red_blk_tree* tree, unsigned int crc32, double timestamp) {
   rb_red_blk_node * y;
   rb_red_blk_node * x;
   rb_red_blk_node * newNode;
@@ -385,9 +385,9 @@ void InorderTreePrint(rb_red_blk_tree* tree, rb_red_blk_node* x) {
   rb_red_blk_node* root=tree->root;
   if (x != tree->nil) {
     InorderTreePrint(tree,x->left);
-    printf("  crc32=%08X", x->crc32); 
-    printf("  access=%d", x->access); 
-    printf("  timestamp=%3.3f", x->timestamp); 
+    printf("  crc32=%08X", x->crc32);
+    printf("  access=%d", x->access);
+    printf("  timestamp=%3.4f", x->timestamp);
     printf("  l->crc32=");
     if( x->left == nil) printf("NULL"); else printf("%08X", x->left->crc32);
     printf("  r->crc32=");
