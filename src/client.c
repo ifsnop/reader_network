@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -36,12 +36,11 @@ int main(int argc, char *argv[]) {
 
     startup();
 
-
-    log_printf(LOG_NORMAL, "client_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
+    log_printf(LOG_NORMAL, "client_LNX v%s Copyright (C) 2002 - 2014 Diego Torres\n\n"
         "This program comes with ABSOLUTELY NO WARRANTY.\n"
         "This is free software, and you are welcome to redistribute it\n"
         "under certain conditions; see COPYING file for details.\n\n", VERSION);
-    
+
 //    pHostInfo = gethostbyname("localost");
 //    memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
     memset(&addr, 0, sizeof(addr));
@@ -52,13 +51,13 @@ int main(int argc, char *argv[]) {
 	log_printf(LOG_ERROR, "socket %s\n", strerror(errno));
 	exit(1);
     }
-    
+
     setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     if ( bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));
 	exit(1);
     }
-				
+
     mreq.imr_interface.s_addr = inet_addr("127.0.0.1"); //nHostAddress;
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_PLOTS_GROUP);
     if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
@@ -310,7 +309,7 @@ int main(int argc, char *argv[]) {
 		diff = dbp.tod_stamp - dbp.tod;
 		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
 		    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
-		} else if (diff >=(86400-512)) {
+		} else if (diff >=(86400-512)) { // añadido para solucionar un bug v0.63
 		    diff -= 86400;
 		}
 	    }

@@ -1,3 +1,10 @@
+0.65
+- SOPORTE: Added asterix_versions to allow runonce.
+- SOPORTE: Now dest_ftp_uri is an array, so dest_file could be
+uploaded several times to different hosts.
+- BUG: If no dest_file_region is specified, don't insert text
+in the destination filename.
+
 0.64
 - SOPORTE de datablocks en categoría 48. Antes solo se deco-
 dificaba el primero. Ahora se procesan todos los datablocks

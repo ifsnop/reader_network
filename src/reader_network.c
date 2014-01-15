@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -25,10 +25,11 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
-float current_time=0.0;
+float current_time_today = 0.0;
 struct sockaddr_in cliaddr,srvaddr;
 
 bool enabled = false;
+long dest_free_space = -1;
 bool dest_file_gps = false, source_file_gps = false;
 bool dest_file_compress = false;
 bool dest_file_timestamp = false;
@@ -41,22 +42,26 @@ long timed_stats_interval = 0;
 time_t t3; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
 char *source, *dest_file = NULL, *dest_file_region = NULL,
     *dest_file_extension = NULL,
-    *dest_file_final_ast = NULL, *dest_file_final_gps = NULL, 
-    *dest_ftp_uri = NULL,  *dest_ftp_host = NULL,
-    *source_file = NULL, **radar_definition;
+    *dest_file_final_ast = NULL, *dest_file_final_gps = NULL,
+    **dest_ftp_uri = NULL,
+    *source_file = NULL, **radar_definition = NULL;
 int *radar_counter = NULL; // plots recibidos por cada flujo
 int *radar_counter_bytes = NULL; // bytes recibidos por cada flujo
 int dest_file_format = DEST_FILE_FORMAT_AST;
-int radar_count = 0; // numero de entradas en el array de definicion de radares. 
+int dest_ftp_count = 0; // número de entrads en el array de ftp de destino de los ficheros.
+int radar_count = 0; // numero de entradas en el array de definicion de radares.
     // para saber el numero de radares, hay que dividir entre 5! (5 columnas por radar)
-int socket_count = 0, s, offset = 0;
-int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
+int socket_count = 0, s_output_multicast = -1, offset = 0;
+int *s_reader = NULL; // listado de sockets para leer en el caso de red (multicast, etc)
+int fd_in = -1, fd_out_ast = -1,fd_out_gps = -1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
+char *asterix_versions = NULL;
+char *digest_hex = NULL;
 
 struct Queue {
     rb_red_blk_node **node;
-    //[MAX_SCRM_SIZE];
+    //[SCRM_MAX_QUEUE_SIZE];
     int front, rear;
     int count;
 };
@@ -70,17 +75,74 @@ struct radar_destination_s {
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
 
+void setup_asterix_versions() {
+    int read_size = 0, i;
+    FILE *fd = NULL;
+    struct stat sb;
+    unsigned char *buf = NULL;
+    MD5_CTX ctx;
+    unsigned char digest[16];
+/*
+    FILE* fstab = setmntent("/etc/mtab", "r");
+    struct mntent *e;
+    const char *devname = NULL;
+    while ((e = getmntent(fstab))) {
+        if (strcmp("/", e->mnt_dir) == 0) {
+            devname = e->mnt_fsname;
+            break;
+        }
+    }
+    printf("root devname is %s\n", devname);
+    endmntent(fstab);
+*/
+// "/var/lib/dbus/machine-id"
+// "/sys/class/dmi/id/board_serial"
+    if ( stat("/var/lib/dbus/machine-id", &sb) == -1 ) { /* To obtain file size */
+	log_printf(LOG_VERBOSE, "asterix_versions fstat error (%s)\n", strerror(errno)); return; // exit(EXIT_FAILURE);
+    }
+    if (!S_ISREG (sb.st_mode)) {
+	log_printf(LOG_VERBOSE, "asterix_versions file error (not a file)\n"); return; // exit(EXIT_FAILURE);
+    }
+    buf = mem_alloc(sb.st_size + 1);
+
+    if ( (fd = fopen("/var/lib/dbus/machine-id", "r")) == NULL ) {
+	log_printf(LOG_VERBOSE, "asterix_versions open error (%s)\n", strerror(errno)); free(buf); return; // exit(EXIT_FAILURE);
+    }
+    if ( (read_size = fread(buf, 1, sb.st_size, fd)) != sb.st_size ) {
+	if ( !feof(fd) ) {
+	    log_printf(LOG_VERBOSE, "asterix_versions fread error (%s)\n", strerror(errno));
+	    mem_free(buf); fclose(fd); // exit(EXIT_FAILURE);
+	}
+    }
+    buf[read_size] = '\0';
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, buf, read_size);
+    MD5_Final(digest, &ctx);
+    mem_free(buf);
+    //sprintf(digest_hex, "%s", digest);
+    digest_hex = (char *) mem_alloc(16*2 + 1); //md5 length in ascii + null terminator3
+
+    for(i=0; i<16; i++)
+	sprintf(digest_hex + i*2, "%02x", digest[i]);
+    digest_hex[16*2] = '\0';
+
+    if ( fclose(fd) != 0 ) {
+	log_printf(LOG_ERROR, "asterix_versions close error\n"); exit(EXIT_FAILURE);
+    }
+    return;
+}
+
 void parse_config(char *conf_file) {
 char *dest_file_format_string = NULL;
 
     if (!cfg_open(conf_file)) {
-        log_printf(LOG_ERROR, "please create reader_network.conf or check for duplicate entry\n");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_ERROR, "please create reader_network.conf or check for duplicate entry\n");
+	exit(EXIT_FAILURE);
     }
     cfg_get_bool(&enabled, "enabled");
     if (enabled == false) {
-        log_printf(LOG_ERROR, "please modify your config.file\n");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_ERROR, "please modify your config.file\n");
+	exit(EXIT_FAILURE);
     }
 
     cfg_get_bool(&mode_daemon, "mode_daemon");
@@ -90,9 +152,9 @@ char *dest_file_format_string = NULL;
 	long retcode; int fd;
 #endif
         log_printf(LOG_VERBOSE, "going to daemon mode\n");
-	if (timed_stats_interval>0) { 
+	if (timed_stats_interval>0) {
 	    log_printf(LOG_VERBOSE, "advanced stats disabled in daemon mode\n"); 
-	    timed_stats_interval = 0; 
+	    timed_stats_interval = 0;
 	}
 	log_flush();
 	log_close();
@@ -128,7 +190,7 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "interactive version\n");
 	if (timed_stats_interval>0)
-	    log_printf(LOG_VERBOSE, "displaying advanced stats every %ld secs only\n", timed_stats_interval);
+	    log_printf(LOG_VERBOSE, "displaying advanced stats every %ld secs\n", timed_stats_interval);
     }
 
     if (cfg_get_bool(&mode_scrm, "mode_scrm")) {
@@ -150,10 +212,33 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "not displaying pkt crc\n");
     }
-    
+
+    if ( !cfg_get_str(&asterix_versions, "asterix_versions") ||
+	strlen(asterix_versions) != 32 ) {
+	log_printf(LOG_ERROR, "asterix_versions entry missing\n");
+	exit(EXIT_FAILURE);
+    } else {
+	if ( digest_hex != NULL ) {
+	    int i = 0, equal = 1;
+	    //printf("%s\n", digest_hex); printf("%s\n", asterix_versions);
+	    for(i=0; i<(16*2); i++)
+		if ( digest_hex[i] != asterix_versions[i] )
+		    equal = 0;
+
+	    if ( equal == 0 ) {
+		log_printf(LOG_ERROR, "asterix_versions mismatch\n");
+		exit(EXIT_FAILURE);
+	    } else {
+		log_printf(LOG_VERBOSE, "asterix_versions match\n");
+	    }
+	} else {
+	    log_printf(LOG_VERBOSE, "asterix_versions not parsed\n");
+	}
+    }
+
     if (!cfg_get_str(&source, "source")) {
-        log_printf(LOG_VERBOSE, "source must be file, multicast or broadcast\n");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_VERBOSE, "source must be file, multicast or broadcast\n");
+	exit(EXIT_FAILURE);
     }
     if (!strncasecmp(source, "file", 4)) {
 	if (!cfg_get_str(&source_file, "source_file")) {
@@ -174,7 +259,7 @@ char *dest_file_format_string = NULL;
 			log_printf(LOG_VERBOSE, "GPSv1 input activated\n");
 			offset = 10;
 		    } else if (source_file_gps_version == 2) {
-		    	log_printf(LOG_VERBOSE, "GPSv2 input activated\n");
+			log_printf(LOG_VERBOSE, "GPSv2 input activated\n");
 			offset = 4;
 		    } else {
 			log_printf(LOG_ERROR, "GPS version not supported\n");
@@ -206,6 +291,10 @@ char *dest_file_format_string = NULL;
     if (cfg_get_int(&timed, "timed")) {
 	log_printf(LOG_VERBOSE, "recording for %ld secs only\n", timed);
     }
+    if ( cfg_get_int(&dest_free_space, "dest_free_space") ) {
+	log_printf(LOG_VERBOSE, "minimum free space configured at %ld Mb\n", dest_free_space);
+    }
+
     if (cfg_get_bool(&dest_localhost, "dest_localhost")) {
 	if (dest_localhost) {
 	    log_printf(LOG_VERBOSE, "enable localhost decoding for stats\n");
@@ -215,19 +304,19 @@ char *dest_file_format_string = NULL;
     }
 
     if (cfg_get_str(&dest_file_region, "dest_file_region")) {
-        log_printf(LOG_VERBOSE, "output file region: %s\n", dest_file_region);
+	log_printf(LOG_VERBOSE, "output file region: %s\n", dest_file_region);
     } else {
-        log_printf(LOG_VERBOSE, "no region prefix\n");
+	log_printf(LOG_VERBOSE, "no region prefix\n");
     }
-    
+
     if (cfg_get_str(&dest_file_extension, "dest_file_extension")) {
-        log_printf(LOG_VERBOSE, "output file extension: %s\n", dest_file_extension);
+	log_printf(LOG_VERBOSE, "output file extension: %s\n", dest_file_extension);
     } else {
-        log_printf(LOG_VERBOSE, "no extension\n");
+	log_printf(LOG_VERBOSE, "no extension\n");
     }
 
     if (cfg_get_str(&dest_file, "dest_file")) {
-        log_printf(LOG_VERBOSE, "output data to file (1):%s\n", dest_file);
+	log_printf(LOG_VERBOSE, "output data to file (1):%s\n", dest_file);
 	if (cfg_get_bool(&dest_file_timestamp, "dest_file_timestamp")) {
 	    if (dest_file_timestamp) log_printf(LOG_VERBOSE, "appending date+time to output file\n");
 	}
@@ -243,16 +332,14 @@ char *dest_file_format_string = NULL;
 		dest_file_format = DEST_FILE_FORMAT_AST;
 		log_printf(LOG_VERBOSE, "AST output activated");
 	    } else {
-	    	    dest_file_format = DEST_FILE_FORMAT_AST;
+		    dest_file_format = DEST_FILE_FORMAT_AST;
 		    log_printf(LOG_VERBOSE, "AST output activated (default)");
 	    }
 	    log_printf(LOG_VERBOSE, "\n");
+	    mem_free(dest_file_format_string);
 	}
-	if (cfg_get_str(&dest_ftp_uri, "dest_ftp_uri")) {
+	if (cfg_get_str_array(&dest_ftp_uri, &dest_ftp_count, "dest_ftp_uri")) {
 	    log_printf(LOG_VERBOSE, "ftp upload enabled\n");
-	}
-	if (cfg_get_str(&dest_ftp_host, "dest_ftp_host")) {
-	    log_printf(LOG_VERBOSE, "ftp host detected\n");
 	}
     } else {
 	log_printf(LOG_VERBOSE, "no output selected\n");
@@ -261,11 +348,14 @@ char *dest_file_format_string = NULL;
 	log_printf(LOG_VERBOSE, "disabling timed_stats_interval (dest_screen_crc set)\n");
 	timed_stats_interval = 0;
     }
+
+    cfg_close();
+
     return;
 }
 
 void setup_output_file(void) {
-char *gpsheader = NULL;
+char *gpsheader = NULL, *dest_file_region_parsed = NULL;
 struct timeval t;
 struct tm *t2 = NULL;
 
@@ -273,6 +363,26 @@ struct tm *t2 = NULL;
     gpsheader = memset(gpsheader, 0xcd, 2200);
 
     if (dest_file != NULL) {
+	if ( dest_free_space != -1 ) {
+	    double result = 0;
+	    struct statvfs sfs;
+	    if ( statvfs(dest_file, &sfs) == -1 ) {
+		log_printf(LOG_ERROR, "ERROR statvfs: %s -> %s\n", strerror(errno), dest_file); exit(EXIT_FAILURE);
+	    } else
+		result = (double)((unsigned long long)sfs.f_bsize * sfs.f_bfree)/(1024*1024);
+	    if (result > 0) {
+		if ( result < dest_free_space ) {
+		    log_printf(LOG_ERROR, "not enough free space %.2f Mb / %ld Mb\n", result, dest_free_space);
+		    exit(EXIT_FAILURE);
+		}
+	    }
+	}
+
+	if ( (dest_file_region != NULL) && (strlen(dest_file_region)>0) ) {
+	    dest_file_region_parsed = (char *) mem_alloc(strlen(dest_file_region)+1+2);
+	    snprintf(dest_file_region_parsed, (strlen(dest_file_region) + 4), "-%s-", dest_file_region);
+	}
+
 	if (dest_file_timestamp) {
 	    if (gettimeofday(&t, NULL) !=0 ) {
 		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno)); exit(EXIT_FAILURE);
@@ -288,12 +398,12 @@ struct tm *t2 = NULL;
 		//sprintf(dest_file_final_ast, "%s_%04d%02d%02d%02d%02d%02d.ast", dest_file, t2->tm_year+1900, t2->tm_mon+1, t2->tm_mday,
 		//    t2->tm_hour, t2->tm_min, t2->tm_sec);
 		snprintf(dest_file_final_ast, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
-		if ((res = system(dest_file_final_ast)) == -1) {
-		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
+		if ( ((res = system(dest_file_final_ast)) == -1) || (WEXITSTATUS(res) != 0) ) {
+		    log_printf(LOG_ERROR, "ERROR makdir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
 		}
-		snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d-%s-%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
+		snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
 		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
-		    (dest_file_region != NULL ? dest_file_region : "na"),
+		    (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
 		    t2->tm_hour, t2->tm_min, t2->tm_sec,
 		    (dest_file_extension != NULL ? dest_file_extension : "ast"));
 	    } else {
@@ -310,13 +420,12 @@ struct tm *t2 = NULL;
 	    if (dest_file_timestamp) {
 		int res = 0;
 		snprintf(dest_file_final_gps, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
-		if ((res = system(dest_file_final_gps)) == -1) {
-		    log_printf(LOG_ERROR, "ERROR makedir %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
+		if ( ((res = system(dest_file_final_gps)) == -1) || (WEXITSTATUS(res) != 0) ) {
+		    log_printf(LOG_ERROR, "ERROR mkdir: %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
 		}
-		//
-		snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d-%s-%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
+		snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
 		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
-		    (dest_file_region != NULL ? dest_file_region : "na"),
+		    (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
 		    t2->tm_hour, t2->tm_min, t2->tm_sec,
 		    (dest_file_extension != NULL ? dest_file_extension : "gps"));
 		//sprintf(dest_file_final_gps, "%s/%02d/%02d/%02d%02d%02d.gps", dest_file, t2->tm_mon+1, t2->tm_mday,
@@ -326,7 +435,7 @@ struct tm *t2 = NULL;
 	    }
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_gps);
 	    if ( (fd_out_gps = open(dest_file_final_gps, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
-	        | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
+		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
 		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	    if (write(fd_out_gps, gpsheader, 2200)!=2200) {
@@ -334,6 +443,8 @@ struct tm *t2 = NULL;
 	    }
 	}
     }
+    if (dest_file_region_parsed != NULL)
+	mem_free(dest_file_region_parsed);
     mem_free(gpsheader);
     return;
 }
@@ -350,13 +461,13 @@ int pid = 0;
 	} else {
 	    log_printf(LOG_VERBOSE, " %d => %d", ret, i);
 	    if ( setpriority(PRIO_PROCESS, pid , i) == -1 ) {
-	        log_printf(LOG_VERBOSE, "\nERROR setpriority: %s\n", strerror(errno));
+		log_printf(LOG_VERBOSE, "\nERROR setpriority: %s\n", strerror(errno));
 	    } else {
-	        log_printf(LOG_VERBOSE, "...done!\n");
+		log_printf(LOG_VERBOSE, "...done!\n");
 	    }
 	}
     } else {
-        log_printf(LOG_VERBOSE, "we are NOT root!\n");
+	log_printf(LOG_VERBOSE, "we are NOT root!\n");
     }
     return;
 }
@@ -368,6 +479,7 @@ int res=0;
     if (dest_file_compress) {
 	setup_priority(0);
 	if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
+	    close(fd_out_ast);
 	    snprintf(tmp, 1023, "bzip2 -f %s", dest_file_final_ast);
 	    if ((res = system(tmp)) == -1) {
 		log_printf(LOG_ERROR, "ERROR compressing %s\n", dest_file_final_ast);
@@ -377,6 +489,7 @@ int res=0;
 	    }
 	}
 	if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
+	    close(fd_out_gps);
 	    snprintf(tmp, 1023, "bzip2 -f %s", dest_file_final_gps);
 	    if ((res = system(tmp)) == -1) {
 		log_printf(LOG_ERROR, "ERROR compressing %s\n", dest_file_final_gps);
@@ -399,78 +512,83 @@ void send_output_file() {
     //char buff_active[1024];
     struct stat file_info;
     curl_off_t fsize;
-    
-    //bzero(buff_active, 1024);
-    //snprintf(buff_active, "-");
-    
+    char noproxy_host[1024];
+    int slash_pos = 6, i = 0;
+
+
     if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
 	snprintf(file, 1023, "%s%s", dest_file_final_ast, (dest_file_compress ? ".bz2" : "") );
     } else if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
-    	snprintf(file, 1023, "%s%s", dest_file_final_gps, (dest_file_compress ? ".bz2" : "") );
+	snprintf(file, 1023, "%s%s", dest_file_final_gps, (dest_file_compress ? ".bz2" : "") );
     }
 
-    snprintf(buff_1, 1023, "%s%s", dest_ftp_uri, basename(file));
-    
     if (stat(file, &file_info)) {
-	log_printf(LOG_ERROR, "ERROR stat '%s': %s\n", file, strerror(errno));
-	exit(EXIT_FAILURE);
+        log_printf(LOG_ERROR, "ERROR stat '%s': %s\n", file, strerror(errno));
+        exit(EXIT_FAILURE);
     }
     fsize = (curl_off_t)file_info.st_size;
+    if ( unsetenv("http_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv http_proxy\n");
+    if ( unsetenv("ftp_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
 
-    if ( (fh = fopen(file, "rb")) == NULL) {
-	log_printf(LOG_ERROR, "ERROR opening '%s': %s\n", file, strerror(errno));
-	exit(EXIT_FAILURE);
+    for(i=0;i<dest_ftp_count;i++) {
+	if ( dest_ftp_uri[i][strlen(dest_ftp_uri[i])-1]!='/' )
+	    snprintf(buff_1, 1023, "%s/%s", dest_ftp_uri[i], basename(file));
+	else
+	    snprintf(buff_1, 1023, "%s%s", dest_ftp_uri[i], basename(file));
+	log_printf(LOG_VERBOSE, "uploading %s\n", buff_1);
+
+        if ( (fh = fopen(file, "rb")) == NULL) {
+	    log_printf(LOG_ERROR, "ERROR opening '%s': %s\n", file, strerror(errno));
+	    exit(EXIT_FAILURE);
+	}
+
+	while ( (dest_ftp_uri[i][slash_pos] != '/') && (slash_pos<strlen(dest_ftp_uri[i])) ) slash_pos++;
+	snprintf(noproxy_host, slash_pos - 5, "%s", dest_ftp_uri[i] + 6);
+
+	if ( setenv("NO_PROXY", noproxy_host,1)==-1 ) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");
+        //system("echo poniendo noproxy\n"); system("echo _${NO_PROXY}_\n"); exit(EXIT_FAILURE);
+
+	curl_global_init(CURL_GLOBAL_ALL);
+	ch = curl_easy_init();
+	if(ch) {
+	    curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
+
+	    /* enable uploading */
+	    curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
+
+	    /* specify target */
+	    curl_easy_setopt(ch, CURLOPT_URL, buff_1);
+	    curl_easy_setopt(ch, CURLOPT_HTTPPROXYTUNNEL, 0L);
+
+	    /* disable PASSIVE transfers */
+	    // NOT TESTED
+	    // curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_active);
+
+	    /* now specify which file to upload */
+	    curl_easy_setopt(ch, CURLOPT_READDATA, fh);
+
+	    /* Set the size of the file to upload (optional).  If you give a *_LARGE
+	    option you MUST make sure that the type of the passed-in argument is a
+	    curl_off_t. If you use CURLOPT_INFILESIZE (without _LARGE) you must
+	    make sure that to pass in a type 'long' argument. */
+	    curl_easy_setopt(ch, CURLOPT_INFILESIZE, (long)(curl_off_t)fsize);
+	    curl_easy_setopt(ch, CURLOPT_ERRORBUFFER, buff_2);
+
+	    /* Now run off and do what you've been told! */
+	    res = curl_easy_perform(ch);
+
+	    if (res != CURLE_OK) {
+		log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
+	    }
+
+	    /* always cleanup */
+	    curl_easy_cleanup(ch);
+	}
+
+	fclose(fh); /* close the local file */
+	curl_global_cleanup();
     }
-    
-    if (setenv("NO_PROXY",dest_ftp_host,1)==-1) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");    
-    if (unsetenv("http_proxy")==-1) log_printf(LOG_ERROR, "ERROR unsetenv http_proxy\n");
-    if (unsetenv("ftp_proxy")==-1) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
-    
-//    system("echo poniendo noproxy\n"); system("echo $NO_PROXY\n"); exit(EXIT_FAILURE);
 
-    curl_global_init(CURL_GLOBAL_ALL);
-    ch = curl_easy_init();
-    if(ch) {
-        curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
-
-        /* enable uploading */
-        curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
-                 
-        /* specify target */
-        curl_easy_setopt(ch, CURLOPT_URL, buff_1);
-        
-	curl_easy_setopt(ch, CURLOPT_HTTPPROXYTUNNEL, 0L);
-                                     
-	/* disable PASSIVE transfers */
-	// NOT TESTED
-	// curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_active);
-
-        /* now specify which file to upload */
-        curl_easy_setopt(ch, CURLOPT_READDATA, fh);
-                                                     
-        /* Set the size of the file to upload (optional).  If you give a *_LARGE
-        option you MUST make sure that the type of the passed-in argument is a
-        curl_off_t. If you use CURLOPT_INFILESIZE (without _LARGE) you must
-        make sure that to pass in a type 'long' argument. */
-        //curl_easy_setopt(ch, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
-        curl_easy_setopt(ch, CURLOPT_INFILESIZE, (long)(curl_off_t)fsize);
-    
-	curl_easy_setopt(ch, CURLOPT_ERRORBUFFER, buff_2);
-                           
-	/* Now run off and do what you've been told! */
-        res = curl_easy_perform(ch);
-        
-        if (res != CURLE_OK) {
-    	    log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
-        }
-        
-        /* always cleanup */
-        curl_easy_cleanup(ch);
-    }
-    
-    fclose(fh); /* close the local file */
-    curl_global_cleanup();
-    
     return;
 }
 
@@ -479,26 +597,121 @@ struct hostent *h;
 int loop=1;
 
     if ( (h = gethostbyname(MULTICAST_PLOTS_GROUP)) == NULL ) {
-        log_printf(LOG_ERROR, "ERROR gethostbyname");
-        exit(EXIT_FAILURE);
+	log_printf(LOG_ERROR, "ERROR gethostbyname");
+	exit(EXIT_FAILURE);
     }
     memset(&cliaddr, 0, sizeof(struct sockaddr_in));
     memset(&srvaddr, 0, sizeof(struct sockaddr_in));
     srvaddr.sin_family = h->h_addrtype;
     memcpy((char*) &srvaddr.sin_addr.s_addr, h->h_addr_list[0], h->h_length);
     srvaddr.sin_port = htons(MULTICAST_PLOTS_PORT);
-    if ( (s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        log_printf(LOG_ERROR, "ERROR socket: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+    if ( (s_output_multicast = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	log_printf(LOG_ERROR, "ERROR socket: %s\n", strerror(errno));
+	exit(EXIT_FAILURE);
     }
     cliaddr.sin_family = AF_INET;
     cliaddr.sin_addr.s_addr = inet_addr("127.0.0.1"); //htonl(INADDR_ANY);
     cliaddr.sin_port = htons(0);
-    if (  bind(s, (struct sockaddr *) &cliaddr, sizeof(cliaddr)) <0 ) {
-        log_printf(LOG_ERROR, "ERROR socket: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+    if (  bind(s_output_multicast, (struct sockaddr *) &cliaddr, sizeof(cliaddr)) <0 ) {
+	log_printf(LOG_ERROR, "ERROR socket: %s\n", strerror(errno));
+	exit(EXIT_FAILURE);
     }
-    setsockopt(s, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
+    setsockopt(s_output_multicast, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
+
+    return;
+}
+
+void setup_input_network(void) {
+    struct sockaddr_in cast_group;
+    struct ip_mreq mreq;
+    int i = 0, yes = 1;
+
+    socket_count = 0;
+
+	    while (i<(radar_count/5)) {
+		if (i>0 && 								     // si
+		    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
+		    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
+//		strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
+		    log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i,
+			radar_definition[i*5], radar_definition[(i*5)+1],
+			radar_definition[(i*5)+2], radar_definition[(i*5)+3],
+			radar_definition[(i*5)+4]);
+
+		    radar_destination[i].socket = s_reader[socket_count-1];
+		    strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
+											     // no te suscribas 
+		    //(para distintas ips de origien pero mismos grupos multicast y puertos, no hace falta volver a suscribirse)
+		}  else {									     // else nos suscribimos
+		    if ( (s_reader[socket_count] = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {        
+			log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
+			exit(EXIT_FAILURE);
+		    }
+		    log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s) socket(%d)\n", i,
+			radar_definition[i*5], radar_definition[(i*5)+1],
+			radar_definition[(i*5)+2], radar_definition[(i*5)+3],
+			radar_definition[(i*5)+4], s_reader[socket_count]);
+
+		    //strncpy(radar_destination[s_reader[socket_count]].dest_ip, radar_definition[(i*5)+1], 255);
+		    radar_destination[i].socket = s_reader[socket_count];
+		    strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
+
+		    //log_printf(LOG_VERBOSE, "0>%s<\n", radar_destination[i].dest_ip);
+		    //log_printf(LOG_VERBOSE, "1>%s<\n", radar_definition[(i*5)+1]);
+
+		    if (!strncasecmp(source, "mult", 4)) {
+			unsigned char ttl = 32;
+			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
+			if ( setsockopt(s_reader[socket_count], IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
+			    log_printf(LOG_ERROR, "ip_multicast_ttl setsockopt reader %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
+
+			memset(&cast_group, 0, sizeof(cast_group));
+			cast_group.sin_family = AF_INET;
+			// segun documentacion, si es SOLARIS cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
+			// resto cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]);
+			//cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
+			cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]); //htonl(INADDR_ANY);
+			cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //multicast group port
+			if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
+			    log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
+
+			mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
+			mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
+			if (setsockopt(s_reader[socket_count], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+			    log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
+		    } else if (!strncasecmp(source, "broa", 4)) {
+			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader: %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
+			cast_group.sin_family = AF_INET;
+			cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
+			cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
+			if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
+			    // error happens when suscribing broadcast addresses
+			    // suscribing 214.25.250.255 for 214.25.250.10 &
+			    //            214.25.250.255 for 214.25.250.11
+			    // returns an "Address already in use", so comment this code.
+			    // problem is that SO_BROADCAST ignores SO_REUSEADDR
+			    //log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
+			    //exit(EXIT_FAILURE);
+			}
+		    }
+		    // log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
+		    // radar_definition[i*5 + 1], radar_definition[i*5 + 2], radar_definition[i*5+3] );
+		    socket_count++;
+		}
+		i++;
+	    }
 
     return;
 }
@@ -506,7 +719,7 @@ int loop=1;
 void setup_time(void) {
 struct timeval t;
 struct tm *t2;
-    
+
     if (gettimeofday(&t, NULL)==-1) {
 	log_printf(LOG_ERROR, "ERROR gettimeofday (setup_time): %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
@@ -541,22 +754,26 @@ ssize_t size;
     return size;
 }
 
-
 void AddQueue(void* a) {
     // printf("add addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
-    if (q.count != MAX_SCRM_SIZE) {
+    if (q.count != SCRM_MAX_QUEUE_SIZE) {
+	if (q.count > 0)
+	    q.rear = (q.rear + 1) % SCRM_MAX_QUEUE_SIZE;
 	q.node[q.rear] = (rb_red_blk_node *) a;
-	q.rear = (q.rear + 1) % MAX_SCRM_SIZE;
 	q.count++;
     }
     return;
 }
-    
+
 void DeleteQueue(void *a) {
-    // printf("delete addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
+    // log_printf(LOG_ERROR, "1>deleting addr:%p crc:%08x\n", a, ((rb_red_blk_node*)a)->crc32);
     // item = queue.node[queue.front];
-    if (q.count != 0) {
-	q.front = (q.front + 1) % MAX_SCRM_SIZE;
+    if (q.count > 0) {
+	if (q.count > 1) {
+	    // log_printf(LOG_ERROR, "2>deleting addr:%p crc:%08x\n", q.node[q.front], q.node[q.front]->crc32);
+	    q.node[q.front] = NULL;
+	    q.front = (q.front + 1) % SCRM_MAX_QUEUE_SIZE;
+	}
 	q.count--;
     }
 }
@@ -565,6 +782,28 @@ int UIntComp(unsigned int a, unsigned int b) {
     if (a>b) return (1);
     if (a<b) return (-1);
     return 0;
+}
+
+void free_config(void) {
+    int i;
+
+    if (dest_file_final_ast != NULL) mem_free(dest_file_final_ast);
+    if (dest_file_final_gps != NULL) mem_free(dest_file_final_gps);
+    if (source != NULL) mem_free(source);
+    if (dest_file_region != NULL) mem_free(dest_file_region);
+    if (dest_file_extension != NULL) mem_free(dest_file_extension);
+    if (source_file != NULL) mem_free(source_file);
+    if (dest_file != NULL) mem_free(dest_file);
+    for(i=0; i<radar_count; i++)
+	mem_free(radar_definition[i]);
+    if (radar_definition != NULL) mem_free(radar_definition);
+    for(i=0; i<dest_ftp_count; i++)
+	mem_free(dest_ftp_uri[i]);
+    if (dest_ftp_uri != NULL) mem_free(dest_ftp_uri);
+    if (digest_hex != NULL) mem_free(digest_hex);
+    if (asterix_versions != NULL) mem_free(asterix_versions);
+
+    return;
 }
 
 
@@ -586,21 +825,20 @@ unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
 
 #ifdef LINUX
-    printf("reader_network_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
-    "This program comes with ABSOLUTELY NO WARRANTY.\n"
-    "This is free software, and you are welcome to redistribute it\n"
-    "under certain conditions; see COPYING file for details.\n\n", VERSION);
+    printf("reader_network_LNX" COPYRIGHT_NOTICE, VERSION);
 #endif
 #ifdef SOLARIS
-    printf("reader_network_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
-    "This program comes with ABSOLUTELY NO WARRANTY.\n"
-    "This is free software, and you are welcome to redistribute it\n"
-    "under certain conditions; see COPYING file for details.\n\n", VERSION);
-#endif    
+    printf("reader_network_SOL" COPYRIGHT_NOTICE, VERSION);
+#endif
     startup();
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
-    if (argc!=2 || strlen(argv[1])<5) {
+    if ( argc!=2 ) {
 	log_printf(LOG_ERROR, "usage: %s <config_file>\n\n", argv[0]);
+	exit(EXIT_FAILURE);
+    }
+    setup_asterix_versions();
+    if ( !strncmp(argv[1], "-r", 2) ) {
+	log_printf(LOG_ERROR, "%s\n", digest_hex);
 	exit(EXIT_FAILURE);
     }
     parse_config(argv[1]);
@@ -610,16 +848,16 @@ unsigned long count2_udp_received = 0;
 	setup_output_multicast();
     setup_output_file();
     setup_crc32_table();
-    if (mode_scrm) { 
+    if (mode_scrm) {
 	tree = RBTreeCreate(UIntComp,AddQueue,DeleteQueue);
-	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * MAX_SCRM_SIZE);
+	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * SCRM_MAX_QUEUE_SIZE);
 	q.rear = q.front = q.count = 0;
-//	q.node =  mem_alloc(rb_red_blk_node);
+	// q.node =  mem_alloc(rb_red_blk_node);
     }
 
     gettimeofday(&timed_t_start, NULL);
 
-    if (!strncasecmp(source, "file", 4)) { 
+    if (!strncasecmp(source, "file", 4)) {
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
 	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
@@ -651,17 +889,17 @@ unsigned long count2_udp_received = 0;
 
 	    if (source_file_gps) {
 		if (source_file_gps_version == 1) {
-		    current_time = ((ast_ptr_raw[ast_pos + ast_size_datablock + 6]<<16 ) +
+		    current_time_today = ((ast_ptr_raw[ast_pos + ast_size_datablock + 6]<<16 ) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 7] << 8) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 8]) ) / 128.0;
 		} else if (source_file_gps_version == 2) {
-		    current_time = ((ast_ptr_raw[ast_pos + ast_size_datablock] ) +
+		    current_time_today = ((ast_ptr_raw[ast_pos + ast_size_datablock] ) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 1] << 8) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 2] << 16) +
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 3] << 24) ) / 1000.0;
 		}
 	    } else {
-		current_time = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
+		current_time_today = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
 	    }
 /*
 	    // esto esta comentado porque al meter dest_file_format, hay que pensar como
@@ -672,10 +910,10 @@ unsigned long count2_udp_received = 0;
 		if (dest_file_gps) {
 		    if (source_file_gps && (source_file_gps_version == 2) ) {
 			if ( (write (fd_out, ast_ptr_raw + ast_pos, ast_size_datablock + offset)) == -1 ) {
-		    	    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
+			    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
 			}
 		    } else {
-    			unsigned long sec;
+			unsigned long sec;
 			unsigned char byte;
 			unsigned char *datablock_tmp;
 			datablock_tmp = (unsigned char *) mem_alloc(ast_size_datablock+4);
@@ -698,7 +936,7 @@ unsigned long count2_udp_received = 0;
 		} else {
 //IFSNOP
 		    int volcar=1;
-		    
+
 		    if ((ast_size_datablock == 9) && (ast_ptr_raw[0+ast_pos] == '\x02')) {
 			volcar=0;
 		    }
@@ -707,7 +945,7 @@ unsigned long count2_udp_received = 0;
 			if (ast_ptr_raw[0+ast_pos] == '\x01') {
 			    char *p;
 			    do {
-//    				log_printf(LOG_VERBOSE, "1 vamos a ver [%x] [%x]\n", ast_ptr_raw+ast_pos, p);
+//				log_printf(LOG_VERBOSE, "1 vamos a ver [%x] [%x]\n", ast_ptr_raw+ast_pos, p);
 				p = (char *) memmem(ast_ptr_raw+ast_pos, ast_size_datablock, "\x0FD\x44\x14\x0C9\x0A0",5);
 //				log_printf(LOG_VERBOSE, "3 vamos a ver [%x] [%x]\n", ast_ptr_raw+ast_pos, p);				
 				if (p!=NULL) {
@@ -726,7 +964,7 @@ unsigned long count2_udp_received = 0;
 			}
 
 			if ( (write(fd_out, ast_ptr_raw + ast_pos, ast_size_datablock) ) == -1) {
-		    	    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
+			    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
 			}
 		    } else {
 			count_plot_ignored++;
@@ -776,101 +1014,21 @@ unsigned long count2_udp_received = 0;
 	mem_free(ast_ptr_raw);
 
     } else if (!strncasecmp(source, "mult", 4) || !strncasecmp(source, "broa", 4)) {
-	int *s_reader, yes = 1, i=0,j=0;
-	fd_set reader_set;
-	struct sockaddr_in cast_group;
-	struct ip_mreq mreq;
-
+	int i=0,j=0;
 	setup_priority(-20);
 
 	s_reader = mem_alloc((radar_count/5)*sizeof(int));
 	radar_counter = mem_alloc((radar_count/5)*sizeof(int));
 	radar_counter_bytes = mem_alloc((radar_count/5)*sizeof(int));
 
-	FD_ZERO(&reader_set);
-
-	while (i<(radar_count/5)) {
+	for(i=0; i<(radar_count/5); i++) {
+	    s_reader[i] = -1;
 	    radar_counter[i] = 0; // plots recibidos por flujo
 	    radar_counter_bytes[i] = 0; // bytes recibidos por flujo
-	    if (i>0 && 									     // si
-		    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
-		    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
-//		strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
-		log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i, 
-		    radar_definition[i*5], radar_definition[(i*5)+1],
-		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-                    radar_definition[(i*5)+4]);
-
-                radar_destination[i].socket = s_reader[socket_count-1];
-		strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
-											     // no te suscribas
-	    }  else {									     // else nos suscribimos
-		if ( (s_reader[socket_count] = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {        
-		    log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
-		    exit(EXIT_FAILURE);
-		}
-		log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s) socket(%d)\n", i, 
-		    radar_definition[i*5], radar_definition[(i*5)+1],
-		    radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-		    radar_definition[(i*5)+4], s_reader[socket_count]);
-
-		//strncpy(radar_destination[s_reader[socket_count]].dest_ip, radar_definition[(i*5)+1], 255);
-		radar_destination[i].socket = s_reader[socket_count];
-		strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
-
-		if (!strncasecmp(source, "mult", 4)) {
-		    unsigned char ttl = 32;
-		    if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
-			log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		    }
-		    if ( setsockopt(s_reader[socket_count], IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
-			log_printf(LOG_ERROR, "ip_multicast_ttl setsockopt reader %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		    }
-
-		    memset(&cast_group, 0, sizeof(cast_group));
-		    cast_group.sin_family = AF_INET;
-		    // segun documentacion, si es SOLARIS cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
-		    // resto cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]);
-		    //cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
-		    cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]); //htonl(INADDR_ANY);
-		    cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //multicast group port
-		    if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
-			log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		    }
-		    
-		    mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
-		    mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
-		    if (setsockopt(s_reader[socket_count], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-			log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		    }
-		} else if (!strncasecmp(source, "broa", 4)) {
-		    if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
-			log_printf(LOG_ERROR, "reuseaddr setsockopt reader: %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		    }
-		    cast_group.sin_family = AF_INET;
-		    cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
-		    cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
-		    if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
-			// error happens when suscribing broadcast addresses
-			// suscribing 214.25.250.255 for 214.25.250.10 &
-			//            214.25.250.255 for 214.25.250.11
-			// returns an "Address already in use", so comment this code.
-			// problem is that SO_BROADCAST ignores SO_REUSEADDR
-			//log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
-			//exit(EXIT_FAILURE);
-		    }
-		}
-//		log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
-//			radar_definition[i*5 + 1], radar_definition[i*5 + 2], radar_definition[i*5+3] );
-		socket_count++;
-	    }
-	    i++;
 	}
+
+	setup_input_network();
+
 	ast_ptr_raw = (unsigned char *) mem_alloc(MAX_PACKET_LENGTH);
 	gettimeofday(&timed_t_current, NULL);
 	timed_t_Xsecs.tv_sec = timed_t_current.tv_sec;
@@ -880,18 +1038,50 @@ unsigned long count2_udp_received = 0;
 	    struct timeval timeout;
 	    int select_count;
 	    socklen_t addrlen = sizeof(struct sockaddr_in);
-	    gettimeofday(&timed_t_current, NULL);
+	    double current_timestamp = 0;
+	    struct sockaddr_in cast_group;
+	    fd_set reader_set;
 
+	    gettimeofday(&timed_t_current, NULL);
 	    memset(ast_ptr_raw, 0x00, MAX_PACKET_LENGTH);
-	    timeout.tv_sec = 10; timeout.tv_usec = 0;
+	    timeout.tv_sec = SELECT_TIMEOUT; timeout.tv_usec = 0;
+
 	    FD_ZERO(&reader_set);
 	    for (i=0; i<socket_count; i++) {
 		FD_SET(s_reader[i], &reader_set);
 	    }
 
 	    select_count = select(s_reader[socket_count - 1] + 1, &reader_set, NULL, NULL, &timeout);
+
+	    gettimeofday(&t, NULL); // for gps & queue timestamp
+	    current_time_today = ((t.tv_sec - t3) % 86400) + t.tv_usec / 1000000.0; // segundos desde las 00:00:00
+	    current_timestamp = (t.tv_sec) + (t.tv_usec / 1000000.0); // segundos desde 01-01-1970 a las 00:00:00
+
+	    // PURGE OLD ELEMENTS FROM DUPE QUEUE
+	    if (mode_scrm) {
+		//log_printf(LOG_ERROR, "=================\ncount: %d, current_timestamp: %3.3f\n", q.count, current_timestamp);
+		// RBTreePrint(tree);
+		//if (q.count>0) {
+		//    log_printf(LOG_ERROR, "q.rear(%08X)\n", q.rear);
+		//    log_printf(LOG_ERROR, "q.front(%08X)\n", q.front);
+		//    log_printf(LOG_ERROR, "q.node[q.rear]->timestamp(%3.3f)\n", q.node[q.rear]->timestamp);
+		//    log_printf(LOG_ERROR, "q.node[q.front]->timestamp(%3.3f)\n", q.node[q.front]->timestamp);
+		//    log_printf(LOG_ERROR, "%3.4f < %3.4f = %3.4f\n", q.node[q.front]->timestamp,
+		//        (current_timestamp - SCRM_TIMEOUT),
+		//        q.node[q.front]->timestamp - (current_timestamp - SCRM_TIMEOUT));
+		//}
+		while ( (q.count > 0) &&
+		    q.node[q.front]->timestamp < (current_timestamp - SCRM_TIMEOUT) ) {
+		    // borrar todos los nodos con fecha > SCRM_OLD_TIME
+		    rb_red_blk_node *node_old = q.node[q.front];
+		    //log_printf(LOG_ERROR, "borrando ahora (%3.3f) nodo que tiene el timestamp (%3.3f) de hace mas de (%d) segundos\n", 
+		    //    current_timestamp, node_old->timestamp, SCRM_TIMEOUT);
+		    RBDelete(tree, node_old);
+		    //log_printf(LOG_ERROR, "despues de borrar, nos quedan (%d) elementos\n", q.count);
+		}
+	    }
+
 	    if ( select_count > 0 ) {
-		gettimeofday(&t, NULL);
 		i=0;
 		while (i<socket_count) {
 		    if (FD_ISSET(s_reader[i], &reader_set)) {
@@ -910,7 +1100,7 @@ unsigned long count2_udp_received = 0;
 //			        (s_reader[i]!=radar_destination[j].socket),
 //			        (strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])!=0));
 			    if ( (s_reader[i]==radar_destination[j].socket) &&
-			         (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) ) 
+			         (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) )
 			        break;
 			}
 			
@@ -926,7 +1116,6 @@ unsigned long count2_udp_received = 0;
 //			log_printf(LOG_VERBOSE, "s(%d) %s->%s:%d\n", s_reader[i], 
 //			    radar_destination[s_reader[i]].dest_ip, 
 //			    inet_ntoa(cast_group.sin_addr), cast_group.sin_port);
-			    
 			    //if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
 			    {
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
@@ -948,7 +1137,7 @@ unsigned long count2_udp_received = 0;
 				}
 				if ( dest_localhost ||
 				    ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) ) {
-				    // solo si se descodifica tenemos que tomar precauciones con el ast 
+				    // solo si se descodifica tenemos que tomar precauciones con el ast
 				    // cat 10 del smr de barajas y con scr mal configurados
 				    ast_size_datablock = (ast_ptr_raw[1]<<8) + ast_ptr_raw[2];
 				} else {
@@ -959,45 +1148,41 @@ unsigned long count2_udp_received = 0;
 //				log_printf(LOG_VERBOSE,"-----udp(%d) ast(%d)\n", udp_size, ast_size_datablock);
 //				ast_output_datablock(ast_ptr_raw, udp_size, count_plot_processed, 0);
 				
-				// se usa en scrm insert y write gps
-				current_time = ((t.tv_sec - t3) % 86400) + t.tv_usec / 1000000.0;
-
 				do {
 				    unsigned int crc = 0;
 				    count2_plot_processed++; // smr barajas mete varios plots que hay que desmontar para fechar
 				    record = true;
-				    
+
 				    if (mode_scrm || dest_screen_crc) {
 					crc = crc32(ast_ptr_raw_tmp, ast_size_datablock);
-				    }
-
-				    if (dest_screen_crc) {
-					log_printf(LOG_VERBOSE, "%3.4f [%08X]\n", current_time, crc);
+					if (dest_screen_crc) {
+					    log_printf(LOG_VERBOSE, "%3.4f [%08X]\n", current_time_today, crc);
+					}
 				    }
 
 				    if (mode_scrm) {
 					rb_red_blk_node *node = RBExactQuery(tree,crc);
 					if (!node) { // no existe en arbol
 					    count2_plot_unique++;
-					    if (tree->count>=MAX_SCRM_SIZE) { // borrar nodo mas antiguo
+					    if (tree->count>=SCRM_MAX_QUEUE_SIZE) { // si arbol lleno, borrar nodo mas antiguo
 						rb_red_blk_node *node_old = q.node[q.front];
 //						if (node_old->access==0) {
 //						    log_printf(LOG_ERROR,"borrando sin dupe crc32[%08x] count[%d]\n", node_old->crc32, node_old->access);
 //						}
-						RBDelete(tree,node_old);						
+						RBDelete(tree, node_old);
 					    }
-					    RBTreeInsert(tree,crc,current_time);
+					    RBTreeInsert(tree, crc, current_timestamp);
 					} else {
 					    node->access++;
 					    record = false; // so dupes are ignored
 					    count2_plot_duped++;
 					}
-//					RBTreePrint(tree);
+					// RBTreePrint(tree);
 				    }
 
-//				    log_printf(LOG_NORMAL, "\n==================================================================\n");
-//				    ast_output_datablock(ast_ptr_raw, ast_size_datablock, count2_plot_processed, 0);
-//				    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
+				    //log_printf(LOG_NORMAL, "\n==================================================================\n");
+				    //ast_output_datablock(ast_ptr_raw, ast_size_datablock, count2_plot_processed, 0);
+				    //ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 				    if (dest_localhost && record) {
 					if (ast_ptr_raw[0] == '\x01')
 					    ast_procesarCAT01(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
@@ -1020,7 +1205,6 @@ unsigned long count2_udp_received = 0;
 					if (ast_ptr_raw[0] == '\x3e')
 					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 				    }
-
 				    if (dest_file != NULL && record) {
 					if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
 					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == -1) {
@@ -1032,8 +1216,9 @@ unsigned long count2_udp_received = 0;
 					    unsigned char byte;
 					    unsigned char output_ptr[MAX_PACKET_LENGTH];
 					    memcpy(output_ptr, ast_ptr_raw_tmp, ast_size_datablock);
+					    memset(output_ptr + ast_size_datablock, 0, 10);
 
-					    timegps = current_time * 128.0;
+					    timegps = current_time_today * 128.0;
 					    byte = (timegps >> 16) & 0xFF;
 					    memcpy(output_ptr + ast_size_datablock + 6, &byte, 1);
 					    byte = (timegps >> 8) & 0xFF;
@@ -1044,7 +1229,7 @@ unsigned long count2_udp_received = 0;
 						log_printf(LOG_ERROR, "ERROR write_gps: %s (fd:%d)\n", strerror(errno), fd_out_gps);
 					    }
 					}
-			    	    }
+				    }
 				    ast_ptr_raw_tmp += ast_size_datablock;
 				    if (ast_ptr_raw_tmp < (ast_ptr_raw+udp_size)) {
 					ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ast_ptr_raw_tmp[2];
@@ -1055,7 +1240,7 @@ unsigned long count2_udp_received = 0;
 //                                j=radar_count/5; // no seguir buscando, ya ha sido procesado
 //			    } else {
 //			        log_printf(LOG_VERBOSE, "%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);
-		   	    }
+			    }
 //			    j++;
 //			}
 			if (!is_processed) count2_plot_ignored++;
@@ -1063,24 +1248,30 @@ unsigned long count2_udp_received = 0;
 		    i++;
 		}
 	    } else if (select_count == 0) {
-		log_printf(LOG_VERBOSE, "1 sec warning\n");
+		log_printf(LOG_VERBOSE, "%d sec(s) warning\n", SELECT_TIMEOUT);
 		if (dest_localhost)
 		    setup_output_multicast();
+		for(i=0; i<socket_count; i++) {
+		    close(s_reader[i]);
+		}
+		socket_count = 0; setup_input_network();
 	    } else {
 		log_printf(LOG_ERROR, "socket error: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	    }
+
 	    // PRINT STATS
 	    if ( (timed_stats_interval > 0) && (
 		(t.tv_sec+t.tv_usec/1000000.0) > (timed_t_Xsecs.tv_sec + timed_t_Xsecs.tv_usec/1000000.0 + timed_stats_interval)
-		) ) { 
+		) ) {
 		float secs = t.tv_sec + t.tv_usec/1000000.0 - // tiempo del ultimo dato recibido
 		  (timed_t_Xsecs.tv_sec + timed_t_Xsecs.tv_usec / 1000000.0); // tiempo del ultimo stat volcado 
-		float total_bw = 0; int total_bytes = 0, total_packets = 0;
+		float total_bw = 0.0; int total_bytes = 0, total_packets = 0;
 
-		printf(" # name\t\t\tcount\tbw(b/s)\tbytes\tsecs(%3.2f)\n", secs);
+		log_printf(LOG_VERBOSE," # name\t\t\tcount\tbw(b/s)\tbytes\tsecs(%3.2f)\n", secs);
+
 		for(i=0;i<radar_count/5;i++) {
-		    printf("%02i]%s\t\t%d\t%03.1f\t%d          \n", i, radar_definition[i*5], 
+		    log_printf(LOG_VERBOSE,"%02i]%s\t\t%d\t%03.1f\t%d          \n", i, radar_definition[i*5],
 			radar_counter[i], ((float)radar_counter_bytes[i]) / secs, radar_counter_bytes[i]);
 		    total_bw += ((float)radar_counter_bytes[i])/secs;
 		    total_bytes += radar_counter_bytes[i];
@@ -1088,49 +1279,63 @@ unsigned long count2_udp_received = 0;
 		    radar_counter[i] = 0;
 		    radar_counter_bytes[i] = 0;
 		}
-		printf("XX]TOTAL\t\t%d\t%03.1f\t%d              \n", total_packets, total_bw, total_bytes);
-		for(i=0;i<(radar_count/5)+2;i++) { printf("\033[1A"); }
+		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d              \n", total_packets, total_bw, total_bytes);
+		//for(i=0;i<(radar_count/5)+2;i++) { printf("\033[1A"); }
 		timed_t_Xsecs.tv_sec = t.tv_sec;
-	    	timed_t_Xsecs.tv_usec = t.tv_usec;
+		timed_t_Xsecs.tv_usec = t.tv_usec;
 	     }
+/*
+	{ // delay statistics
+	    struct timeval delay_t;
+	    double delay;
+	    gettimeofday(&delay_t, NULL); // for gps & queue timestamp
+	    delay = (delay_t.tv_sec + (delay_t.tv_usec / 1000000.0)) - (t.tv_sec + (t.tv_usec / 1000000.0));
+	    if (delay>0.001)
+		log_printf(LOG_VERBOSE,"proc. delay: %3.5f\n", delay);
+	}
+*/	
 	}
 	mem_free(radar_counter_bytes);
 	mem_free(radar_counter);
-	mem_free(s_reader);
 	mem_free(ast_ptr_raw);
+	for(i=0; i<socket_count; i++)
+	    close(s_reader[i]);
+	mem_free(s_reader);
     }
 
-    {
-	int i;
-	if ( (timed_stats_interval > 0) && (count2_plot_processed>0) )
-	    for(i=0;i<(radar_count/5)+1;i++) 
-		printf("\n");
-    }
+    //{
+	//int i;
+	//if ( (timed_stats_interval > 0) && (count2_plot_processed>0) )
+	//    for(i=0;i<(radar_count/5)+1;i++)
+	//	printf("\n");
+    //}
     log_printf(LOG_NORMAL, "stats received[%ld] processed[%ld]/ignored[%ld] = unique[%ld]+duped[%ld]\n", 
 	count2_udp_received, count2_plot_processed, count2_plot_ignored, count2_plot_unique, count2_plot_duped);
 
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;
+	memset(&dbp, 0, sizeof(struct datablock_plot));
 	dbp.cat = CAT_255;
-	if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+	if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
 	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	}
     }
 
 //    log_flush();
     if (mode_scrm) {
-        mem_free(q.node);
+	mem_free(q.node);
 	RBTreeDestroy(tree);
     }
-    close(s);
-    close(fd_in);
-    close(fd_out_ast);
-    close(fd_out_gps);
+    if (dest_localhost)
+	close(s_output_multicast);
+    if (!strncasecmp(source, "file", 4))
+	close(fd_in);
     close_output_file();
-    if (dest_ftp_uri!=NULL && dest_ftp_host!=NULL)
+    if (dest_ftp_count > 0)
 	send_output_file();
-    if (dest_file_final_ast != NULL) mem_free(dest_file_final_ast);
-    if (dest_file_final_gps != NULL) mem_free(dest_file_final_gps);
-    return 0;
 
+    free_config();
+
+    return 0;
 }
+

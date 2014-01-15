@@ -21,12 +21,17 @@ fi
 
 for destarch in $destarchs; do
 
-    gccopts="-m${destarch} -O2 -pipe -Iinclude -Llibs -static \
-	-Wall -Wno-trigraphs -fno-strict-aliasing -fno-common"
+    gccopts="-Wl,-Bstatic -m${destarch} -O2 -pipe -Iinclude -Llibs -Bstatic \
+	-Wall -Wno-trigraphs -fno-strict-aliasing -fno-common -ggdb -Wl,-Bdynamic"
 
-    ## quarrantined options -fPIC (only works for shared libraries, not used)
+    ## quarrantined options:
+    ## "-fPIC" (only works for shared libraries, not used)
+    ## useful options:
+    ## "-O2" to enable optimizations
+    ## "-ggdb" to enable debug symbols
+    ## "-DDEBUG_LOG -DDEBUG_MEM" to enable debuging of memory allocation
     ## unknown what they do, even if the are used "-DGETHOSTBYNAME -DGETSERVBYNAME"
-    
+
     if [[ ! -f libs/libdebug${destarch}.a ]]; then
 	gcc $gccopts -c -o obj/log${destarch}.o src/libdebug/log.c
 	gcc $gccopts -c -o obj/memory${destarch}.o src/libdebug/memory.c
@@ -40,7 +45,7 @@ for destarch in $destarchs; do
 	gcc $gccopts -c -o obj/config${destarch}.o src/libconfig/config.c
 	ar crv libs/libconfig${destarch}.a obj/scan${destarch}.o obj/parse${destarch}.o obj/config${destarch}.o > /dev/null
     fi
-    
+
     if [[ ! -f libs/libz${destarch}.a ]]; then
 	pushd . > /dev/null
 	rm -r 3rdparty/tmp/zlib-1.2.8 2> /dev/null
@@ -54,7 +59,7 @@ for destarch in $destarchs; do
 	popd > /dev/null
 	cp $DESTDIR/usr/local/lib/libz.a libs/libz${destarch}.a
     fi
-    
+
     if [[ ! -f libs/libcurl${destarch}.a ]]; then
 	pushd . > /dev/null
 	rm -r 3rdparty/tmp/curl-7.30.0 2> /dev/null
@@ -79,17 +84,18 @@ for destarch in $destarchs; do
 	-lconfig${destarch} -ldebug${destarch} \
 	-lcurl${destarch} -lz${destarch} -lrt \
 	-DLINUX -I3rdparty/tmp/usr/local/${destarch}/include"
-    
+
     rncfiles="src/asterix.c src/sacsic.c src/helpers.c \
 	src/startup.c src/crc32.c src/red_black_tree.c \
-	src/red_black_tree_misc.c src/red_black_tree_stack.c"
+	src/red_black_tree_misc.c src/red_black_tree_stack.c \
+	src/md5.c"
 
-    gcc $gccopts -o bin/reader_network${destarch} $rncfiles src/reader_network.c $rnopts 
-    strip bin/reader_network${destarch} 2> /dev/null
-    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch} $rncfiles src/reader_rrd3.c $rnopts 
+    gcc $gccopts -o bin/reader_network${destarch} $rncfiles src/reader_network.c $rnopts
+    #strip bin/reader_network${destarch} 2> /dev/null
+    #gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch} $rncfiles src/reader_rrd3.c $rnopts
 
 done
-
+exit
 gcc $gccopts -o bin/client_time src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
 gcc $gccopts -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
 gcc $gccopts -o bin/cleanast src/utils/cleanast.c $rnopts

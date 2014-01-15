@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) Abraham vd Merwe <abz@blio.com>
+ * Copyright (c) 2002-2004  Abraham vd Merwe <abz@blio.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,8 +49,7 @@ static void dump16 (char *buf,const uint8_t *s,uintptr_t offset,size_t len)
 	 {
 		size_t i,n;
 
-		// n = sprintf (buf,"%08x - ",offset); // hex.c:52:3: warning: format ‘%x’ expects argument of type ‘unsigned int’, but argument 3 has type ‘uintptr_t’ [-Wformat]
-		n = sprintf (buf,"%08x - ",(unsigned int) offset); // hex.c:52:3: warning: format ‘%x’ expects argument of type ‘unsigned int’, but argument 3 has type ‘uintptr_t’ [-Wformat]
+		n = sprintf (buf,"%08x - ", (unsigned int) offset);  // warning: format ‘%x’ expects argument of type ‘unsigned int’, but argument 3 has type ‘uintptr_t’ [-Wformat]
 
 		for (i = 0; i < len; i++)
 		  {

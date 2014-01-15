@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) Abraham vd Merwe <abz@blio.com>
+ * Copyright (c) 2002-2004  Abraham vd Merwe <abz@blio.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@
 #define mem_realloc realloc
 #define mem_free free
 #else	/* #ifndef DEBUG_LOG */
-#include <debug/memory.h>
+#include <libdebug/memory.h>
 #endif	/* #ifndef DEBUG_LOG */
 
 /* va_copy is __va_copy in older versions of GCC. */

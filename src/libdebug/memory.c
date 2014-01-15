@@ -2,7 +2,8 @@
 /* Based on the Memory Allocation Debugging system by Janne Kukonlehto */
 
 /*
- * Copyright (c) Abraham vd Merwe <abz@blio.com>
+ * Copyright (c) 2002-2004  Abraham vd Merwe <abz@blio.com>
+ * Copyright (c) 2011  Peter Pentchev <roam@ringlet.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +43,7 @@
 #else	/* #ifndef DEBUG_LOG */
 #define log_printf fprintf
 #define LOG_ERROR stderr
+#define log_vprintf fprintf
 #endif	/* #ifndef DEBUG_LOG */
 
 #ifdef DEBUG_MEM
@@ -131,9 +133,7 @@ void mem_check_stub (const char *file,int line,const char *function)
 {
    char str[100];
    mem_t *tmp;
-//   static int round; // memory.c:134:15: warning: variable ‘round’ set but not used [-Wunused-but-set-variable]
 
-//   round=0; // memory.c:136:15: warning: variable ‘round’ set but not used [-Wunused-but-set-variable]
    for (tmp = mem_areas; tmp != NULL; tmp = tmp->next)
 	 {
 		if (*(tmp->head_sig) != MEM_SIGNATURE)
@@ -159,7 +159,7 @@ void *mem_alloc_stub (size_t size,const char *file,int line,const char *function
    mem_t *tmp;
    size_t old_size = size;
 
-   DPRINTF("called %s(%u)\n",__FUNCTION__,size);
+   DPRINTF("called %s(%zu)\n",__FUNCTION__,size);
 
    mem_check_stub (file,line,function);
 
@@ -195,7 +195,7 @@ void *mem_realloc_stub (void *ptr,size_t size,const char *file,int line,const ch
 #endif	/* #ifndef REALLOC_BUG_WORKAROUND */
    size_t old_size = size;
 
-   DPRINTF("called %s(%p,%u)\n",__FUNCTION__,ptr,size);
+   DPRINTF("called %s(%p,%zu)\n",__FUNCTION__,ptr,size);
 
    if (ptr == NULL) return (mem_alloc_stub (size,file,line,function));
 

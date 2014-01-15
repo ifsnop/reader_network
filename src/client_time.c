@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -311,7 +311,7 @@ int main(int argc, char *argv[]) {
 
     startup();
 
-    log_printf(LOG_NORMAL, "client_time_LNX v%s Copyright (C) 2002 - 2012 Diego Torres\n\n"
+    log_printf(LOG_NORMAL, "client_time_LNX v%s Copyright (C) 2002 - 2014 Diego Torres\n\n"
         "This program comes with ABSOLUTELY NO WARRANTY.\n"
         "This is free software, and you are welcome to redistribute it\n"
         "under certain conditions; see COPYING file for details.\n\n", VERSION);
@@ -348,18 +348,17 @@ int main(int argc, char *argv[]) {
 	int select_return;
 	dbplen = sizeof(dbp);
 	addrlen = sizeof(addr);
-	
 
 	timeout.tv_sec = SERVER_TIMEOUT_SEC;
 	timeout.tv_usec = 0;
 	select_return = select(s+1, &reader_set, NULL, NULL, &timeout);
 	
 	if (select_return > 0) {
-	    FD_SET(s, &reader_set);		
+	    FD_SET(s, &reader_set);
 	    if (recvfrom(s, &dbp, dbplen, 0, (struct sockaddr *) &addr, &addrlen) < 0) {
 		log_printf(LOG_ERROR, "recvfrom\n");
 		exit(EXIT_FAILURE);
-	    }    
+	    }
 	    if (dbp.cat == CAT_255) {
 		log_printf(LOG_ERROR, "fin de fichero\n");
 		forced_exit = true;
@@ -369,11 +368,11 @@ int main(int argc, char *argv[]) {
 		diff = dbp.tod_stamp - dbp.tod;
 		i=0;
 //		log_printf(LOG_NORMAL,"A) %03d %03d (%3.3f)\n", dbp.sac, dbp.sic, diff);
-		while ( (i < MAX_RADAR_NUMBER) && 
+		while ( (i < MAX_RADAR_NUMBER) &&
 		    ( (dbp.sac != radar_delay[i].sac) ||
 		    (dbp.sic != radar_delay[i].sic) ) &&
 		    ( (radar_delay[i].sac != 0) ||
-		    (radar_delay[i].sic != 0) ) ) { 
+		    (radar_delay[i].sic != 0) ) ) {
 		    i++; 
 //		    log_printf(LOG_NORMAL,"B) %03d %03d %03d\n", i, radar_delay[i].sac, radar_delay[i].sic);
 		}
@@ -393,22 +392,22 @@ int main(int argc, char *argv[]) {
 		}
 		if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
                     diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
-                } else if (diff >= (86400-512)) {
-            	    diff -= 86400;
-                }
+		} else if (diff >= (86400-512)) { // añadido para solucionar un bug v0.63
+		    diff -= 86400;
+		}
 
-                if (fabs(diff) >= 8.0) {
-                    log_printf(LOG_ERROR, "retardo mayor de 8 segundos\n");
+		if (fabs(diff) >= 8.0) {
+		    log_printf(LOG_ERROR, "retardo mayor de 8 segundos\n");
 		    continue;
-//                    exit(EXIT_FAILURE);
-                }
-									
+		    // exit(EXIT_FAILURE);
+		}
+
 		switch (dbp.cat) {
-		case CAT_01 : { 
-				if (dbp.flag_test == 1) 
+		case CAT_01 : {
+				if (dbp.flag_test == 1)
 				    continue;
 				radar_delay[i].cuenta_plot_cat1++;
-			        radar_delay[i].suma_retardos_cat1+=diff;
+				radar_delay[i].suma_retardos_cat1+=diff;
 				radar_delay[i].suma_retardos_cuad_cat1+=pow(diff,2);
 				if (diff > radar_delay[i].max_retardo_cat1)
 				    radar_delay[i].max_retardo_cat1 = diff;
