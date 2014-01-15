@@ -57,7 +57,7 @@ int *radar_counter_bytes = NULL; // bytes recibidos por cada flujo
 int dest_file_format = DEST_FILE_FORMAT_AST;
 int radar_count = 0; // numero de entradas en el array de definicion de radares. 
     // para saber el numero de radares, hay que dividir entre 5! (5 columnas por radar)
-int socket_count = 0, s, offset = 0;
+int socket_count = 0, s_output_multicast = -1, offset = 0;
 int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
@@ -411,7 +411,7 @@ long timestamp = 0;
         mem_free(q.node);
 	RBTreeDestroy(tree);
     }
-    close(s);
+    //close(s_output_multicast);
     close(fd_in);
 //    close(fd_out_ast);
 //    close(fd_out_gps);

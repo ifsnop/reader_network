@@ -92,10 +92,10 @@ for destarch in $destarchs; do
 
     gcc $gccopts -o bin/reader_network${destarch} $rncfiles src/reader_network.c $rnopts
     #strip bin/reader_network${destarch} 2> /dev/null
-    #gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch} $rncfiles src/reader_rrd3.c $rnopts
+    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch} $rncfiles src/reader_rrd3.c $rnopts
 
 done
-exit
+#exit
 gcc $gccopts -o bin/client_time src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
 gcc $gccopts -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
 gcc $gccopts -o bin/cleanast src/utils/cleanast.c $rnopts
