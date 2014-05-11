@@ -48,7 +48,7 @@ long timed = 0;
 time_t midnight_t; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
 char *region_name = NULL;
 char *rrd_directory = NULL;
-char *dest_file = NULL, 
+char *dest_file = NULL,
     *dest_file_final_ast = NULL, *dest_file_final_gps = NULL, 
     *source_file = NULL, **radar_definition;
 char source[] = "file";
@@ -299,7 +299,7 @@ long timestamp = 0;
     }
 */
 
-    if (!strncasecmp(source, "file", 4)) { 
+    if (!strncasecmp(source, "file", 4)) {
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
 	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
@@ -376,7 +376,7 @@ long timestamp = 0;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
 		} else if (ast_ptr_raw[ast_pos] == '\x30') {
 		    count2_plot_processed++;
-		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false, FILTER_NO);
+		    ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false, NULL);
 		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
 		    count2_plot_processed++;
 		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
@@ -1039,14 +1039,14 @@ div_t d;
 		radar_delay[i].segmentos_cat1[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 		//log_printf(LOG_NORMAL, "%3.4f;%3.4f\n", diff, ((int) floorf((diff+8.0)*10000.0/50.0))*0.005-8.0 );
 		break; }
-	    case CAT_02 : { 
+	    case CAT_02 : {
 		radar_delay[i].cuenta_plot_cat2++; radar_delay[i].suma_retardos_cat2+=diff;
 		radar_delay[i].suma_retardos_cuad_cat2+=pow(diff,2);
 		if (diff > radar_delay[i].max_retardo_cat2) radar_delay[i].max_retardo_cat2 = diff;
 		if (diff < radar_delay[i].min_retardo_cat2) radar_delay[i].min_retardo_cat2 = diff;
 		radar_delay[i].segmentos_cat2[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 		break; }
-	    case CAT_08 : { 
+	    case CAT_08 : {
 		radar_delay[i].cuenta_plot_cat8++;
 	        radar_delay[i].suma_retardos_cat8+=diff;
 		radar_delay[i].suma_retardos_cuad_cat8+=pow(diff,2);
@@ -1054,7 +1054,7 @@ div_t d;
 		if (diff < radar_delay[i].min_retardo_cat8) radar_delay[i].min_retardo_cat8 = diff;
 		radar_delay[i].segmentos_cat8[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 		break; }
-    	    case CAT_10 : { 
+	    case CAT_10 : {
 		radar_delay[i].cuenta_plot_cat10++; radar_delay[i].suma_retardos_cat10+=diff;
 		radar_delay[i].suma_retardos_cuad_cat10+=pow(diff,2);
 		if (diff > radar_delay[i].max_retardo_cat10) radar_delay[i].max_retardo_cat10 = diff;
@@ -1075,21 +1075,21 @@ div_t d;
 		if (diff < radar_delay[i].min_retardo_cat20) radar_delay[i].min_retardo_cat20 = diff;
 		radar_delay[i].segmentos_cat20[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 		break; }
-    	    case CAT_21 : { 
+	    case CAT_21 : {
 		radar_delay[i].cuenta_plot_cat21++; radar_delay[i].suma_retardos_cat21+=diff;
 		radar_delay[i].suma_retardos_cuad_cat21+=pow(diff,2);
 		if (diff > radar_delay[i].max_retardo_cat21) radar_delay[i].max_retardo_cat21 = diff;
 		if (diff < radar_delay[i].min_retardo_cat21) radar_delay[i].min_retardo_cat21 = diff;
 		radar_delay[i].segmentos_cat21[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 		break; }
-	    case CAT_34 : { 
+	    case CAT_34 : {
 		radar_delay[i].cuenta_plot_cat34++; radar_delay[i].suma_retardos_cat34+=diff;
 		radar_delay[i].suma_retardos_cuad_cat34+=pow(diff,2);
 		if (diff > radar_delay[i].max_retardo_cat34) radar_delay[i].max_retardo_cat34 = diff;
 		if (diff < radar_delay[i].min_retardo_cat34) radar_delay[i].min_retardo_cat34 = diff;
 		radar_delay[i].segmentos_cat34[(int) floorf((diff+8.0)*10000.0/50.0)]++;
 		break; }
-	    case CAT_48 : { 
+	    case CAT_48 : {
 		radar_delay[i].cuenta_plot_cat48++; radar_delay[i].suma_retardos_cat48+=diff;
 		radar_delay[i].suma_retardos_cuad_cat48+=pow(diff,2);
 		if (diff > radar_delay[i].max_retardo_cat48) radar_delay[i].max_retardo_cat48 = diff;
@@ -1113,9 +1113,7 @@ char *rrd_path, *cmd;
     //date -d "120630 23:59:59" +%s
     //1341100799
     //--start|-b start time (default: now - 10s)
-    
-    
-    
+
     //Specifies the time in seconds since 1970-01-01 UTC when the first value should be added 
     //to the RRD. RRDtool will not accept any data timed before or at the time specified.
 
@@ -1172,7 +1170,7 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
 
     cmd = mem_alloc(512);
     if (!stdout_output) { // == 0 ejecutando scripts
-    	sprintf(cmd, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat, 
+	sprintf(cmd, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat, 
 	    region_name, timestamp, cuenta, max, min, media, stdev, p99);
 	system(cmd);
     } else { // == 1, sacando directamente los inserts
@@ -1184,6 +1182,6 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
     	log_printf(LOG_NORMAL,"%s\n",cmd);
     }
     mem_free(cmd);
-    return;    
+    return;
 }
 

@@ -39,23 +39,19 @@ extern struct sockaddr_in srvaddr;
 
 unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
-
+// return true if filter_type found (datablock should be left out)
 bool filter_test(unsigned char *ptr_raw, int ptr, int filter_type) {
-    bool ret = false;
 
-    if (filter_type == FILTER_ONLY_GROUND) {
-    
-        printf("%08X %08X\n", ptr_raw[ptr], ptr_raw[ptr+1]);
-        
-        if ( ((ptr_raw[ptr] & 28) == 4) || 
+    if (filter_type == FILTER_NONE)
+        return true;
+
+    if ((filter_type & FILTER_GROUND) == FILTER_GROUND) {
+        if ( ((ptr_raw[ptr] & 28) == 4) ||
              ((ptr_raw[ptr] & 28) == 12) ) {
-                printf("ON GROUND\n");
-                ret = true;
+                return true;
         }
-    
     }
-
-    return ret;
+    return false;
 }
 
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index) {
@@ -131,12 +127,12 @@ int index = 0;
 	dbp.flag_test = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
-    
+
 	if (sizeFSPEC == 0) {
 	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 	    return T_ERROR;
 	}
-	
+
 	j = sizeFSPEC;
 	size_current += sizeFSPEC;
 	if ( ptr_raw[0] & 128 ) { //I001/010
@@ -147,10 +143,10 @@ int index = 0;
 	}
 	if ( ptr_raw[0] & 64 ) { //I001/010
 	    if ( ptr_raw[j] & 128 ) { // track
-	    	//log_printf(LOG_NORMAL, "type %02X TRACK\n", ptr_raw[j]);
+		//log_printf(LOG_NORMAL, "type %02X TRACK\n", ptr_raw[j]);
 	        dbp.available |= IS_TRACK;
 		size_current = size_datablock - 3; //exit without further decompression
-	    
+
 	    } else { // plot
 		dbp.available |= IS_TYPE;
 		//log_printf(LOG_NORMAL, "type %02X\n", ptr_raw[j]);
@@ -175,10 +171,10 @@ int index = 0;
 		size_current++; j++;
 		if ( ptr_raw[0] & 32 ) { //I001/040
 		    //log_printf(LOG_NORMAL, "polar %02X %02X %02X %02X \n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2], ptr_raw[j+3] );
-	    	    dbp.rho = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
-	    	    dbp.theta = (ptr_raw[j+2]*256 + ptr_raw[j+3]) * 360.0/65536.0;
-	    	    size_current += 4; j+= 4;
-	    	    dbp.available |= IS_MEASURED_POLAR;
+		    dbp.rho = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
+		    dbp.theta = (ptr_raw[j+2]*256 + ptr_raw[j+3]) * 360.0/65536.0;
+		    size_current += 4; j+= 4;
+		    dbp.available |= IS_MEASURED_POLAR;
 	        }
 		if ( ptr_raw[0] & 16 ) { //I001/070
 		    //log_printf(LOG_NORMAL, "modea %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
@@ -199,14 +195,14 @@ int index = 0;
 		}
 		if ( ptr_raw[0] & 4  ) { //I001/130
 		    //log_printf(LOG_NORMAL, "responses %02X\n", ptr_raw[j]);
-	    	    dbp.radar_responses = (ptr_raw[j] >> 1);
+		    dbp.radar_responses = (ptr_raw[j] >> 1);
 		    while (ptr_raw[j] & 1) { j++; size_current++; }
 		    size_current++; j++;
 		    dbp.available |= IS_RADAR_RESPONSES;
 		}
 		if ( ptr_raw[0] & 2  ) { //I001/141
 		    //log_printf(LOG_NORMAL, "tod %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
-	    	    dbp.truncated_tod = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
+		    dbp.truncated_tod = (ptr_raw[j]*256 + ptr_raw[j+1]) / 128.0;
 		    if ( (dbp.tod = ttod_get_full(dbp.sac, dbp.sic, ptr_raw + j, id)) != T_ERROR )
 			dbp.available |= IS_TOD;
 //		    else {
@@ -830,11 +826,16 @@ int index = 0;
     return T_OK;
 }
 
-int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, int filter_type) {
+int ast_procesarCAT48F(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, filter_struct *fs) {
 int size_current = 0, j = 0;
 int index = 0;
 bool filter_true = false;
-//int i = 0; char *ptr_tmp;
+unsigned char *datablock_start = NULL;
+
+    if (fs !=NULL && fs->filter_type != FILTER_NONE) {
+        fs->ptr_raw = (unsigned char *) mem_alloc(size_datablock);
+        fs->size_datablock = 3;
+    }
 
     do {
 	int sizeFSPEC;
@@ -850,29 +851,31 @@ bool filter_true = false;
 	dbp.flag_test = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
-    
+
 //	if (sizeFSPEC == 0) {
 //	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 //	    return T_ERROR;
 //	}
 
-/*
+        /*
 	ptr_tmp = (char *) mem_alloc(sizeFSPEC*3 + 1);
 	memset(ptr_tmp, 0x0, sizeFSPEC*3 + 1);
 	for( i = 0; i < sizeFSPEC; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[i]));
 	ptr_tmp[strlen(ptr_tmp)-1] = 0;
         log_printf(LOG_NORMAL, "fspec(%s)\n", ptr_tmp);
         mem_free(ptr_tmp);
-*/
+        */
 	/*
 	ptr_tmp = (char *) mem_alloc(size_datablock*3 + 1);
         memset(ptr_tmp, 0x0, size_datablock*3 + 1);
         for (i=0; i < size_datablock*3 - size_current*3 -3*3; i+=3) sprintf((char *)(ptr_tmp + i), "%02X ", (unsigned char) (ptr_raw[i/3]));
 	log_printf(LOG_NORMAL, "%s(%d)\n", ptr_tmp, size_datablock - size_current);
 	mem_free(ptr_tmp);
-	*/	
+	*/
 
-//	ast_output_datablock(ptr_raw, size_datablock - size_current - 3, id, index);
+	//ast_output_datablock(ptr_raw, size_datablock - size_current - 3, id, index);
+
+        datablock_start = ptr_raw;
 
 	j = sizeFSPEC;
 	size_current += sizeFSPEC;
@@ -885,7 +888,7 @@ bool filter_true = false;
 //	    log_printf(LOG_NORMAL, "hextod(%02X %02X %02X)\n", ptr_raw[j], ptr_raw[j+1], ptr_raw[j+2]);
 	    size_current += 3; j += 3; dbp.available |= IS_TOD;
 	}
-	if ( ptr_raw[0] & 32 ) { /* I048/020 */ 
+	if ( ptr_raw[0] & 32 ) { /* I048/020 */
 	    int b = 0;
 	    b = (ptr_raw[j] & 224) >> 5;
 	    switch (b) {
@@ -942,26 +945,26 @@ bool filter_true = false;
 		if ( ptr_raw[2] & 32 ) {  /* I048/080 */ j += 2; size_current += 2; }
 		if ( ptr_raw[2] & 16 ) {  /* I048/100 */ j += 4; size_current += 4; }
 		if ( ptr_raw[2] & 8 ) {   /* I048/110 */ j += 2; size_current += 2; }
-		if ( ptr_raw[2] & 4 ) {   /* I048/120 */ 
-		    int k = j; 
+		if ( ptr_raw[2] & 4 ) {   /* I048/120 */
+		    int k = j;
 		    if ( ptr_raw[k] & 128 ) { j += 2; size_current += 2; }
 		    if ( ptr_raw[k] & 64 ) { int l = j; j += ptr_raw[l]*6 + 1; size_current += ptr_raw[l]*6 + 1; }
 		}
-		if ( ptr_raw[2] & 2 ) { /* I048/230 */ filter_true = filter_test(ptr_raw, j, filter_type); j += 2; size_current += 2;  }
+		if ( ptr_raw[2] & 2 ) { /* I048/230 */ if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type); j += 2; size_current += 2;  }
 		if ( ptr_raw[2] & 1 ) { // FX3
 		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ j += 7; size_current += 7; }
 		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
 		    if ( ptr_raw[3] & 32 ) {  /* I048/050 */ j += 2; size_current += 2; }
 		    if ( ptr_raw[3] & 16 ) {  /* I048/065 */ j += 1; size_current += 1; }
 		    if ( ptr_raw[3] & 8 ) {   /* I048/060 */ j += 2; size_current += 2; }
-		    if ( ptr_raw[3] & 4 ) {   /* I048/SP  */ size_current = size_datablock - 3; j = 0; 
-			log_printf(LOG_ERROR, "unexpected I048/SP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(-1);
+		    if ( ptr_raw[3] & 4 ) {   /* I048/SP  */ size_current = size_datablock - 3; j = 0;
+			log_printf(LOG_ERROR, "unexpected I048/SP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(EXIT_FAILURE);
 		    }
 		    if ( ptr_raw[3] & 2 ) {   /* I048/RE  */ size_current = size_datablock - 3; j = 0;
-			log_printf(LOG_ERROR, "unexpected I048/RE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(-1);
+			log_printf(LOG_ERROR, "unexpected I048/RE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(EXIT_FAILURE);
 		    }
 		    if ( ptr_raw[3] & 1 ) {   /* FX4 */      size_current = size_datablock - 3; j = 0;
-			log_printf(LOG_ERROR, "unexpected I048/FX4!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(-1);
+			log_printf(LOG_ERROR, "unexpected I048/FX4!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");exit(EXIT_FAILURE);
 		    }
 		}
 	    }
@@ -971,7 +974,7 @@ bool filter_true = false;
 	if ( dbp.available & IS_TOD ) {
 //	    log_printf(LOG_NORMAL, "currenttod(%3.3f) plottod(%3.3f) diff(%3.3f)\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
 //	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
-//		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
+//		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
 //		exit(EXIT_FAILURE);
 //	    }
 	    if (enviar) {
@@ -982,20 +985,34 @@ bool filter_true = false;
 		update_calculations(dbp);
 	    }
 	}
-	
+
+        if ( fs != NULL && fs->filter_type != FILTER_NONE && !filter_true ) { // si filter_true == true, contiene un mensaje de ground, asi que no lo queremos
+            memcpy(fs->ptr_raw + fs->size_datablock, datablock_start, j);
+            fs->size_datablock += j;
+        }
+
+/*
+        if ( fs != NULL && fs->filter_type != FILTER_NONE && filter_true ) {
+            ast_output_datablock(datablock_start, size_current, id, 0); // + size_datablock - 3, id, index);
+        }
+*/
         ptr_raw += j;
-	index++;
-	
-	// FIXME (solo tiene en cuenta el primer datablock
-	
-//	log_printf(LOG_NORMAL, "size_current(%d) size_datablock(%d)\n", size_current, size_datablock);
-//	size_current = size_datablock - 3;
-	
+        index++;
+
     } while ((size_current + 3) < size_datablock);
+
+    if ( fs != NULL && (fs->filter_type != FILTER_NONE) && (fs->size_datablock != 3) ) {
+        fs->ptr_raw[0] = (unsigned short) 48;
+        fs->ptr_raw[1] = (unsigned short) (fs->size_datablock>>8);
+        fs->ptr_raw[2] = (unsigned short) (fs->size_datablock & 255);
+        //ast_output_datablock(fs->ptr_raw, fs->size_datablock, id, 0);
+    } else if (fs != NULL && fs->size_datablock == 3) {
+        fs->size_datablock = 0;
+        mem_free(fs->ptr_raw);
+    }
 
     return T_OK;
 }
-
 
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar) {
 /*int sizeFSPEC=0;
@@ -1006,6 +1023,8 @@ struct datablock_plot dbp;
 //    ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
 */    return T_OK;
 }
+
+
 
 void printTOD() {
     struct timeval t;

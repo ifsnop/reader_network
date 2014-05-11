@@ -108,10 +108,16 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define TYPE_C34_GEOGRAPHICAL_FILTERING 4
 #define TYPE_C34_JAMMING_STROBE 8
 
-#define FILTER_NO 0
-#define FILTER_ONLY_GROUND 1
+#define FILTER_NONE 0
+#define FILTER_GROUND 1
 
 // unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
+
+typedef struct {
+    ssize_t size_datablock;
+    unsigned char *ptr_raw;
+    int filter_type;
+} filter_struct;
 
 void ttod_put_full(unsigned char sac, unsigned char sic, unsigned char *ptr_full_tod);
 float ttod_get_full(int sac, int sic, unsigned char *ptr_ttod, unsigned long id);
@@ -123,7 +129,7 @@ int ast_procesarCAT19(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 int ast_procesarCAT20(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 int ast_procesarCAT34(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
-int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, int filter_type);
+int ast_procesarCAT48F(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, filter_struct *fs);
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index);
 int ast_get_size_FSPEC(unsigned char *ptr_raw, ssize_t size_datablock);

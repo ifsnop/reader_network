@@ -35,6 +35,9 @@ bool dest_file_compress = false;
 bool dest_file_timestamp = false;
 bool dest_localhost = false;
 bool dest_screen_crc = false;
+char **dest_filter_selection = NULL; // parsed from config
+int dest_filter_count = 0;
+int dest_filter_flags = FILTER_NONE; // config translated
 bool mode_daemon = false;
 bool mode_scrm = false;
 long timed = 0;
@@ -347,6 +350,22 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "no output selected\n");
     }
+
+    if (cfg_get_str_array(&dest_filter_selection, &dest_filter_count, "dest_filter_selection")) {
+        int i;
+        if (strncasecmp(source, "file", 4)) { // not equal
+            log_printf(LOG_ERROR, "dest_filter_selection is only available when source = \"file\"\n");
+            exit(EXIT_FAILURE);
+        }
+        for (i=0; i<dest_filter_count; i++) {
+            if (!strncasecmp(dest_filter_selection[i], "FILTER_GROUND", 13)) {
+                dest_filter_flags |= FILTER_GROUND;
+                log_printf(LOG_VERBOSE, "filtering ground plots\n");
+            }
+        }
+    }
+
+
     if (dest_screen_crc && timed_stats_interval != 0) {
 	log_printf(LOG_VERBOSE, "disabling timed_stats_interval (dest_screen_crc set)\n");
 	timed_stats_interval = 0;
@@ -826,6 +845,7 @@ unsigned long count2_plot_processed = 0;
 unsigned long count2_plot_unique = 0;
 unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
+unsigned long count2_plot_filtered = 0;
 
 #ifdef LINUX
     printf("reader_network_LNX" COPYRIGHT_NOTICE, VERSION);
@@ -861,12 +881,12 @@ unsigned long count2_udp_received = 0;
     gettimeofday(&timed_t_start, NULL);
 
     if (!strncasecmp(source, "file", 4)) {
-    
+
         if ( (fd_out_ast != -1) || (fd_out_gps == -1) ) {
 	    log_printf(LOG_ERROR, "ERROR reader_network: output should be GPS when reading file\n");
 	    exit(EXIT_FAILURE);
         }
-    
+
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
 	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
@@ -898,6 +918,7 @@ unsigned long count2_udp_received = 0;
         }
 
 	while (ast_pos < ast_size_total) {
+            bool volcar = true;
 	    gettimeofday(&t, NULL);
 	    ast_size_datablock = (ast_ptr_raw[ast_pos + 1]<<8) + ast_ptr_raw[ast_pos + 2];
 	    count2_udp_received++;
@@ -917,16 +938,80 @@ unsigned long count2_udp_received = 0;
 		current_time_today = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
 	    }
 
-            
 	    // esto esta comentado porque al meter dest_file_format, hay que pensar como
 	    // se convierte de fichero gps a fichero .ast, y nada de esto esta validado.
 	    // introducido para las modificaciones en malaga/sevilla, grabador en tiempo 
 	    // real de lan
+            filter_struct fs;
+            fs.size_datablock = 0;
+            fs.ptr_raw = NULL;
+            fs.filter_type = dest_filter_flags;
 
-	    if ( (write (fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset)) == -1 ) {
-                log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
+            if ( dest_localhost || dest_filter_flags ) {
+
+		if (ast_ptr_raw[ast_pos] == '\x01') {
+		    count2_plot_processed++;
+		    ast_procesarCAT01(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x02') {
+		    count2_plot_processed++;
+		    ast_procesarCAT02(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x08') {
+		    count2_plot_processed++;
+		    ast_procesarCAT08(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x0a') {
+		    count2_plot_processed++;
+		    ast_procesarCAT10(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x13') {
+		    count2_plot_processed++;
+		    ast_procesarCAT19(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x14') {
+		    count2_plot_processed++;
+		    ast_procesarCAT20(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x15') {
+		    count2_plot_processed++;
+		    ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x22') {
+		    count2_plot_processed++;
+		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else if (ast_ptr_raw[ast_pos] == '\x30') {
+                    count2_plot_processed++;
+		    ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, &fs);
+                    if (fs.size_datablock == 0) {
+                        volcar = false;
+                        count2_plot_filtered++;
+                    } else if ( fs.size_datablock == ast_size_datablock ) {
+                        mem_free(fs.ptr_raw);
+                        fs.size_datablock = 0;
+                    }
+		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
+		    count2_plot_processed++;
+		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		} else {
+		    count2_plot_ignored++;
+		}
+	    }
+            if (volcar) {
+                  if (fs.size_datablock > 0) { // en el caso de que ast_procesarCATXXF soportase filtros y se hubiera activado,
+                                               // hay que escribir en disco el datablock una vez filtrado
+                    count2_plot_filtered++;
+                    //ast_output_datablock(fs.ptr_raw, fs.size_datablock, count2_plot_processed, 0);
+                    if ( write(fd_out_gps, fs.ptr_raw, fs.size_datablock) == -1 ) {
+                        log_printf(LOG_ERROR, "ERROR write (fs): %s\n", strerror(errno));
+                    }
+                    mem_free(fs.ptr_raw);
+                    if ( write(fd_out_gps, ast_ptr_raw + ast_pos + ast_size_datablock, offset) == -1 ) {
+                        log_printf(LOG_ERROR, "ERROR write (gps): %s\n", strerror(errno));
+                    }
+                } else {
+                    //ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock + offset, count2_plot_processed, 0);
+
+                    if ( write(fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset) == -1 ) {
+                        log_printf(LOG_ERROR, "ERROR write (ast_ptr_raw): %s\n", strerror(errno));
+                    }
+                }
             }
 
+            ast_pos += ast_size_datablock + offset;
 
 /*
 	    if (fd_out_ast != -1) { // ultima modificacion! permitir salida ast/gps en input de fichero.
@@ -995,6 +1080,7 @@ unsigned long count2_udp_received = 0;
 		}
 	    }
 */
+/*
 	    if (dest_localhost) {
 //		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock + offset, 0, 0);
 		if (ast_ptr_raw[ast_pos] == '\x01') {
@@ -1023,7 +1109,7 @@ unsigned long count2_udp_received = 0;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true);
 		} else if (ast_ptr_raw[ast_pos] == '\x30') {
 		    count2_plot_processed++;
-		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true, FILTER_ONLY_GROUND);
+		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true, dest_filter_flags);
 		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
 		    count2_plot_processed++;
 		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true);
@@ -1033,6 +1119,7 @@ unsigned long count2_udp_received = 0;
 	    }
 	    ast_pos += ast_size_datablock + offset;
 //	    usleep(100);
+*/
 	}
 	mem_free(ast_ptr_raw);
 
@@ -1224,7 +1311,9 @@ unsigned long count2_udp_received = 0;
 					if (ast_ptr_raw[0] == '\x22')
 					    ast_procesarCAT34(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 					if (ast_ptr_raw[0] == '\x30')
-					    ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true, FILTER_ONLY_GROUND);
+					    //ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true); //, FILTER_GROUND);
+                                            //ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, dest_filter_flags, ast_ptr_raw_new, ast_size_datablock_new);
+                                            ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, NULL);
 					if (ast_ptr_raw[0] == '\x3e')
 					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 				    }
@@ -1332,8 +1421,10 @@ unsigned long count2_udp_received = 0;
 	//    for(i=0;i<(radar_count/5)+1;i++)
 	//	printf("\n");
     //}
-    log_printf(LOG_NORMAL, "stats received[%ld] processed[%ld]/ignored[%ld] = unique[%ld]+duped[%ld]\n", 
-	count2_udp_received, count2_plot_processed, count2_plot_ignored, count2_plot_unique, count2_plot_duped);
+
+    log_printf(LOG_NORMAL, "stats received[%ld] processed[%ld]/ignored[%ld]/filtered[%ld] = unique[%ld]+duped[%ld]\n",
+        count2_udp_received, count2_plot_processed, count2_plot_ignored,
+        count2_plot_filtered, count2_plot_unique, count2_plot_duped);
 
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;
@@ -1342,6 +1433,13 @@ unsigned long count2_udp_received = 0;
 	if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
 	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	}
+    }
+
+    if (dest_filter_selection) {
+        int i;
+        for(i=0; i<dest_filter_count; i++)
+            mem_free(dest_filter_selection[i]);
+        mem_free(dest_filter_selection);
     }
 
 //    log_flush();
