@@ -53,7 +53,7 @@ int radar_count = 0; // numero de entradas en el array de definicion de radares.
     // para saber el numero de radares, hay que dividir entre 5! (5 columnas por radar)
 int socket_count = 0, s_output_multicast = -1, offset = 0;
 int *s_reader = NULL; // listado de sockets para leer en el caso de red (multicast, etc)
-int fd_in = -1, fd_out_ast = -1,fd_out_gps = -1;
+int fd_in = -1, fd_out_ast = -1, fd_out_gps = -1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
 char *asterix_versions = NULL;
@@ -289,7 +289,10 @@ char *dest_file_format_string = NULL;
         log_printf(LOG_VERBOSE, "reading from broadcast\n");
     }
     if (cfg_get_int(&timed, "timed")) {
-	log_printf(LOG_VERBOSE, "recording for %ld secs only\n", timed);
+        if (timed == 0) 
+	    log_printf(LOG_VERBOSE, "recording forever (user interrupt or input file interrupt)\n");
+	else
+	    log_printf(LOG_VERBOSE, "recording for %ld secs only\n", timed);
     }
     if ( cfg_get_int(&dest_free_space, "dest_free_space") ) {
 	log_printf(LOG_VERBOSE, "minimum free space configured at %ld Mb\n", dest_free_space);
@@ -363,7 +366,7 @@ struct tm *t2 = NULL;
     gpsheader = memset(gpsheader, 0xcd, 2200);
 
     if (dest_file != NULL) {
-	if ( dest_free_space != -1 ) {
+	if ( dest_file_timestamp == true && dest_free_space != -1 ) {
 	    double result = 0;
 	    struct statvfs sfs;
 	    if ( statvfs(dest_file, &sfs) == -1 ) {
@@ -412,7 +415,7 @@ struct tm *t2 = NULL;
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_ast);
 	    if ( (fd_out_ast = open(dest_file_final_ast, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
-		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno)); exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR open(%s): %s\n", dest_file_final_ast, strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	}
 	if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
@@ -436,7 +439,7 @@ struct tm *t2 = NULL;
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_gps);
 	    if ( (fd_out_gps = open(dest_file_final_gps, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
-		log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno)); exit(EXIT_FAILURE);
+		log_printf(LOG_ERROR, "ERROR open(%s): %s\n", dest_file_final_gps, strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	    if (write(fd_out_gps, gpsheader, 2200)!=2200) {
 		log_printf(LOG_ERROR, "ERROR write gps file init: %s\n", strerror(errno)); exit(EXIT_FAILURE);
@@ -538,7 +541,7 @@ void send_output_file() {
 	log_printf(LOG_VERBOSE, "uploading %s\n", buff_1);
 
         if ( (fh = fopen(file, "rb")) == NULL) {
-	    log_printf(LOG_ERROR, "ERROR opening '%s': %s\n", file, strerror(errno));
+	    log_printf(LOG_ERROR, "ERROR open(%s): %s\n", file, strerror(errno));
 	    exit(EXIT_FAILURE);
 	}
 
@@ -740,7 +743,7 @@ ssize_t setup_input_file(void) {
 ssize_t size;
 
     if ( (fd_in = open(source_file, O_RDONLY)) == -1) {
-        log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
+        log_printf(LOG_ERROR, "ERROR open(%s): %s\n", source_file, strerror(errno));
         exit(EXIT_FAILURE);
     }
     if ( (size = lseek(fd_in, 0, SEEK_END)) == -1) {
@@ -858,6 +861,12 @@ unsigned long count2_udp_received = 0;
     gettimeofday(&timed_t_start, NULL);
 
     if (!strncasecmp(source, "file", 4)) {
+    
+        if ( (fd_out_ast != -1) || (fd_out_gps == -1) ) {
+	    log_printf(LOG_ERROR, "ERROR reader_network: output should be GPS when reading file\n");
+	    exit(EXIT_FAILURE);
+        }
+    
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
 	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
@@ -882,6 +891,12 @@ unsigned long count2_udp_received = 0;
 		ast_pos += 2200;
 	}
 
+        if (source_file_gps_version != 1) {
+            mem_free(ast_ptr_raw);
+	    log_printf(LOG_ERROR, "ERROR reader_network: input should be GPSv1 when reading file\n");
+	    exit(EXIT_FAILURE);
+        }
+
 	while (ast_pos < ast_size_total) {
 	    gettimeofday(&t, NULL);
 	    ast_size_datablock = (ast_ptr_raw[ast_pos + 1]<<8) + ast_ptr_raw[ast_pos + 2];
@@ -901,15 +916,23 @@ unsigned long count2_udp_received = 0;
 	    } else {
 		current_time_today = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
 	    }
-/*
+
+            
 	    // esto esta comentado porque al meter dest_file_format, hay que pensar como
 	    // se convierte de fichero gps a fichero .ast, y nada de esto esta validado.
 	    // introducido para las modificaciones en malaga/sevilla, grabador en tiempo 
 	    // real de lan
+
+	    if ( (write (fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset)) == -1 ) {
+                log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
+            }
+
+
+/*
 	    if (fd_out_ast != -1) { // ultima modificacion! permitir salida ast/gps en input de fichero.
 		if (dest_file_gps) {
 		    if (source_file_gps && (source_file_gps_version == 2) ) {
-			if ( (write (fd_out, ast_ptr_raw + ast_pos, ast_size_datablock + offset)) == -1 ) {
+			if ( (write (fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset)) == -1 ) {
 			    log_printf(LOG_ERROR, "ERROR: %s\n", strerror(errno));
 			}
 		    } else {
@@ -1000,7 +1023,7 @@ unsigned long count2_udp_received = 0;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true);
 		} else if (ast_ptr_raw[ast_pos] == '\x30') {
 		    count2_plot_processed++;
-		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true);
+		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true, FILTER_ONLY_GROUND);
 		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
 		    count2_plot_processed++;
 		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, true);
@@ -1201,7 +1224,7 @@ unsigned long count2_udp_received = 0;
 					if (ast_ptr_raw[0] == '\x22')
 					    ast_procesarCAT34(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 					if (ast_ptr_raw[0] == '\x30')
-					    ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
+					    ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true, FILTER_ONLY_GROUND);
 					if (ast_ptr_raw[0] == '\x3e')
 					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 				    }

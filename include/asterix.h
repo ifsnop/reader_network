@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -108,6 +108,9 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define TYPE_C34_GEOGRAPHICAL_FILTERING 4
 #define TYPE_C34_JAMMING_STROBE 8
 
+#define FILTER_NO 0
+#define FILTER_ONLY_GROUND 1
+
 // unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
 void ttod_put_full(unsigned char sac, unsigned char sic, unsigned char *ptr_full_tod);
@@ -120,9 +123,10 @@ int ast_procesarCAT19(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 int ast_procesarCAT20(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 int ast_procesarCAT34(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
-int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
+int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, int filter_type);
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index);
 int ast_get_size_FSPEC(unsigned char *ptr_raw, ssize_t size_datablock);
 inline char* parse_hora(float segs);
+bool filter_test(unsigned char *ptr_raw, int ptr, int filter_type);
 //void update_calculations(struct datablock_plot dbp);

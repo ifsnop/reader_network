@@ -1,3 +1,7 @@
+0.66
+- SOPORTE: Creación de filtro de blancos en tierra. Se usará
+en reader_network con file como origen.
+
 0.65
 - SOPORTE: Added asterix_versions to allow runonce.
 - SOPORTE: Now dest_ftp_uri is an array, so dest_file could be

@@ -4,3 +4,5 @@ libs/*.a
 bin/reader*
 bin/client*
 bin/clean*
+bin/datos/*.*ast
+bin/datos/*.*gps

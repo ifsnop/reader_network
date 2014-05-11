@@ -376,7 +376,7 @@ long timestamp = 0;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
 		} else if (ast_ptr_raw[ast_pos] == '\x30') {
 		    count2_plot_processed++;
-		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
+		    ast_procesarCAT48(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false, FILTER_NO);
 		} else if (ast_ptr_raw[ast_pos] == '\x3e') {
 		    count2_plot_processed++;
 		    ast_procesarCAT62(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);

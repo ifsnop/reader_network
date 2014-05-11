@@ -39,6 +39,25 @@ extern struct sockaddr_in srvaddr;
 
 unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
+
+bool filter_test(unsigned char *ptr_raw, int ptr, int filter_type) {
+    bool ret = false;
+
+    if (filter_type == FILTER_ONLY_GROUND) {
+    
+        printf("%08X %08X\n", ptr_raw[ptr], ptr_raw[ptr+1]);
+        
+        if ( ((ptr_raw[ptr] & 28) == 4) || 
+             ((ptr_raw[ptr] & 28) == 12) ) {
+                printf("ON GROUND\n");
+                ret = true;
+        }
+    
+    }
+
+    return ret;
+}
+
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index) {
 int i;
 char *ptr_tmp;
@@ -811,9 +830,10 @@ int index = 0;
     return T_OK;
 }
 
-int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar) {
+int ast_procesarCAT48(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, int filter_type) {
 int size_current = 0, j = 0;
 int index = 0;
+bool filter_true = false;
 //int i = 0; char *ptr_tmp;
 
     do {
@@ -927,7 +947,7 @@ int index = 0;
 		    if ( ptr_raw[k] & 128 ) { j += 2; size_current += 2; }
 		    if ( ptr_raw[k] & 64 ) { int l = j; j += ptr_raw[l]*6 + 1; size_current += ptr_raw[l]*6 + 1; }
 		}
-		if ( ptr_raw[2] & 2 ) {   /* I048/230 */ j += 2; size_current += 2; }
+		if ( ptr_raw[2] & 2 ) { /* I048/230 */ filter_true = filter_test(ptr_raw, j, filter_type); j += 2; size_current += 2;  }
 		if ( ptr_raw[2] & 1 ) { // FX3
 		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ j += 7; size_current += 7; }
 		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
