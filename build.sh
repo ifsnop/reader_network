@@ -107,9 +107,9 @@ for destarch in $destarchs; do
     gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts
 
 done
-gcc $gccopts -o bin/client_time${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
-gcc $gccopts -o bin/client${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
-gcc $gccopts -o bin/cleanast${arch} src/utils/cleanast.c $rnopts
+gcc $gccopts -o bin/client_time${destarch}${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
+gcc $gccopts -o bin/client${destarch}${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
+gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts
 #gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX
 #gcc -Wall -Iinclude/ src/memresp/memresps.c -o bin/memresps -DLINUX
 
