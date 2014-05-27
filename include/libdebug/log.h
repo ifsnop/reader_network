@@ -57,8 +57,8 @@ enum
 
 #if defined(__linux)
 #define LOG_QUIET	_LOG_QUIET
-#define LOG_WARNING	_LOG_WARNING
-#define LOG_DEBUG	_LOG_DEBUG
+//#define LOG_WARNING	_LOG_WARNING
+//#define LOG_DEBUG	_LOG_DEBUG
 #define LOG_NOISY	_LOG_NOISY
 #endif	/* #if defined(__linux)  */
 

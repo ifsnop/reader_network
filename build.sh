@@ -106,39 +106,22 @@ for destarch in $destarchs; do
     #strip bin/reader_network${destarch} 2> /dev/null
     gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts
 
+    gcc $gccopts -o bin/client_time${destarch}${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
+    gcc $gccopts -o bin/client${destarch}${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
+    gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts
 done
-gcc $gccopts -o bin/client_time${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
-gcc $gccopts -o bin/client${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
-gcc $gccopts -o bin/cleanast${arch} src/utils/cleanast.c $rnopts
-#gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX
-#gcc -Wall -Iinclude/ src/memresp/memresps.c -o bin/memresps -DLINUX
 
 exit
+
+#gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX
+#gcc -Wall -Iinclude/ src/memresp/memresps.c -o bin/memresps -DLINUX
 
 #old binaries
 
 #gcc -Wall -Iinclude/ src/cmpclock.c -o bin/cmpclock
-#echo client_rrd
 #gcc -g -o bin/client_rrd src/client_rrd.c src/sacsic.c src/helpers.c $params
-#strip bin/client_rrd
-#echo client_rrd2
 #gcc -g -o bin/client_rrd2 src/client_rrd2.c src/sacsic.c src/helpers.c $params
-#strip bin/client_rrd
-#echo client
 #gcc -g -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c $params
-#strip bin/client
-#echo client_filter
 #gcc -g -o bin/client_filter src/client_filter.c src/sacsic.c src/helpers.c src/startup.c $params
-#echo repeater_network
 #gcc -Wall -g -o bin/repeater_network src/repeater_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c $params
-#strip bin/reader_network
 
-#COMPILATION FOR SOLARIS
-
-#CUR_DIR=`pwd`
-##gcc -Wall -g -o bin/subscriber_SOL src/subscriber.c -L${CUR_DIR}/libs/lib/ -I${CUR_DIR}/include/ -I${CUR_DIR}/libs/include/ -lm -lconfig -ldebug -lsocket -lnsl -DSOLARIS
-#gcc -Wall -g -o bin/reader_network_SOL src/reader_network.c src/asterix.c src/sacsic.c src/helpers.c src/startup.c src/crc32.c src/red_black_tree.c src/red_black_tree_misc.c src/red_black_tree_stack.c -L${CUR_DIR}/libs/lib_SOL/ -I${CUR_DIR}/include/ -I${CUR_DIR}/libs/include/ -lm -lconfig -ldebug -lsocket -lnsl -DSOLARIS
-#gcc -Wall -g -o bin/client src/client.c src/sacsic.c src/helpers.c src/startup.c -L/aplic/reader/conversor_asterix0.45.1/libs/lib/ -Iinclude -Ilibs/include -lm -lconfig -ldebug -lsocket -lnsl -v
-
-#gcc -Wall -g -Iinclude -o bin/cleanast_SOL src/cleanast.c
-#gcc -Wall -g -Iinclude -lnsl -lsocket -o bin/memresp_SOL src/memresp/memresp.c -DSOLARIS
