@@ -111,10 +111,10 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts
 done
 
-exit
-
 #gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX
 #gcc -Wall -Iinclude/ src/memresp/memresps.c -o bin/memresps -DLINUX
+
+exit
 
 #old binaries
 
