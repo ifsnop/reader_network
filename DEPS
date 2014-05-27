@@ -1,4 +1,4 @@
-reader_network 0.65 - A package of utilities to record and work with 
+reader_network 0.66 - A package of utilities to record and work with 
 multicast radar data in ASTERIX format. (radar as in air navigation 
 surveillance).
 
@@ -31,3 +31,4 @@ libconfig (included in source code)
 libdebug (included in source code)
 
 pthreads
+

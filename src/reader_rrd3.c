@@ -233,7 +233,7 @@ long timestamp = 0;
 		rrd_directory = optarg;
 		break;
 	    default:
-		log_printf(LOG_ERROR, "reader_rrd3_LNX" COPYRIGHT_NOTICE, VERSION);
+		log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
 		log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
 		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
 		    "\t-s asterix input source file\n"
@@ -246,7 +246,7 @@ long timestamp = 0;
     }
 
     if (source_file == NULL || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
-	log_printf(LOG_ERROR, "reader_rrd3_LNX" COPYRIGHT_NOTICE, VERSION);
+	log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
 	log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
 		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
 		    "\t-s asterix input source file\n"
@@ -606,16 +606,17 @@ int i,j;
 	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
 	radar_delay[i].sorted_list_cat21 = NULL;
 	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
-	
-	bzero(radar_delay[i].segmentos_cat1, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat2, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat8, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat10, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat19, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat20, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat21, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat34, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat48, sizeof(int) * MAX_SEGMENT_NUMBER);
+
+	memset(radar_delay[i].segmentos_cat1, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat2, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat8, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat10, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat19, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat20, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat21, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat34, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat48, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+
 	radar_delay[i].sac = '\0'; radar_delay[i].sic = '\0';
 	for(j=0;j<256;j++) radar_delay[i].first_time[j] = 0;
 	radar_delay[i].cuenta_plot_cat1 = 0; radar_delay[i].cuenta_plot_cat2 = 0;

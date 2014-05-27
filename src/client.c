@@ -35,11 +35,7 @@ int main(int argc, char *argv[]) {
     bool forced_exit = false;
 
     startup();
-
-    log_printf(LOG_NORMAL, "client_LNX v%s Copyright (C) 2002 - 2014 Diego Torres\n\n"
-        "This program comes with ABSOLUTELY NO WARRANTY.\n"
-        "This is free software, and you are welcome to redistribute it\n"
-        "under certain conditions; see COPYING file for details.\n\n", VERSION);
+    printf("client_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
 
 //    pHostInfo = gethostbyname("localost");
 //    memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
@@ -57,8 +53,12 @@ int main(int argc, char *argv[]) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));
 	exit(1);
     }
-
+#if defined(__linux)
     mreq.imr_interface.s_addr = inet_addr("127.0.0.1"); //nHostAddress;
+#endif
+#if defined(__sun)
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+#endif
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_PLOTS_GROUP);
     if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 	log_printf(LOG_ERROR, "setsocktperror\n");
@@ -97,8 +97,10 @@ int main(int argc, char *argv[]) {
 		    diff -= 86400;
 		}
 	    }
-	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s]%s [AZI %03.3f]"
-		" [DST %03.3f] [MODEA %04o%s%s%s] [FL%03d%s%s] r%d [%s] (%5.3f) [%s] (%3.4f)\n", dbp.id, /* IFSNOP MOD */
+	    log_printf(LOG_VERBOSE, "sac(%d) sic(%d) %ld [%s/%s] [%s%s%s%s%s]%s [AZI %03.3f]"
+		" [DST %03.3f] [MODEA %04o%s%s%s] [FL%03d%s%s] r%d [%s] (%5.3f) [%s] (%3.4f)\n", 
+                dbp.sac, dbp.sic,
+                dbp.id, /* IFSNOP MOD */
 		sac_s , sic_l, 
 		(dbp.type == NO_DETECTION) ? "NODET" : "",
 		(dbp.type & TYPE_C1_PSR) ? "PSR" : "", 

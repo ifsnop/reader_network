@@ -27,6 +27,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define _DEBUG_LOG_C
+
 #include <sys/types.h>
 #include <stdint.h>
 #include <stddef.h>

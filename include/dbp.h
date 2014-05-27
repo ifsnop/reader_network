@@ -23,8 +23,8 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 
 struct datablock_plot {
-    int sac; 				//	CAT01 CAT02 CAT08 CAT10
-    int sic;				//	CAT01 CAT02 CAT08 CAT10
+    unsigned char sac; 			//	CAT01 CAT02 CAT08 CAT10
+    unsigned char sic;			//	CAT01 CAT02 CAT08 CAT10
     int cat; 				// 	 // categoria original de la info
     int type; 				//	CAT01 CAT02 CAT08  CAT10 CAT34 CAT48 // psr-ssr-cmb-track/pasonorte.../sop-eop.../
     int plot_type; 			//	CAT10

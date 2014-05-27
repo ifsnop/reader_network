@@ -28,6 +28,13 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
     "This is free software, and you are welcome to redistribute it\n" \
     "under certain conditions; see COPYING file for details.\n\n"
 
+#if defined(__sun)
+#define ARCH "SOL"
+#endif
+#if defined(__linux)
+#define ARCH "LNX"
+#endif
+
 #define TEXT_LENGTH_SHORT 4
 #define TEXT_LENGTH_LONG  32
 

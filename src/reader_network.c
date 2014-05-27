@@ -103,7 +103,7 @@ void setup_asterix_versions() {
     if ( stat("/var/lib/dbus/machine-id", &sb) == -1 ) { /* To obtain file size */
 	log_printf(LOG_VERBOSE, "asterix_versions fstat error (%s)\n", strerror(errno)); return; // exit(EXIT_FAILURE);
     }
-    if (!S_ISREG (sb.st_mode)) {
+    if (!S_ISREG(sb.st_mode)) {
 	log_printf(LOG_VERBOSE, "asterix_versions file error (not a file)\n"); return; // exit(EXIT_FAILURE);
     }
     buf = mem_alloc(sb.st_size + 1);
@@ -114,7 +114,7 @@ void setup_asterix_versions() {
     if ( (read_size = fread(buf, 1, sb.st_size, fd)) != sb.st_size ) {
 	if ( !feof(fd) ) {
 	    log_printf(LOG_VERBOSE, "asterix_versions fread error (%s)\n", strerror(errno));
-	    mem_free(buf); fclose(fd); // exit(EXIT_FAILURE);
+	    mem_free(buf); fclose(fd); return; // exit(EXIT_FAILURE);
 	}
     }
     buf[read_size] = '\0';
@@ -151,8 +151,8 @@ char *dest_file_format_string = NULL;
     cfg_get_bool(&mode_daemon, "mode_daemon");
     cfg_get_int(&timed_stats_interval, "timed_stats_interval");
     if (mode_daemon) {
-#ifdef SOLARIS
-	long retcode; int fd;
+#if defined(__sun)
+	long retcode; int fd = 0;
 #endif
         log_printf(LOG_VERBOSE, "going to daemon mode\n");
 	if (timed_stats_interval>0) {
@@ -161,13 +161,13 @@ char *dest_file_format_string = NULL;
 	}
 	log_flush();
 	log_close();
-#ifdef LINUX
+#if defined(__linux)
 	if (daemon(1,0) == -1) {
 	    log_printf(LOG_ERROR, "ERROR daemon: %s\n",strerror(errno));
 	    exit(EXIT_FAILURE);
 	}
 #endif
-#ifdef SOLARIS
+#if defined(__sun)
 	if(getppid()==1) {
 	    log_printf(LOG_ERROR, "ERROR getppid (already a daemon): %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	}
@@ -847,12 +847,7 @@ unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
 unsigned long count2_plot_filtered = 0;
 
-#ifdef LINUX
-    printf("reader_network_LNX" COPYRIGHT_NOTICE, VERSION);
-#endif
-#ifdef SOLARIS
-    printf("reader_network_SOL" COPYRIGHT_NOTICE, VERSION);
-#endif
+    printf("reader_network_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
     startup();
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
     if ( argc!=2 ) {
@@ -861,7 +856,8 @@ unsigned long count2_plot_filtered = 0;
     }
     setup_asterix_versions();
     if ( !strncmp(argv[1], "-r", 2) ) {
-	log_printf(LOG_ERROR, "%s\n", digest_hex);
+	if (digest_hex)
+	    log_printf(LOG_ERROR, "%s\n", digest_hex);
 	exit(EXIT_FAILURE);
     }
     parse_config(argv[1]);

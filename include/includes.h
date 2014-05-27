@@ -44,7 +44,12 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 #include <limits.h>
 #include <values.h>
+#if defined(__sun)
+#include <sys/mntent.h>
+#endif
+#if defined(__linux)
 #include <mntent.h>
+#endif
 #include <libgen.h>
 #include <sys/statvfs.h>
 #include "libdebug/memory.h"

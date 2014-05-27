@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -39,8 +39,8 @@ int main(int argc, char *argv[]) {
     unsigned char *ptr;
 
     if(argc!=6) {
-        printf("cleanast_LNX v%s Copyright (C) 2002 - 2013 Diego Torres\n\n", VERSION);
-	printf("cleanast in_filename.ast out_filename.ast headerbytes prebytes postbytes\n\n"); exit(1);
+        printf("cleanast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
+	printf("cleanast_%s in_filename.ast out_filename.ast headerbytes prebytes postbytes\n\n", ARCH); exit(1);
     }
     
     headerbytes = atoi(argv[3]);

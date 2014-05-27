@@ -29,7 +29,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
+/* 
+ * Error in SOLARIS, not needed in Linux
+ * #include <sys/cdefs.h>
+ */
 #include <sys/types.h>
 
 /*
@@ -52,15 +55,13 @@ extern void mem_check_stub (const char *file,int line,const char *function);
  * Allocate a memory area. Used instead of malloc()
  */
 #define mem_alloc(size) mem_alloc_stub(size,__FILE__,__LINE__,__FUNCTION__)
-extern void *mem_alloc_stub (size_t size,const char *file,int line,const char *function)
-  __attribute_malloc__;
+extern void *mem_alloc_stub (size_t size,const char *file,int line,const char *function) __attribute__ ((__malloc__));
 
 /*
  * Re-allocate a memory area. Used instead of realloc()
  */
 #define mem_realloc(ptr,size) mem_realloc_stub(ptr,size,__FILE__,__LINE__,__FUNCTION__)
-extern void *mem_realloc_stub (void *ptr,size_t size,const char *file,int line,const char *function)
-  __attribute_malloc__;
+extern void *mem_realloc_stub (void *ptr,size_t size,const char *file,int line,const char *function) __attribute__ ((__malloc__));
 
 /*
  * Free a memory area. Used instead of free()

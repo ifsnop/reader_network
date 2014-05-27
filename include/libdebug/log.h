@@ -30,16 +30,17 @@
  */
 
 #include <stdarg.h>
+#include <sys/syslog.h>
 
 enum
 {
    _LOG_QUIET   = 0,
    _LOG_ERROR   = 1,
-   _LOG_WARNING = 2,
-   _LOG_NORMAL  = 3,
-   _LOG_VERBOSE = 4,
-   _LOG_DEBUG   = 5,
-   _LOG_NOISY   = 6
+   _LOG_WARNING = 4,
+   _LOG_NORMAL  = 5,
+   _LOG_VERBOSE = 6,
+   _LOG_DEBUG   = 7,
+   _LOG_NOISY   = 8
 };
 
 /*
@@ -48,15 +49,19 @@ enum
  * conflicting symbols (LOG_DEBUG, LOG_WARNING, etc), so we
  * have to use different names inside the library.
  */
-
 #ifndef _DEBUG_LOG_C
-#define LOG_QUIET	_LOG_QUIET
-#define LOG_ERROR	_LOG_ERROR
-#define LOG_WARNING	_LOG_WARNING
-#define LOG_NORMAL	_LOG_NORMAL
+
 #define LOG_VERBOSE	_LOG_VERBOSE
+#define LOG_ERROR	_LOG_ERROR
+#define LOG_NORMAL	_LOG_NORMAL
+
+#if defined(__linux)
+#define LOG_QUIET	_LOG_QUIET
+#define LOG_WARNING	_LOG_WARNING
 #define LOG_DEBUG	_LOG_DEBUG
 #define LOG_NOISY	_LOG_NOISY
+#endif	/* #if defined(__linux)  */
+
 #endif	/* #ifndef _DEBUG_LOG_C */
 
 #define LOG_LEVELS	(_LOG_NOISY - _LOG_QUIET + 1)
@@ -147,4 +152,91 @@ extern int log_puts_stub (const char *filename,int line,const char *function,int
 
 #define MARKER() log_printf_stub(__FILE__,__LINE__,__FUNCTION__,LOG_DEBUG,"MARKER\n")
 
+#if (defined _DEBUG_LOG_C && defined __sun)
+
+#define LOG_MAKEPRI(fac, pri)   (((fac) << 3) | (pri))
+
+#define INTERNAL_NOPRI  0x10    /* the "no priority" priority */
+                                /* mark "facility" */
+#define INTERNAL_MARK   LOG_MAKEPRI(LOG_NFACILITIES, 0)
+
+typedef struct _code {
+        char    *c_name;
+        int     c_val;
+} CODE;
+
+CODE prioritynames[] =
+  {
+    { "alert", LOG_ALERT },
+    { "crit", LOG_CRIT },
+    { "debug", LOG_DEBUG },
+    { "emerg", LOG_EMERG },
+    { "err", LOG_ERR },
+    { "error", LOG_ERR },               /* DEPRECATED */
+    { "info", LOG_INFO },
+    { "none", INTERNAL_NOPRI },         /* INTERNAL */
+    { "notice", LOG_NOTICE },
+    { "panic", LOG_EMERG },             /* DEPRECATED */
+    { "warn", LOG_WARNING },            /* DEPRECATED */
+    { "warning", LOG_WARNING },
+    { NULL, -1 }
+  };
+
+#define LOG_KERN        (0<<3)  /* kernel messages */
+#define LOG_USER        (1<<3)  /* random user-level messages */
+#define LOG_MAIL        (2<<3)  /* mail system */
+#define LOG_DAEMON      (3<<3)  /* system daemons */
+#define LOG_AUTH        (4<<3)  /* security/authorization messages */
+#define LOG_SYSLOG      (5<<3)  /* messages generated internally by syslogd */
+#define LOG_LPR         (6<<3)  /* line printer subsystem */
+#define LOG_NEWS        (7<<3)  /* network news subsystem */
+#define LOG_UUCP        (8<<3)  /* UUCP subsystem */
+//#define LOG_CRON        (9<<3)  /* clock daemon */
+#define LOG_AUTHPRIV    (10<<3) /* security/authorization messages (private) */
+#define LOG_FTP         (11<<3) /* ftp daemon */
+
+#define LOG_LOCAL0      (16<<3) /* reserved for local use */
+#define LOG_LOCAL1      (17<<3) /* reserved for local use */
+#define LOG_LOCAL2      (18<<3) /* reserved for local use */
+#define LOG_LOCAL3      (19<<3) /* reserved for local use */
+#define LOG_LOCAL4      (20<<3) /* reserved for local use */
+#define LOG_LOCAL5      (21<<3) /* reserved for local use */
+#define LOG_LOCAL6      (22<<3) /* reserved for local use */
+#define LOG_LOCAL7      (23<<3) /* reserved for local use */
+
+#define LOG_NFACILITIES 24      /* current number of facilities */
+#define LOG_FACMASK     0x03f8  /* mask to extract facility part */
+                                /* facility of pri */
+#define LOG_FAC(p)      (((p) & LOG_FACMASK) >> 3)
+
+CODE facilitynames[] =
+  {
+    { "auth", LOG_AUTH },
+    { "authpriv", LOG_AUTHPRIV },
+    { "cron", LOG_CRON },
+    { "daemon", LOG_DAEMON },
+    { "ftp", LOG_FTP },
+    { "kern", LOG_KERN },
+    { "lpr", LOG_LPR },
+    { "mail", LOG_MAIL },
+    { "mark", INTERNAL_MARK },          /* INTERNAL */
+    { "news", LOG_NEWS },
+    { "security", LOG_AUTH },           /* DEPRECATED */
+    { "syslog", LOG_SYSLOG },
+    { "user", LOG_USER },
+    { "uucp", LOG_UUCP },
+    { "local0", LOG_LOCAL0 },
+    { "local1", LOG_LOCAL1 },
+    { "local2", LOG_LOCAL2 },
+    { "local3", LOG_LOCAL3 },
+    { "local4", LOG_LOCAL4 },
+    { "local5", LOG_LOCAL5 },
+    { "local6", LOG_LOCAL6 },
+    { "local7", LOG_LOCAL7 },
+    { NULL, -1 }
+  };
+
+#endif  /* #if (defined _DEBUG_LOG_C && defined __sun) */
+
 #endif	/* #ifndef _DEBUG_LOG_H */
+

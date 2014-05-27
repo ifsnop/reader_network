@@ -158,8 +158,12 @@ void server_connect(void) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));
 	exit(1);
     }
-				
+#if defined(__sun)
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+#endif
+#if defined(__linux)
     mreq.imr_interface.s_addr = inet_addr("127.0.0.1"); //nHostAddress;
+#endif
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_PLOTS_GROUP);
     if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 	log_printf(LOG_ERROR, "setsocktperror\n");
@@ -236,16 +240,17 @@ int i;
 	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
 	radar_delay[i].sorted_list_cat21 = NULL;
 	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
-	
-	bzero(radar_delay[i].segmentos_cat1, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat2, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat8, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat10, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat19, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat20, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat21, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat34, sizeof(int) * MAX_SEGMENT_NUMBER);
-	bzero(radar_delay[i].segmentos_cat48, sizeof(int) * MAX_SEGMENT_NUMBER);
+
+	memset(radar_delay[i].segmentos_cat1, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat2, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat8, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat10, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat19, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat20, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat21, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat34, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat48, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+
 	radar_delay[i].sac = '\0'; radar_delay[i].sic = '\0';
 	radar_delay[i].cuenta_plot_cat1 = 0; radar_delay[i].cuenta_plot_cat2 = 0;
 	radar_delay[i].cuenta_plot_cat8 = 0; radar_delay[i].cuenta_plot_cat10 = 0;
@@ -310,11 +315,7 @@ int main(int argc, char *argv[]) {
     struct timeval t2, old_t2;
 
     startup();
-
-    log_printf(LOG_NORMAL, "client_time_LNX v%s Copyright (C) 2002 - 2014 Diego Torres\n\n"
-        "This program comes with ABSOLUTELY NO WARRANTY.\n"
-        "This is free software, and you are welcome to redistribute it\n"
-        "under certain conditions; see COPYING file for details.\n\n", VERSION);
+    log_printf(LOG_NORMAL, "client_time_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
 	    
     server_connect();
     radar_delay_alloc();

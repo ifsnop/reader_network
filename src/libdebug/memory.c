@@ -30,6 +30,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define _DEBUG_LOG_C
+
 #include <stdlib.h>
 #include <sys/types.h>
 #include <inttypes.h>
@@ -38,7 +40,7 @@
 
 #include <libdebug/memory.h>
 
-#ifndef DEBUG_LOG
+#ifdef DEBUG_LOG
 #include <libdebug/log.h>
 #else	/* #ifndef DEBUG_LOG */
 #define log_printf fprintf

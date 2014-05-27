@@ -1,6 +1,8 @@
 0.66
 - SOPORTE: Creación de filtro de blancos en tierra. Se usará
 en reader_network con file como origen.
+- BUG: Corregido el script de compilación (build.sh) para que
+vuelva a funcionar en Solaris.
 
 0.65
 - SOPORTE: Added asterix_versions to allow runonce.
@@ -120,5 +122,5 @@ no se puede usar para grabar asterix sacta o lo que sea. solo asterix.
 - se aniade la version en defines.h para que todos los programas la
 usen.
 - se aniade la opcion "dest_screen_crc" que muestra por pantalla un crc 
-por cada paquete con un timstamp en segundos.
+por cada paquete con un timestamp en segundos.
 
