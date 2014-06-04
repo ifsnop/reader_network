@@ -1,3 +1,9 @@
+0.67
+- BUG: En  solaris no debería haber asterix_versions. Sin
+embargo, si no existe en el fichero de configuración, la
+aplicación no arranca. Si existe, la aplicación funciona
+(no se comprueba nada mas).
+
 0.66
 - SOPORTE: Creación de filtro de blancos en tierra. Se usará
 en reader_network con file como origen.
