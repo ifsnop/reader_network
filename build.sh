@@ -81,7 +81,8 @@ for destarch in $destarchs; do
 	DESTDIR=`pwd`/3rdparty/tmp/
 	cd $DESTDIR/curl-7.30.0 > /dev/null
 	export CFLAGS="-m${destarch}"
-	./configure --enable-static --without-libidn --disable-shared --disable-ssl \
+	./configure --enable-static --without-libidn --without-librtmp \
+            --disable-shared --disable-ssl \
 	    --disable-ipv6 --disable-rtsp --disable-dict --disable-gopher --disable-https \
 	    --disable-telnet --disable-smtp --disable-smtps --disable-imap --disable-imaps \
 	    --disable-pop3 --disable-pop3s --disable-ftps --without-ssl --without-polarssl \
