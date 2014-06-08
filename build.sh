@@ -115,6 +115,8 @@ done
 #gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX
 #gcc -Wall -Iinclude/ src/memresp/memresps.c -o bin/memresps -DLINUX
 
+ls -la bin/
+
 exit
 
 #old binaries
