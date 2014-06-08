@@ -1,8 +1,12 @@
 0.67
+PENDIENTE DE RESOLVER, PERO NOTIFICADO
 - BUG: En  solaris no debería haber asterix_versions. Sin
 embargo, si no existe en el fichero de configuración, la
 aplicación no arranca. Si existe, la aplicación funciona
 (no se comprueba nada mas).
+- SOPORTE: Ya se puede generar de un fichero GPS->GPS,
+AST->AST y GPS->AST. Esto permite a los filtros trabajar
+sobre ficheros ast y sobre ficheros gps.
 
 0.66
 - SOPORTE: Creación de filtro de blancos en tierra. Se usará

@@ -54,7 +54,8 @@ int dest_file_format = DEST_FILE_FORMAT_AST;
 int dest_ftp_count = 0; // número de entrads en el array de ftp de destino de los ficheros.
 int radar_count = 0; // numero de entradas en el array de definicion de radares.
     // para saber el numero de radares, hay que dividir entre 5! (5 columnas por radar)
-int socket_count = 0, s_output_multicast = -1, offset = 0;
+int socket_count = 0, s_output_multicast = -1, 
+    offset = 0; // post bytes que van detrás de cada datablock (por ejemplo, cuando el asterix va fechado con gps
 int *s_reader = NULL; // listado de sockets para leer en el caso de red (multicast, etc)
 int fd_in = -1, fd_out_ast = -1, fd_out_gps = -1;
 long source_file_gps_version=3;
@@ -303,9 +304,9 @@ char *dest_file_format_string = NULL;
 
     if (cfg_get_bool(&dest_localhost, "dest_localhost")) {
 	if (dest_localhost) {
-	    log_printf(LOG_VERBOSE, "enable localhost decoding for stats\n");
+	    log_printf(LOG_VERBOSE, "enable localhost decoding\n");
 	} else {
-	    log_printf(LOG_VERBOSE, "no asterix decoding\n");
+	    log_printf(LOG_VERBOSE, "not enabling localhost decoding\n");
 	}
     }
 
@@ -877,10 +878,18 @@ unsigned long count2_plot_filtered = 0;
     gettimeofday(&timed_t_start, NULL);
 
     if (!strncasecmp(source, "file", 4)) {
-
+/*
         if ( (fd_out_ast != -1) || (fd_out_gps == -1) ) {
 	    log_printf(LOG_ERROR, "ERROR reader_network: output should be GPS when reading file\n");
 	    exit(EXIT_FAILURE);
+        }
+*/
+        //if ( (!source_file_gps && (fd_out_ast == -1)) ||
+        if ( !source_file_gps && (fd_out_gps != -1) ) {
+            log_printf(LOG_ERROR, "ERROR input & output mismatch source_file_gps(%d) fd_out_ast(%d) fd_out_gps(%d)\n",
+                source_file_gps, fd_out_ast, fd_out_gps);
+            log_printf(LOG_ERROR, "it is only possible to write AST->AST, GPS->GPS, GPS->AST\n");
+            exit(EXIT_FAILURE);
         }
 
 	ast_size_total = setup_input_file();
@@ -891,28 +900,33 @@ unsigned long count2_plot_filtered = 0;
 	}
 	log_printf(LOG_NORMAL, "readed %ld bytes\n", (unsigned long) ast_size_total);
         if (source_file_gps_version == 0) {
-	    unsigned char *memcmp1;
-	    memcmp1 = (unsigned char *) mem_alloc(20);
-	    memcmp1 = memset(memcmp1, 0xCD, 20);
-	    if (!memcmp(memcmp1, ast_ptr_raw+20, 20)) {
-	        offset = 10; ast_pos += 2200; source_file_gps_version = 1;
-	        log_printf(LOG_VERBOSE, "GPSv1 input auto-activated\n");
-	    } else {
-	        offset = 4; ast_pos = 0; source_file_gps_version = 2;
-	        log_printf(LOG_VERBOSE, "GPSv2 input auto-activated\n");
+            if ( !source_file_gps ) { // acaba en ast, es un archivo asterix
+                offset = 0; ast_pos = 0;
+            } else {
+	        unsigned char *memcmp1;
+	        memcmp1 = (unsigned char *) mem_alloc(20);
+	        memcmp1 = memset(memcmp1, 0xCD, 20);
+	        if (!memcmp(memcmp1, ast_ptr_raw+20, 20)) {
+	            offset = 10; ast_pos += 2200; source_file_gps_version = 1;
+	            log_printf(LOG_VERBOSE, "GPSv1 input auto-activated\n");
+	        } else {
+	            offset = 4; ast_pos = 0; source_file_gps_version = 2;
+	            log_printf(LOG_VERBOSE, "GPSv2 input auto-activated\n");
+	        }
+	        mem_free(memcmp1);
 	    }
-	    mem_free(memcmp1);
-	} else {
-	    if (source_file_gps_version == 1)
-		ast_pos += 2200;
+        } else {
+            if (source_file_gps_version == 1) {
+	        ast_pos += 2200; offset = 10;
+            }
 	}
-
+/*
         if (source_file_gps_version != 1) {
             mem_free(ast_ptr_raw);
 	    log_printf(LOG_ERROR, "ERROR reader_network: input should be GPSv1 when reading file\n");
 	    exit(EXIT_FAILURE);
         }
-
+*/
 	while (ast_pos < ast_size_total) {
             bool volcar = true;
 	    gettimeofday(&t, NULL);
@@ -991,18 +1005,36 @@ unsigned long count2_plot_filtered = 0;
                                                // hay que escribir en disco el datablock una vez filtrado
                     count2_plot_filtered++;
                     //ast_output_datablock(fs.ptr_raw, fs.size_datablock, count2_plot_processed, 0);
-                    if ( write(fd_out_gps, fs.ptr_raw, fs.size_datablock) == -1 ) {
-                        log_printf(LOG_ERROR, "ERROR write (fs): %s\n", strerror(errno));
+                    if ( fd_out_gps != -1 ) {
+                        if ( write(fd_out_gps, fs.ptr_raw, fs.size_datablock) == -1 ) {
+                            log_printf(LOG_ERROR, "ERROR writev1->fd_out_gps (fs): %s\n", strerror(errno));
+                        }
+                        // si el origen es gps, hay que escribir también el offset.
+                        if ( offset != 0 ) {
+                            if ( write(fd_out_gps, ast_ptr_raw + ast_pos + ast_size_datablock, offset) == -1 ) {
+                                log_printf(LOG_ERROR, "ERROR writev1->fd_out_gps (gps): %s\n", strerror(errno));
+                            }
+                        }
+                        // nunca se puede dar la condición de que el original sea gps y el destino asterix.
+                    }
+                    if ( fd_out_ast != -1 ) {
+                        // no hay offset que escribir, el origen es asterix, el destino debe ser asterix
+                        if ( write(fd_out_ast, fs.ptr_raw, fs.size_datablock) == -1 ) {
+                            log_printf(LOG_ERROR, "ERROR write (fs): %s\n", strerror(errno));
+                        }
                     }
                     mem_free(fs.ptr_raw);
-                    if ( write(fd_out_gps, ast_ptr_raw + ast_pos + ast_size_datablock, offset) == -1 ) {
-                        log_printf(LOG_ERROR, "ERROR write (gps): %s\n", strerror(errno));
-                    }
                 } else {
                     //ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock + offset, count2_plot_processed, 0);
-
-                    if ( write(fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset) == -1 ) {
-                        log_printf(LOG_ERROR, "ERROR write (ast_ptr_raw): %s\n", strerror(errno));
+                    if ( fd_out_gps != -1 ) {
+                        if ( write(fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset) == -1 ) {
+                            log_printf(LOG_ERROR, "ERROR writev2->fd_out_gps (ast_ptr_raw): %s\n", strerror(errno));
+                        }
+                    }
+                    if ( fd_out_ast != -1 ) {
+                        if ( write(fd_out_ast, ast_ptr_raw + ast_pos, ast_size_datablock) == -1 ) {
+                            log_printf(LOG_ERROR, "ERROR writev2->fd_out_ast (ast_ptr_raw): %s\n", strerror(errno));
+                        }
                     }
                 }
             }

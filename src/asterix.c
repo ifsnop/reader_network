@@ -829,7 +829,6 @@ int index = 0;
 int ast_procesarCAT48F(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar, filter_struct *fs) {
 int size_current = 0, j = 0;
 int index = 0;
-bool filter_true = false;
 unsigned char *datablock_start = NULL;
 
     if (fs !=NULL && fs->filter_type != FILTER_NONE) {
@@ -840,6 +839,7 @@ unsigned char *datablock_start = NULL;
     do {
 	int sizeFSPEC;
 	struct datablock_plot dbp;
+        bool filter_true = false;
 	memset(&dbp, 0, sizeof(struct datablock_plot));
 	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
 	dbp.cat = CAT_48;
@@ -851,32 +851,14 @@ unsigned char *datablock_start = NULL;
 	dbp.flag_test = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
-
 //	if (sizeFSPEC == 0) {
 //	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 //	    return T_ERROR;
 //	}
 
-        /*
-	ptr_tmp = (char *) mem_alloc(sizeFSPEC*3 + 1);
-	memset(ptr_tmp, 0x0, sizeFSPEC*3 + 1);
-	for( i = 0; i < sizeFSPEC; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[i]));
-	ptr_tmp[strlen(ptr_tmp)-1] = 0;
-        log_printf(LOG_NORMAL, "fspec(%s)\n", ptr_tmp);
-        mem_free(ptr_tmp);
-        */
-	/*
-	ptr_tmp = (char *) mem_alloc(size_datablock*3 + 1);
-        memset(ptr_tmp, 0x0, size_datablock*3 + 1);
-        for (i=0; i < size_datablock*3 - size_current*3 -3*3; i+=3) sprintf((char *)(ptr_tmp + i), "%02X ", (unsigned char) (ptr_raw[i/3]));
-	log_printf(LOG_NORMAL, "%s(%d)\n", ptr_tmp, size_datablock - size_current);
-	mem_free(ptr_tmp);
-	*/
-
 	//ast_output_datablock(ptr_raw, size_datablock - size_current - 3, id, index);
 
         datablock_start = ptr_raw;
-
 	j = sizeFSPEC;
 	size_current += sizeFSPEC;
 	if ( ptr_raw[0] & 128 ) { //I048/010
@@ -950,7 +932,10 @@ unsigned char *datablock_start = NULL;
 		    if ( ptr_raw[k] & 128 ) { j += 2; size_current += 2; }
 		    if ( ptr_raw[k] & 64 ) { int l = j; j += ptr_raw[l]*6 + 1; size_current += ptr_raw[l]*6 + 1; }
 		}
-		if ( ptr_raw[2] & 2 ) { /* I048/230 */ if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type); j += 2; size_current += 2;  }
+		if ( ptr_raw[2] & 2 ) { /* I048/230 */
+                    //log_printf(LOG_ERROR, "en I048/230\n");
+                    if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type); j += 2; size_current += 2;
+                }
 		if ( ptr_raw[2] & 1 ) { // FX3
 		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ j += 7; size_current += 7; }
 		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
@@ -990,7 +975,12 @@ unsigned char *datablock_start = NULL;
             memcpy(fs->ptr_raw + fs->size_datablock, datablock_start, j);
             fs->size_datablock += j;
         }
-
+/*
+        if (filter_true && (dbp.type == TYPE_C48_PSR)) {
+            ast_output_datablock(datablock_start, size_datablock - size_current - 3, id, index);
+            log_printf(LOG_ERROR, "ERROR: esto no puede pasar!!!\n"); exit(EXIT_FAILURE);
+        }
+*/
 /*
         if ( fs != NULL && fs->filter_type != FILTER_NONE && filter_true ) {
             ast_output_datablock(datablock_start, size_current, id, 0); // + size_datablock - 3, id, index);
