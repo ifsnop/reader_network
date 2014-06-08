@@ -1108,6 +1108,7 @@ div_t d;
 
 void create_database(int sac, int sic, int cat, long timestamp) {
 char *rrd_path, *cmd;
+int ret = 0;
 
     //date -d"121231 23:59:59" +%s
     //1356998399
@@ -1143,7 +1144,9 @@ RRA:MIN:0.5:1:600 \
 RRA:MIN:0.5:6:700 \
 RRA:MIN:0.5:24:775 \
 RRA:MIN:0.5:288:797",rrd_path);
-	system(cmd);
+	if ( (ret = system(cmd)) == -1 ) {
+            log_printf(LOG_ERROR, "error ejecutando cmd(%s)\n", cmd);
+        }
 	mem_free(cmd);
     }/* else {
 	log_printf(LOG_ERROR, "encontrado(%s)\n", rrd_path);
@@ -1155,8 +1158,8 @@ RRA:MIN:0.5:288:797",rrd_path);
 void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, float max,
     float min, float media, float stdev, float moda, float p99) {
     char *cmd;
-
-    if ( cat != 1 && cat != 48 ) 
+    int ret = 0;
+    if ( cat != 1 && cat != 48 )
 	return;
 
     moda = (moda < -7.994) || (moda > 7.996) ? 0 : moda;
@@ -1173,7 +1176,9 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
     if (!stdout_output) { // == 0 ejecutando scripts
 	sprintf(cmd, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat, 
 	    region_name, timestamp, cuenta, max, min, media, stdev, p99);
-	system(cmd);
+	if ( (ret = system(cmd)) == -1 ) {
+            log_printf(LOG_ERROR, "error ejecutando cmd(%s)\n", cmd);
+        }
     } else { // == 1, sacando directamente los inserts
     	sprintf(cmd, "REPLACE INTO availability3 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) "
     	    "VALUES ('%03d_%03d_%03d', '%s', %ld, %3.0f, %f, %f, %f, %f, %f, now());", 
