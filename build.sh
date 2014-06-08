@@ -113,8 +113,6 @@ for destarch in $destarchs; do
 
     bin/reader_network${destarch}${arch}
     bin/reader_rrd3${destarch}${arch}
-    bin/client_time${destarch}${arch}
-    bin/client${destarch}${arch}
     bin/cleanast${destarch}${arch}
 done
 
