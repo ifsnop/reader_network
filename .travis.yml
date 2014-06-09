@@ -5,3 +5,19 @@ compiler:
   - clang
 
 script: ./build.sh
+
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "DMBAJ1bmsPNFxGFcrffZtw"
+
+addons:
+  coverity_scan:
+    project:
+      name: "ifsnop/reader_network"
+      description: "A package of utilities to record and work with multicast radar data in ASTERIX format. (radar as in air navigation surveillance)"
+    notification_email: diego.torres@gmail.com
+    build_command_prepend:
+    build_command: ./build.sh
+    branch_pattern: master
