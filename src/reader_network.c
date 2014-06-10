@@ -60,7 +60,8 @@ int *s_reader = NULL; // listado de sockets para leer en el caso de red (multica
 int fd_in = -1, fd_out_ast = -1, fd_out_gps = -1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
-char *asterix_versions = NULL;
+char **asterix_versions = NULL;
+int asterix_versions_count = 0;
 char *digest_hex = NULL;
 
 struct Queue {
@@ -217,27 +218,36 @@ char *dest_file_format_string = NULL;
 	log_printf(LOG_VERBOSE, "not displaying pkt crc\n");
     }
 
-    if ( !cfg_get_str(&asterix_versions, "asterix_versions") ||
-	strlen(asterix_versions) != 32 ) {
-	log_printf(LOG_ERROR, "asterix_versions entry missing\n");
-	exit(EXIT_FAILURE);
-    } else {
-	if ( digest_hex != NULL ) {
-	    int i = 0, equal = 1;
-	    //printf("%s\n", digest_hex); printf("%s\n", asterix_versions);
-	    for(i=0; i<(16*2); i++)
-		if ( digest_hex[i] != asterix_versions[i] )
-		    equal = 0;
-
-	    if ( equal == 0 ) {
+    if ( cfg_get_str_array(&asterix_versions, &asterix_versions_count, "asterix_versions") ) {
+        if (0 == asterix_versions_count) {
+	    log_printf(LOG_ERROR, "asterix_versions entry missing\n");
+	    exit(EXIT_FAILURE);
+        }
+        if (NULL == digest_hex) {
+	    log_printf(LOG_VERBOSE, "asterix_versions not parsed\n");
+	} else {
+            int i;
+            bool equal = false;
+            for ( i=0; i<asterix_versions_count; i++) {
+	        int j = 0;
+	        if ( strlen(asterix_versions[i]) != 32 ) {
+	            log_printf(LOG_ERROR, "asterix_versions corrupted\n");
+	            exit(EXIT_FAILURE);
+                }
+                equal = true;
+	        for( j = 0; j<32; j++)
+		    if ( digest_hex[j] != asterix_versions[i][j] )
+		        equal = false;
+                if (equal)
+		    break;
+            }
+            if (equal) {
+	        log_printf(LOG_VERBOSE, "asterix_versions match\n");
+	    } else {
 		log_printf(LOG_ERROR, "asterix_versions mismatch\n");
 		exit(EXIT_FAILURE);
-	    } else {
-		log_printf(LOG_VERBOSE, "asterix_versions match\n");
 	    }
-	} else {
-	    log_printf(LOG_VERBOSE, "asterix_versions not parsed\n");
-	}
+        }
     }
 
     if (!cfg_get_str(&source, "source")) {
@@ -824,8 +834,12 @@ void free_config(void) {
 	mem_free(dest_ftp_uri[i]);
     if (dest_ftp_uri != NULL) mem_free(dest_ftp_uri);
     if (digest_hex != NULL) mem_free(digest_hex);
+    for(i=0; i<dest_filter_count; i++)
+        mem_free(dest_filter_selection[i]);
+    if (dest_filter_selection != NULL) mem_free(dest_filter_selection);
+    for(i=0; i<asterix_versions_count; i++)
+        mem_free(asterix_versions[i]);
     if (asterix_versions != NULL) mem_free(asterix_versions);
-
     return;
 }
 
@@ -1461,13 +1475,6 @@ unsigned long count2_plot_filtered = 0;
 	if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
 	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	}
-    }
-
-    if (dest_filter_selection) {
-        int i;
-        for(i=0; i<dest_filter_count; i++)
-            mem_free(dest_filter_selection[i]);
-        mem_free(dest_filter_selection);
     }
 
 //    log_flush();

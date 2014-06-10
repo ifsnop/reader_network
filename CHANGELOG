@@ -4,6 +4,7 @@ PENDIENTE DE RESOLVER, PERO NOTIFICADO
 embargo, si no existe en el fichero de configuración, la
 aplicación no arranca. Si existe, la aplicación funciona
 (no se comprueba nada mas).
+- SOPORTE: asterix_versions implemented as an array.
 - SOPORTE: Ya se puede generar de un fichero GPS->GPS,
 AST->AST y GPS->AST. Esto permite a los filtros trabajar
 sobre ficheros ast y sobre ficheros gps.
