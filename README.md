@@ -5,7 +5,7 @@ surveillance).
 [![Build Status](https://travis-ci.org/ifsnop/reader_network.svg?branch=master)](https://travis-ci.org/ifsnop/reader_network)
 [![Coverity Analysis](https://scan.coverity.com/projects/2418/badge.svg)](https://scan.coverity.com/projects/2418?tab=overview)
 
-Work in progress. Altough I use this software everyday (in a realtime quality
+Work in progress. Although I use this software everyday (in a realtime quality
 monitorization environment), this software is EXPERIMENTAL.
 
 Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
