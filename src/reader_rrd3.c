@@ -1108,7 +1108,7 @@ div_t d;
 
 void create_database(int sac, int sic, int cat, long timestamp) {
 char *rrd_path, *cmd;
-int ret = 0;
+int ret = 0, fd = -1;
 
     //date -d"121231 23:59:59" +%s
     //1356998399
@@ -1122,7 +1122,7 @@ int ret = 0;
     rrd_path = mem_alloc(512);
     sprintf(rrd_path, "%s/%s_%03d_%03d_%03d.rrd", rrd_directory, region_name, sac, sic, cat);
     //log_printf(LOG_ERROR, "buscando(%s)\n", rrd_path);
-    if (open(rrd_path,O_EXCL) == -1){ 
+    if ( (fd = open(rrd_path,O_EXCL)) == -1 ) {
         //log_printf(LOG_ERROR, "no encontrado, creando(%s)\n", rrd_path);
 	cmd = mem_alloc(512);
         sprintf(cmd, "rrdtool create %s --step 300 \
@@ -1148,9 +1148,10 @@ RRA:MIN:0.5:288:797",rrd_path);
             log_printf(LOG_ERROR, "error ejecutando cmd(%s)\n", cmd);
         }
 	mem_free(cmd);
-    }/* else {
-	log_printf(LOG_ERROR, "encontrado(%s)\n", rrd_path);
-    }*/
+    } else {
+	//log_printf(LOG_ERROR, "encontrado(%s)\n", rrd_path);
+        close(fd);
+    }
     mem_free(rrd_path);
     return;
 }
