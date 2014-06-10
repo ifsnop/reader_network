@@ -1,14 +1,18 @@
 language: c
 
 compiler:
-  - gcc
-  - clang
+    - gcc
+    - clang
 
-script: ./build.sh
+install:
+    - sudo apt-get update
+    - sudo apt-get -qq install valgrind
 
-after_success:
- - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sudo apt-get -qq install valgrind; fi
- - if [ "$TRAVIS_OS_NAME" = "linux" ]; then valgrind --leak-check=full --show-reachable=yes bin/reader_network64 -ionline; fi
+script: 
+    - ./build.sh
+    - valgrind --leak-check=full --show-reachable=yes bin/reader_network64
+    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364
+    - valgrind --leak-check=full --show-reachable=yes bin/cleanast64    
 
 env:
   global:
