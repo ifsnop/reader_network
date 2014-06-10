@@ -241,7 +241,7 @@ long timestamp = 0;
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
 		    "\t-d rrd directory\n\n"
 		    , argv[0]);
-		exit(EXIT_FAILURE);
+		exit(EXIT_SUCCESS);
 	}
     }
 
@@ -254,7 +254,7 @@ long timestamp = 0;
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
 		    "\t-d rrd directory\n\n"
 	    , argv[0]);
-	exit(EXIT_FAILURE);
+	exit(EXIT_SUCCESS);
     }
 
     if (stdout_output == 0) {
