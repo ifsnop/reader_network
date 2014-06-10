@@ -731,6 +731,7 @@ void setup_input_network(void) {
 			cast_group.sin_family = AF_INET;
 			cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
 			cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
+			memset(&cast_group.sin_zero, 0, sizeof(cast_group.sin_zero));
 			if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
 			    // error happens when suscribing broadcast addresses
 			    // suscribing 214.25.250.255 for 214.25.250.10 &
