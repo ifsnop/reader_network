@@ -555,6 +555,8 @@ void send_output_file() {
 	snprintf(file, 1023, "%s%s", dest_file_final_gps, (dest_file_compress ? ".bz2" : "") );
     }
 
+    memset(&file_info, 0, sizeof(struct stat));
+
     if (stat(file, &file_info)) {
         log_printf(LOG_ERROR, "ERROR stat '%s': %s\n", file, strerror(errno));
         exit(EXIT_FAILURE);
