@@ -75,7 +75,7 @@ struct Queue q;
 
 struct radar_destination_s {
     int socket; // socket descriptor
-    char dest_ip[255]; // destination multicast address
+    char dest_ip[256]; // destination multicast address
 };
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
@@ -667,7 +667,8 @@ void setup_input_network(void) {
 		if (i>0 && 								     // si
 		    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
 		    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
-//		strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
+
+//		    strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
 		    log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i,
 			radar_definition[i*5], radar_definition[(i*5)+1],
 			radar_definition[(i*5)+2], radar_definition[(i*5)+3],
@@ -876,7 +877,7 @@ unsigned long count2_plot_filtered = 0;
     if ( !strncmp(argv[1], "-r", 2) ) {
 	if (digest_hex)
 	    log_printf(LOG_ERROR, "%s\n", digest_hex);
-	exit(EXIT_FAILURE);
+	exit(EXIT_SUCCESS);
     }
     parse_config(argv[1]);
     log_printf(LOG_NORMAL, "init...\n");

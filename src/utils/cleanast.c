@@ -28,8 +28,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "defines.h"	 
-	 
+#include "defines.h"
 
 int main(int argc, char *argv[]) {
     int prebytes=0, postbytes=0, headerbytes=0;
@@ -40,15 +39,16 @@ int main(int argc, char *argv[]) {
 
     if(argc!=6) {
         printf("cleanast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	printf("cleanast_%s in_filename.ast out_filename.ast headerbytes prebytes postbytes\n\n", ARCH); exit(1);
+        printf("cleanast_%s in_filename.ast out_filename.ast headerbytes prebytes postbytes\n\n", ARCH);
+        exit(EXIT_SUCCESS);
     }
-    
+
     headerbytes = atoi(argv[3]);
     prebytes = atoi(argv[4]);
     postbytes = atoi(argv[5]);
 
     if ( (fdin = open(argv[1], O_RDONLY)) == -1 ) {
-    	printf("error input file\n"); exit(1);
+	printf("error input file\n"); exit(1);
     }
     if ( (fdout = open(argv[2], O_CREAT|O_WRONLY|O_TRUNC, 0666)) == -1 ) {
 	printf("error output file\n"); exit(1);
@@ -66,8 +66,8 @@ int main(int argc, char *argv[]) {
 
     if (read(fdin, ptr, filesize) != filesize) {
 	printf("error read\n");	exit(1);
-    } 
-    
+    }
+
     i+=headerbytes;
     while( i<filesize ) {
 //	int j;

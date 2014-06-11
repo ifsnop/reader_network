@@ -12,8 +12,8 @@ script:
     - ./build.sh
     - bin/reader_network32 -r
     - valgrind --leak-check=full --show-reachable=yes bin/reader_network64 bin/conf/066test_filter.conf
-    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364 bin/conf/066test_filter.conf
-    - valgrind --leak-check=full --show-reachable=yes bin/cleanast64    
+    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364
+    - valgrind --leak-check=full --show-reachable=yes bin/cleanast64
 
 env:
   global:
