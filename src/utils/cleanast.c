@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
 
     if(argc!=6) {
         printf("cleanast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-        printf("cleanast_%s in_filename.ast out_filename.ast headerbytes prebytes postbytes\n\n", ARCH);
+        printf("cleanast_%s in_filename.gps out_filename.ast headerbytes prebytes postbytes\n\n", ARCH);
         exit(EXIT_SUCCESS);
     }
 
