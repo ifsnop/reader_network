@@ -1,5 +1,7 @@
 0.68beta1
 - SOPORTE: filtersacsic, to filter gps files by sac/sic.
+- SOPORTE: joingps, to mix two gps files sorting by gps
+timestamp.
 
 PENDIENTE DE RESOLVER, PERO NOTIFICADO
 - BUG: En  solaris no debería haber asterix_versions. Sin
