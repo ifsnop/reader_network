@@ -110,6 +110,8 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/client_time${destarch}${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
     gcc $gccopts -o bin/client${destarch}${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
     gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts
+    gcc $gccopts -o bin/filtersacsic${destarch}${arch} src/utils/filtersacsic.c $rnopts
+
 done
 
 #gcc -Wall -Iinclude/ src/memresp/memresp.c -o bin/memresp -DLINUX

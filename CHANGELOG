@@ -1,4 +1,6 @@
 0.68beta1
+- SOPORTE: filtersacsic, to filter gps files by sac/sic.
+
 PENDIENTE DE RESOLVER, PERO NOTIFICADO
 - BUG: En  solaris no debería haber asterix_versions. Sin
 embargo, si no existe en el fichero de configuración, la
