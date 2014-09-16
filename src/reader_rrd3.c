@@ -29,6 +29,9 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define DEST_FILE_FORMAT_GPS 4
 #define DEST_FILE_FORMAT_BOTH 6
 
+#define SERVER_TIMEOUT_SEC 10
+#define FIRST_STEP DBL_MAX
+
 extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
 //date --utc --date "2012-03-02 00:00:00" +%s
@@ -63,7 +66,6 @@ long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
 int stdout_output = 0;
 
-
 struct Queue {
     rb_red_blk_node **node;
     //[MAX_SCRM_SIZE];
@@ -79,6 +81,73 @@ struct radar_destination_s {
 };
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
+
+struct sorted_list {
+    double segment;
+    int count;
+    struct sorted_list *next;
+};
+
+struct radar_delay_s {
+    unsigned char sac,sic;
+    unsigned char first_time[256];
+    long cuenta_plot_cat1, cuenta_plot_cat2;
+    long cuenta_plot_cat8, cuenta_plot_cat10;
+    long cuenta_plot_cat19, cuenta_plot_cat20;
+    long cuenta_plot_cat21;
+    long cuenta_plot_cat34, cuenta_plot_cat48;
+    double suma_retardos_cat1, suma_retardos_cat2;
+    double suma_retardos_cat8, suma_retardos_cat10;
+    double suma_retardos_cat19, suma_retardos_cat20;
+    double suma_retardos_cat21;
+    double suma_retardos_cat34, suma_retardos_cat48;
+    double suma_retardos_cuad_cat1, suma_retardos_cuad_cat2;
+    double suma_retardos_cuad_cat8, suma_retardos_cuad_cat10;
+    double suma_retardos_cuad_cat19, suma_retardos_cuad_cat20;
+    double suma_retardos_cuad_cat21;
+    double suma_retardos_cuad_cat34, suma_retardos_cuad_cat48;
+    double max_retardo_cat1, max_retardo_cat2;
+    double max_retardo_cat8, max_retardo_cat10;
+    double max_retardo_cat19, max_retardo_cat20;
+    double max_retardo_cat21;
+    double max_retardo_cat34, max_retardo_cat48;
+    double min_retardo_cat1, min_retardo_cat2;
+    double min_retardo_cat8, min_retardo_cat10;
+    double min_retardo_cat19, min_retardo_cat20;
+    double min_retardo_cat21;
+    double min_retardo_cat34, min_retardo_cat48;
+    int *segmentos_cat1, *segmentos_cat2;
+    int *segmentos_cat8, *segmentos_cat10;
+    int *segmentos_cat19, *segmentos_cat20;
+    int *segmentos_cat21;
+    int *segmentos_cat34, *segmentos_cat48;
+    int segmentos_max_cat1, segmentos_max_cat2;
+    int segmentos_max_cat8, segmentos_max_cat10;
+    int segmentos_max_cat19, segmentos_max_cat20;
+    int segmentos_max_cat21;
+    int segmentos_max_cat34, segmentos_max_cat48;
+    int segmentos_ptr_cat1, segmentos_ptr_cat2;
+    int segmentos_ptr_cat8, segmentos_ptr_cat10;
+    int segmentos_ptr_cat19, segmentos_ptr_cat20;
+    int segmentos_ptr_cat21;
+    int segmentos_ptr_cat34, segmentos_ptr_cat48;
+    struct sorted_list *sorted_list_cat1, *sorted_list_cat2;
+    struct sorted_list *sorted_list_cat8, *sorted_list_cat10;
+    struct sorted_list *sorted_list_cat19, *sorted_list_cat20;
+    struct sorted_list *sorted_list_cat21;
+    struct sorted_list *sorted_list_cat34, *sorted_list_cat48;
+};
+
+struct radar_delay_s *radar_delay;
+
+struct ip_mreq mreq;
+struct sockaddr_in addr;
+fd_set reader_set;
+int s, yes = 1;
+bool forced_exit = false;
+
+double step = FIRST_STEP;
+double last_tod_stamp;
 
 void parse_config() {
 
@@ -97,8 +166,8 @@ void parse_config() {
 }
 
 void setup_time(long timestamp) {
-struct timeval t;
-struct tm *t2;
+    struct timeval t;
+    struct tm *t2;
 
     if (setenv("TZ","UTC",1)==-1) {
 	log_printf(LOG_ERROR, "ERROR setenv\n");
@@ -129,7 +198,7 @@ struct tm *t2;
 }
 
 ssize_t setup_input_file(void) {
-ssize_t size;
+    ssize_t size;
 
     if ( (fd_in = open(source_file, O_RDONLY)) == -1) {
         log_printf(LOG_ERROR, "ERROR open: %s\n", strerror(errno));
@@ -172,23 +241,210 @@ int UIntComp(unsigned int a, unsigned int b) {
     return 0;
 }
 
+void insertList(struct sorted_list **p, int segment, int count) {
+
+    double fsegment = (segment * 0.005) - 8;
+    //log_printf(LOG_NORMAL, "0) insertando(%d) ROOT(%08X)\n", count, (unsigned int)*p);
+    if (*p==NULL) {
+	*p = (struct sorted_list *) mem_alloc(sizeof(struct sorted_list));
+	(*p)->segment = fsegment;
+	(*p)->count = count;
+	(*p)->next = NULL;
+        //log_printf(LOG_NORMAL, "1)%d ROOT(%08X)\n", (*p)->count, (unsigned int)(*p));
+    } else { // ordenaremos de menor a mayor
+	struct sorted_list *t = *p;
+	struct sorted_list *nuevo;
+	struct sorted_list *old = NULL;
+
+//      log_printf(LOG_NORMAL, "2)%d %08X\n", t->count, (unsigned int)t);
+
+//	int i=0;
+	while((fsegment > t->segment) && (t->next!=NULL)) {
+//	    log_printf(LOG_NORMAL, "%d\n", i++);
+	    old = t;
+	    t = t->next;
+	}
+//        log_printf(LOG_NORMAL, "3)ROOT(%08X) t(%08X)\n",(unsigned int) *p, (unsigned int) t);
+
+	nuevo = (struct sorted_list *) mem_alloc(sizeof(struct sorted_list));
+	nuevo->count = count;
+	nuevo->segment = fsegment;
+	nuevo->next = NULL;
+
+	if (fsegment > t->segment) { // se da de alta detras del elemento actual
+	    nuevo->next = t->next;
+	    t->next = nuevo;
+//	    log_printf(LOG_NORMAL, "4)\n");
+	} else {
+	    if (fsegment <= t->segment && (t!=*p)) { // se da de alta en lugar del elemento actual, pero no es ppio de lista
+		old->next = nuevo;
+		nuevo->next = t;
+//	        log_printf(LOG_NORMAL, "5)\n");
+	    }
+	    if (t == *p) { // insertando al principio de la lista
+		nuevo->next = *p;
+		*p = nuevo;
+//		log_printf(LOG_NORMAL, "6)\n");
+	    }
+	}
+//	log_printf(LOG_NORMAL, "7)%d %08X\n", nuevo->count, (unsigned int)nuevo);
+    }
+//    log_printf(LOG_NORMAL, "8)ROOT(%08X)\n\n", (unsigned int)*p);
+    return;
+}
+
+void radar_delay_alloc(void) {
+    int i,j;
+
+    radar_delay = (struct radar_delay_s *) mem_alloc(sizeof(struct radar_delay_s)*MAX_RADAR_NUMBER);
+    for (i=0; i < MAX_RADAR_NUMBER; i++) {
+	radar_delay[i].segmentos_cat1 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat2 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat8 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat10 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat19 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat20 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat21 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat34 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].segmentos_cat48 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
+	radar_delay[i].sorted_list_cat1 = radar_delay[i].sorted_list_cat2 = NULL;
+	radar_delay[i].sorted_list_cat8 = radar_delay[i].sorted_list_cat10 = NULL;
+	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
+	radar_delay[i].sorted_list_cat21 = NULL;
+	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
+	for(j=0;j<256;j++) radar_delay[i].first_time[j] = 0;
+    }
+    return;
+}
+
+void radar_delay_clear(void) {
+    int i,j;
+    for (i=0; i < MAX_RADAR_NUMBER; i++) {
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat1;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat2;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat8;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat10;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat19;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat20;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat21;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat34;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	{
+	    struct sorted_list *p = radar_delay[i].sorted_list_cat48;
+	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
+	}
+	radar_delay[i].sorted_list_cat1 = radar_delay[i].sorted_list_cat2 = NULL;
+	radar_delay[i].sorted_list_cat8 = radar_delay[i].sorted_list_cat10 = NULL;
+	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
+	radar_delay[i].sorted_list_cat21 = NULL;
+	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
+
+	memset(radar_delay[i].segmentos_cat1, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat2, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat8, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat10, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat19, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat20, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat21, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat34, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+	memset(radar_delay[i].segmentos_cat48, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
+
+	radar_delay[i].sac = '\0'; radar_delay[i].sic = '\0';
+	for(j=0;j<256;j++) radar_delay[i].first_time[j] = 0;
+	radar_delay[i].cuenta_plot_cat1 = 0; radar_delay[i].cuenta_plot_cat2 = 0;
+	radar_delay[i].cuenta_plot_cat8 = 0; radar_delay[i].cuenta_plot_cat10 = 0;
+	radar_delay[i].cuenta_plot_cat19 = 0; radar_delay[i].cuenta_plot_cat20 = 0;
+	radar_delay[i].cuenta_plot_cat21 = 0;
+	radar_delay[i].cuenta_plot_cat34 = 0; radar_delay[i].cuenta_plot_cat48 = 0;
+	radar_delay[i].suma_retardos_cat1 = 0; radar_delay[i].suma_retardos_cat2 = 0;
+	radar_delay[i].suma_retardos_cat8 = 0; radar_delay[i].suma_retardos_cat10 = 0;
+	radar_delay[i].suma_retardos_cat19 = 0; radar_delay[i].suma_retardos_cat20 = 0;
+	radar_delay[i].suma_retardos_cat21 = 0;
+	radar_delay[i].suma_retardos_cat34 = 0; radar_delay[i].suma_retardos_cat48 = 0;
+	radar_delay[i].suma_retardos_cuad_cat1 = 0; radar_delay[i].suma_retardos_cuad_cat2 = 0;
+	radar_delay[i].suma_retardos_cuad_cat8 = 0; radar_delay[i].suma_retardos_cuad_cat10 = 0;
+	radar_delay[i].suma_retardos_cuad_cat19 = 0; radar_delay[i].suma_retardos_cuad_cat20 = 0;
+	radar_delay[i].suma_retardos_cuad_cat21 = 0;
+	radar_delay[i].suma_retardos_cuad_cat34 = 0; radar_delay[i].suma_retardos_cuad_cat48 = 0;
+	radar_delay[i].max_retardo_cat1 = -10000.0; radar_delay[i].max_retardo_cat2 = -10000.0;
+	radar_delay[i].max_retardo_cat8 = -10000.0; radar_delay[i].max_retardo_cat10 = -10000.0;
+	radar_delay[i].max_retardo_cat19 = -10000.0; radar_delay[i].max_retardo_cat20 = -10000.0;
+	radar_delay[i].max_retardo_cat21 = -10000.0;
+	radar_delay[i].max_retardo_cat34 = -10000.0; radar_delay[i].max_retardo_cat48 = -10000.0;
+	radar_delay[i].min_retardo_cat1 = 10000.0; radar_delay[i].min_retardo_cat2 = 10000.0;
+	radar_delay[i].min_retardo_cat8 = 10000.0; radar_delay[i].min_retardo_cat10 = 10000.0;
+	radar_delay[i].min_retardo_cat19 = 10000.0; radar_delay[i].min_retardo_cat20 = 10000.0;
+	radar_delay[i].min_retardo_cat21 = 10000.0;
+	radar_delay[i].min_retardo_cat34 = 10000.0; radar_delay[i].min_retardo_cat48 = 10000.0;
+	radar_delay[i].segmentos_max_cat1 = 0; radar_delay[i].segmentos_max_cat2 = 0;
+	radar_delay[i].segmentos_max_cat8 = 0; radar_delay[i].segmentos_max_cat10 = 0;
+	radar_delay[i].segmentos_max_cat19 = 0; radar_delay[i].segmentos_max_cat20 = 0;
+	radar_delay[i].segmentos_max_cat21 = 0;
+	radar_delay[i].segmentos_max_cat34 = 0; radar_delay[i].segmentos_max_cat48 = 0;
+	radar_delay[i].segmentos_ptr_cat1 = 0; radar_delay[i].segmentos_ptr_cat2 = 0;
+	radar_delay[i].segmentos_ptr_cat8 = 0; radar_delay[i].segmentos_ptr_cat10 = 0;
+	radar_delay[i].segmentos_ptr_cat19 = 0; radar_delay[i].segmentos_ptr_cat20 = 0;
+	radar_delay[i].segmentos_ptr_cat21 = 0;
+	radar_delay[i].segmentos_ptr_cat34 = 0; radar_delay[i].segmentos_ptr_cat48 = 0;
+    }
+}
+
+void radar_delay_free(void) {
+    int i;
+
+    for (i=0; i < MAX_RADAR_NUMBER; i++) {
+	mem_free(radar_delay[i].segmentos_cat1);
+	mem_free(radar_delay[i].segmentos_cat2);
+	mem_free(radar_delay[i].segmentos_cat8);
+	mem_free(radar_delay[i].segmentos_cat10);
+	mem_free(radar_delay[i].segmentos_cat19);
+	mem_free(radar_delay[i].segmentos_cat20);
+	mem_free(radar_delay[i].segmentos_cat21);
+	mem_free(radar_delay[i].segmentos_cat34);
+	mem_free(radar_delay[i].segmentos_cat48);
+    }
+    mem_free(radar_delay);
+}
 
 int main(int argc, char *argv[]) {
 
-ssize_t ast_size_total;
-ssize_t ast_pos = 0;
-ssize_t ast_size_tmp;
-int ast_size_datablock;
-unsigned char *ast_ptr_raw;
-struct timeval timed_t_start; // tiempo inicial para las grabaciones temporizadas
-//struct timeval timed_t_current; // tiempo actual de la recepcion del paquete
-//struct timeval timed_t_Xsecs; // tiempo inicial de la vuelta actual (para el display de stats)
-unsigned long count2_plot_ignored = 0;
-unsigned long count2_plot_processed = 0;
-//unsigned long count2_plot_unique = 0;
-//unsigned long count2_plot_duped = 0;
-unsigned long count2_udp_received = 0;
-long timestamp = 0;
+    ssize_t ast_size_total;
+    ssize_t ast_pos = 0;
+    ssize_t ast_size_tmp;
+    int ast_size_datablock;
+    unsigned char *ast_ptr_raw;
+    struct timeval timed_t_start; // tiempo inicial para las grabaciones temporizadas
+    //struct timeval timed_t_current; // tiempo actual de la recepcion del paquete
+    //struct timeval timed_t_Xsecs; // tiempo inicial de la vuelta actual (para el display de stats)
+    unsigned long count2_plot_ignored = 0;
+    unsigned long count2_plot_processed = 0;
+    //unsigned long count2_plot_unique = 0;
+    //unsigned long count2_plot_duped = 0;
+    unsigned long count2_udp_received = 0;
+    long timestamp = 0;
 
     int opt = 0; // getopt
     int long_index = 0; // getopt
@@ -421,269 +677,15 @@ long timestamp = 0;
 //    close(fd_out_ast);
 //    close(fd_out_gps);
 //    close_output_file();
+
+    radar_delay_free();
+
     return 0;
 }
 
-#define SERVER_TIMEOUT_SEC 10
-
-struct sorted_list {
-    double segment;
-    int count;
-    struct sorted_list *next;
-};
-
-struct radar_delay_s {
-    unsigned char sac,sic;
-    unsigned char first_time[256];
-    long cuenta_plot_cat1, cuenta_plot_cat2;
-    long cuenta_plot_cat8, cuenta_plot_cat10;
-    long cuenta_plot_cat19, cuenta_plot_cat20;
-    long cuenta_plot_cat21;
-    long cuenta_plot_cat34, cuenta_plot_cat48;
-    double suma_retardos_cat1, suma_retardos_cat2;
-    double suma_retardos_cat8, suma_retardos_cat10;
-    double suma_retardos_cat19, suma_retardos_cat20;
-    double suma_retardos_cat21;
-    double suma_retardos_cat34, suma_retardos_cat48;
-    double suma_retardos_cuad_cat1, suma_retardos_cuad_cat2;
-    double suma_retardos_cuad_cat8, suma_retardos_cuad_cat10;
-    double suma_retardos_cuad_cat19, suma_retardos_cuad_cat20;
-    double suma_retardos_cuad_cat21;
-    double suma_retardos_cuad_cat34, suma_retardos_cuad_cat48;
-    double max_retardo_cat1, max_retardo_cat2;
-    double max_retardo_cat8, max_retardo_cat10;
-    double max_retardo_cat19, max_retardo_cat20;
-    double max_retardo_cat21;
-    double max_retardo_cat34, max_retardo_cat48;
-    double min_retardo_cat1, min_retardo_cat2;
-    double min_retardo_cat8, min_retardo_cat10;
-    double min_retardo_cat19, min_retardo_cat20;
-    double min_retardo_cat21;
-    double min_retardo_cat34, min_retardo_cat48;
-    int *segmentos_cat1, *segmentos_cat2;
-    int *segmentos_cat8, *segmentos_cat10;
-    int *segmentos_cat19, *segmentos_cat20;
-    int *segmentos_cat21;
-    int *segmentos_cat34, *segmentos_cat48;
-    int segmentos_max_cat1, segmentos_max_cat2;
-    int segmentos_max_cat8, segmentos_max_cat10;
-    int segmentos_max_cat19, segmentos_max_cat20;
-    int segmentos_max_cat21;
-    int segmentos_max_cat34, segmentos_max_cat48;
-    int segmentos_ptr_cat1, segmentos_ptr_cat2;
-    int segmentos_ptr_cat8, segmentos_ptr_cat10;
-    int segmentos_ptr_cat19, segmentos_ptr_cat20;
-    int segmentos_ptr_cat21;
-    int segmentos_ptr_cat34, segmentos_ptr_cat48;
-    struct sorted_list *sorted_list_cat1, *sorted_list_cat2;
-    struct sorted_list *sorted_list_cat8, *sorted_list_cat10;
-    struct sorted_list *sorted_list_cat19, *sorted_list_cat20;
-    struct sorted_list *sorted_list_cat21;
-    struct sorted_list *sorted_list_cat34, *sorted_list_cat48;
-};
-
-struct radar_delay_s *radar_delay;
-
-struct ip_mreq mreq;
-struct sockaddr_in addr;
-fd_set reader_set;
-int s, yes = 1;
-bool forced_exit = false;
-
-void insertList(struct sorted_list **p, int segment, int count) {
-
-    double fsegment = (segment * 0.005) - 8;
-//    log_printf(LOG_NORMAL, "0) insertando(%d) ROOT(%08X)\n", count, (unsigned int)*p);
-    if (*p==NULL) {
-	*p = (struct sorted_list *) mem_alloc(sizeof(struct sorted_list));
-	(*p)->segment = fsegment;
-	(*p)->count = count;
-	(*p)->next = NULL;
-//	log_printf(LOG_NORMAL, "1)%d ROOT(%08X)\n", (*p)->count, (unsigned int)(*p));
-    } else { // ordenaremos de menor a mayor
-	struct sorted_list *t = *p;
-	struct sorted_list *nuevo;
-	struct sorted_list *old = NULL;
-
-//	log_printf(LOG_NORMAL, "2)%d %08X\n", t->count, (unsigned int)t);
-	
-//	int i=0;
-	while((fsegment > t->segment) && (t->next!=NULL)) {
-//	    log_printf(LOG_NORMAL, "%d\n", i++);
-	    old = t;
-	    t = t->next;
-	}
-//        log_printf(LOG_NORMAL, "3)ROOT(%08X) t(%08X)\n",(unsigned int) *p, (unsigned int) t);
-
-	nuevo = (struct sorted_list *) mem_alloc(sizeof(struct sorted_list));
-	nuevo->count = count;
-	nuevo->segment = fsegment;
-	nuevo->next = NULL;
-
-	if (fsegment > t->segment) { // se da de alta detras del elemento actual
-	    nuevo->next = t->next;
-	    t->next = nuevo;
-//	    log_printf(LOG_NORMAL, "4)\n");
-	} else {
-	    if (fsegment <= t->segment && (t!=*p)) { // se da de alta en lugar del elemento actual, pero no es ppio de lista
-		old->next = nuevo;
-		nuevo->next = t;
-//	        log_printf(LOG_NORMAL, "5)\n");
-	    }
-	    if (t == *p) { // insertando al principio de la lista
-		nuevo->next = *p; 
-		*p = nuevo;
-//		log_printf(LOG_NORMAL, "6)\n");
-	    }
-	}
-//	log_printf(LOG_NORMAL, "7)%d %08X\n", nuevo->count, (unsigned int)nuevo);
-    }
-//    log_printf(LOG_NORMAL, "8)ROOT(%08X)\n\n", (unsigned int)*p);
-    return;
-}
-
-void radar_delay_alloc(void) {
-int i,j;
-
-    radar_delay = (struct radar_delay_s *) mem_alloc(sizeof(struct radar_delay_s)*MAX_RADAR_NUMBER);
-    for (i=0; i < MAX_RADAR_NUMBER; i++) {
-	radar_delay[i].segmentos_cat1 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat2 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat8 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat10 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat19 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat20 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat21 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat34 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].segmentos_cat48 = (int *) mem_alloc(sizeof(int) * MAX_SEGMENT_NUMBER);
-	radar_delay[i].sorted_list_cat1 = radar_delay[i].sorted_list_cat2 = NULL;
-	radar_delay[i].sorted_list_cat8 = radar_delay[i].sorted_list_cat10 = NULL;
-	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
-	radar_delay[i].sorted_list_cat21 = NULL;
-	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
-	for(j=0;j<256;j++) radar_delay[i].first_time[j] = 0;
-    }
-    return;
-}
-
-void radar_delay_clear(void) {
-int i,j;
-    for (i=0; i < MAX_RADAR_NUMBER; i++) {
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat1;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat2;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat8;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat10;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat19;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat20;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat21;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat34;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	{
-	    struct sorted_list *p = radar_delay[i].sorted_list_cat48;
-	    while (p!=NULL) { struct sorted_list *p2 = p->next; mem_free(p); p = p2; }
-	}
-	radar_delay[i].sorted_list_cat1 = radar_delay[i].sorted_list_cat2 = NULL;
-	radar_delay[i].sorted_list_cat8 = radar_delay[i].sorted_list_cat10 = NULL;
-	radar_delay[i].sorted_list_cat19 = radar_delay[i].sorted_list_cat20 = NULL;
-	radar_delay[i].sorted_list_cat21 = NULL;
-	radar_delay[i].sorted_list_cat34 = radar_delay[i].sorted_list_cat48 = NULL;
-
-	memset(radar_delay[i].segmentos_cat1, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat2, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat8, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat10, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat19, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat20, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat21, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat34, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-	memset(radar_delay[i].segmentos_cat48, 0, sizeof(int) * MAX_SEGMENT_NUMBER);
-
-	radar_delay[i].sac = '\0'; radar_delay[i].sic = '\0';
-	for(j=0;j<256;j++) radar_delay[i].first_time[j] = 0;
-	radar_delay[i].cuenta_plot_cat1 = 0; radar_delay[i].cuenta_plot_cat2 = 0;
-	radar_delay[i].cuenta_plot_cat8 = 0; radar_delay[i].cuenta_plot_cat10 = 0;
-	radar_delay[i].cuenta_plot_cat19 = 0; radar_delay[i].cuenta_plot_cat20 = 0;
-	radar_delay[i].cuenta_plot_cat21 = 0;
-	radar_delay[i].cuenta_plot_cat34 = 0; radar_delay[i].cuenta_plot_cat48 = 0;
-	radar_delay[i].suma_retardos_cat1 = 0; radar_delay[i].suma_retardos_cat2 = 0;
-	radar_delay[i].suma_retardos_cat8 = 0; radar_delay[i].suma_retardos_cat10 = 0;
-	radar_delay[i].suma_retardos_cat19 = 0; radar_delay[i].suma_retardos_cat20 = 0;
-	radar_delay[i].suma_retardos_cat21 = 0;
-	radar_delay[i].suma_retardos_cat34 = 0; radar_delay[i].suma_retardos_cat48 = 0;
-	radar_delay[i].suma_retardos_cuad_cat1 = 0; radar_delay[i].suma_retardos_cuad_cat2 = 0;
-	radar_delay[i].suma_retardos_cuad_cat8 = 0; radar_delay[i].suma_retardos_cuad_cat10 = 0;
-	radar_delay[i].suma_retardos_cuad_cat19 = 0; radar_delay[i].suma_retardos_cuad_cat20 = 0;
-	radar_delay[i].suma_retardos_cuad_cat21 = 0;
-	radar_delay[i].suma_retardos_cuad_cat34 = 0; radar_delay[i].suma_retardos_cuad_cat48 = 0;
-	radar_delay[i].max_retardo_cat1 = -10000.0; radar_delay[i].max_retardo_cat2 = -10000.0;
-	radar_delay[i].max_retardo_cat8 = -10000.0; radar_delay[i].max_retardo_cat10 = -10000.0;
-	radar_delay[i].max_retardo_cat19 = -10000.0; radar_delay[i].max_retardo_cat20 = -10000.0;
-	radar_delay[i].max_retardo_cat21 = -10000.0;
-	radar_delay[i].max_retardo_cat34 = -10000.0; radar_delay[i].max_retardo_cat48 = -10000.0;
-	radar_delay[i].min_retardo_cat1 = 10000.0; radar_delay[i].min_retardo_cat2 = 10000.0;
-	radar_delay[i].min_retardo_cat8 = 10000.0; radar_delay[i].min_retardo_cat10 = 10000.0;
-	radar_delay[i].min_retardo_cat19 = 10000.0; radar_delay[i].min_retardo_cat20 = 10000.0;
-	radar_delay[i].min_retardo_cat21 = 10000.0;
-	radar_delay[i].min_retardo_cat34 = 10000.0; radar_delay[i].min_retardo_cat48 = 10000.0;
-	radar_delay[i].segmentos_max_cat1 = 0; radar_delay[i].segmentos_max_cat2 = 0;
-	radar_delay[i].segmentos_max_cat8 = 0; radar_delay[i].segmentos_max_cat10 = 0;
-	radar_delay[i].segmentos_max_cat19 = 0; radar_delay[i].segmentos_max_cat20 = 0;
-	radar_delay[i].segmentos_max_cat21 = 0;
-	radar_delay[i].segmentos_max_cat34 = 0; radar_delay[i].segmentos_max_cat48 = 0;
-	radar_delay[i].segmentos_ptr_cat1 = 0; radar_delay[i].segmentos_ptr_cat2 = 0;
-	radar_delay[i].segmentos_ptr_cat8 = 0; radar_delay[i].segmentos_ptr_cat10 = 0;
-	radar_delay[i].segmentos_ptr_cat19 = 0; radar_delay[i].segmentos_ptr_cat20 = 0;
-	radar_delay[i].segmentos_ptr_cat21 = 0;
-	radar_delay[i].segmentos_ptr_cat34 = 0; radar_delay[i].segmentos_ptr_cat48 = 0;
-    }
-}
-
-void radar_delay_free(void) {
-int i;
-
-    for (i=0; i < MAX_RADAR_NUMBER; i++) {
-	mem_free(radar_delay[i].segmentos_cat1);
-	mem_free(radar_delay[i].segmentos_cat2);
-	mem_free(radar_delay[i].segmentos_cat8);
-	mem_free(radar_delay[i].segmentos_cat10);
-	mem_free(radar_delay[i].segmentos_cat19);
-	mem_free(radar_delay[i].segmentos_cat20);
-	mem_free(radar_delay[i].segmentos_cat21);
-	mem_free(radar_delay[i].segmentos_cat34);
-	mem_free(radar_delay[i].segmentos_cat48);
-    }
-    mem_free(radar_delay);
-}
-
-#define FIRST_STEP DBL_MAX
-double step = FIRST_STEP;
-double last_tod_stamp;
 void update_calculations(struct datablock_plot dbp) {
-double diff = 0.0, stdev = 0.0, media = 0.0;
-div_t d;
+    double diff = 0.0, stdev = 0.0, media = 0.0;
+    div_t d;
 
     d.quot = 0; d.rem = 0;
 
@@ -711,7 +713,7 @@ div_t d;
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
     }
 
-    //printf("tod:%ld mod:%03d b:%d\n",t.tv_sec, d.rem, write_stats); printf("\033[1A");
+    //printf("\ndbp.tod_stamp:%3.3f step:%3.3f\n\n",dbp.tod_stamp, step); //printf("\033[1A");
     if (forced_exit || (step<FIRST_STEP && ((dbp.tod_stamp + midnight_t) > step)) ) {
 	int i,j;
 	char *sac_s=0, *sic_l=0;
@@ -1187,6 +1189,8 @@ int ret = 0, fd = -1;
     //date -d "120630 23:59:59" +%s
     //1341100799
     //--start|-b start time (default: now - 10s)
+    //$ date -d @1193144433
+    //Tue Oct 23 15:00:33 CEST 2007
 
     //Specifies the time in seconds since 1970-01-01 UTC when the first value should be added 
     //to the RRD. RRDtool will not accept any data timed before or at the time specified.
