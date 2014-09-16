@@ -109,8 +109,8 @@ struct tm *t2;
 	return;
     }
     if (gettimeofday(&t, NULL)==-1) {
-	log_printf(LOG_ERROR, "ERROR gettimeofday (setup_time): %s\n", strerror(errno));
-	exit(EXIT_FAILURE);
+        log_printf(LOG_ERROR, "ERROR gettimeofday (setup_time): %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
     }
     if ((t2 = gmtime(&t.tv_sec)) == NULL) {
 	log_printf(LOG_ERROR, "ERROR gmtime (setup_time): %s\n", strerror(errno));
@@ -123,6 +123,7 @@ struct tm *t2;
 	exit(EXIT_FAILURE);
     }
     //log_printf(LOG_ERROR,"DST(%d) (%s) (%ld)\n", t2->tm_isdst,t2->tm_zone,t2->tm_gmtoff);
+    //log_printf(LOG_ERROR,"day(%d) month(%d) year(%d)\n", t2->tm_mday,t2->tm_mon,t2->tm_year);
     //log_printf(LOG_ERROR, "timestamp:%ld\n", midnight_t);
     return;
 }
@@ -210,6 +211,8 @@ long timestamp = 0;
 
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
 
+    setup_time(0);
+
     while ((opt = getopt_long(argc, argv,"t:s:or:d:",
 	long_options, &long_index )) != -1) {
         switch (opt) {
@@ -235,25 +238,25 @@ long timestamp = 0;
 	    default:
 		log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
 		log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
-		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
+		    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
 		    "\t-s asterix input source file\n"
 		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
 		    "\t-d rrd directory\n\n"
-		    , argv[0]);
+		    , argv[0], midnight_t);
 		exit(EXIT_SUCCESS);
 	}
     }
 
-    if (source_file == NULL || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
+    if (source_file == NULL) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
 	log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
 	log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
-		    "\t-t seconds from 1-1-1970 to 00:00:00 of today\n" 
-		    "\t-s asterix input source file\n"
-		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
-		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
-		    "\t-d rrd directory\n\n"
-	    , argv[0]);
+	    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
+	    "\t-s asterix input source file\n"
+	    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
+	    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
+	    "\t-d rrd directory\n\n"
+	    , argv[0], midnight_t);
 	exit(EXIT_SUCCESS);
     }
 
@@ -299,7 +302,7 @@ long timestamp = 0;
     }
 */
 
-    if (!strncasecmp(source, "file", 4)) {
+//    if (!strncasecmp(source, "file", 4)) {
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
 	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
@@ -312,7 +315,7 @@ long timestamp = 0;
 	    memcmp1 = (unsigned char *) mem_alloc(20);
 	    memcmp1 = memset(memcmp1, 0xCD, 20);
 	    if (!memcmp(memcmp1, ast_ptr_raw+20, 20)) {
-	        offset = 10; ast_pos += 2200; source_file_gps_version = 1;
+	        offset = 10; ast_pos = 2200; source_file_gps_version = 1;
 	        //log_printf(LOG_ERROR, "GPSv1 input auto-activated\n");
 	    } else {
 	        offset = 4; ast_pos = 0; source_file_gps_version = 2;
@@ -321,7 +324,7 @@ long timestamp = 0;
 	    mem_free(memcmp1);
 	} else {
 	    if (source_file_gps_version == 1)
-		ast_pos += 2200; offset = 10;
+		ast_pos = 2200; offset = 10;
 	}
 
 	while (ast_pos < ast_size_total) {
@@ -340,15 +343,16 @@ long timestamp = 0;
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 3] << 24) ) / 1000.0;
 		}
 	    }
-
 	    //log_printf(LOG_VERBOSE, "%ld %d %3.3f plots_processed(%ld) plots_ignored(%ld) cat(%02X)\n", (long int)ast_pos, ast_size_datablock, 
 		//current_time, count2_plot_processed, count2_plot_ignored, ast_ptr_raw[ast_pos]);
+	    //log_printf(LOG_VERBOSE, "ast_size_datablock(%d)\n", ast_size_datablock); log_flush();
+
 	    if (dest_localhost) {
-//		int l;
-//		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock/* + offset*/, count2_plot_processed+1, 0);
-//		    for (l=0; l < ast_size_datablock; l++)
-//			printf("[%02X]", (unsigned char) ast_ptr_raw[ast_pos + l]);
-//		    printf("\n");
+		//int l;
+		//ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed+1, 0);
+		//for (l=0; l < ast_size_datablock; l++)
+		//    printf("[%02X] ", (unsigned char) ast_ptr_raw[ast_pos + l]);
+		//printf("\n");
 		         
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
@@ -384,12 +388,13 @@ long timestamp = 0;
 		    count2_plot_ignored++;
 		}
 	    }
+
 	    ast_pos += ast_size_datablock + offset;
 //	    usleep(100);
 	}
 	mem_free(ast_ptr_raw);
 
-    } 
+//    }
 
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;
@@ -401,8 +406,8 @@ long timestamp = 0;
     }
 
     log_flush();
-//    log_printf(LOG_ERROR, "stats received[%ld] processed[%ld]/ignored[%ld] = unique[%ld]+duped[%ld]\n", 
-//	count2_udp_received, count2_plot_processed, count2_plot_ignored, count2_plot_unique, count2_plot_duped);
+//    log_printf(LOG_ERROR, "stats received[%ld] processed[%ld]/ignored[%ld]\n",
+//	count2_udp_received, count2_plot_processed, count2_plot_ignored);
 
 
 
@@ -417,7 +422,6 @@ long timestamp = 0;
 //    close(fd_out_gps);
 //    close_output_file();
     return 0;
-
 }
 
 #define SERVER_TIMEOUT_SEC 10
@@ -1235,7 +1239,8 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
     max = (max == -10000) ? 0 : max;
     min = (min == +10000) ? 0 : min;
 
-    create_database(sac, sic, cat, timestamp);
+    if (rrd_directory != NULL)
+        create_database(sac, sic, cat, timestamp);
 
 /*mysql -u root cocir -e "REPLACE INTO availability3
 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) VALUES
@@ -1244,19 +1249,18 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
     cmd = mem_alloc(512);
     if (!stdout_output) { // == 0 ejecutando scripts
 	sprintf(cmd, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat, 
-	    region_name, timestamp, cuenta, max, min, media, stdev, p99);
+	    (region_name != NULL ? region_name : ""), timestamp, cuenta, max, min, media, stdev, p99);
 	if ( (ret = system(cmd)) == -1 ) {
             log_printf(LOG_ERROR, "error ejecutando cmd(%s)\n", cmd);
         }
     } else { // == 1, sacando directamente los inserts
     	sprintf(cmd, "REPLACE INTO availability3 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) "
     	    "VALUES ('%03d_%03d_%03d', '%s', %ld, %3.0f, %f, %f, %f, %f, %f, now());", 
-    	sac, sic, cat,
-    	region_name, timestamp,
-    	cuenta, max, min, media, stdev, p99);
+            sac, sic, cat,
+            (region_name != NULL ? region_name : ""), timestamp,
+            cuenta, max, min, media, stdev, p99);
     	log_printf(LOG_NORMAL,"%s\n",cmd);
     }
     mem_free(cmd);
     return;
 }
-

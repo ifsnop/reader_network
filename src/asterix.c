@@ -540,7 +540,7 @@ int index = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
 
-//	ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
+	//ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
 	if (sizeFSPEC == 0) {
 	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 	    return T_ERROR;
