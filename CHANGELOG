@@ -1,3 +1,6 @@
+0.68beta2
+- SOPORTE: delays in category 20 are now exported.
+
 0.68beta1
 - SOPORTE: filtersacsic, to filter gps files by sac/sic.
 - SOPORTE: joingps, to mix two gps files sorting by gps
