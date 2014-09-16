@@ -703,7 +703,7 @@ void update_calculations(struct datablock_plot dbp) {
 	} else if (diff>=(86400-512)) {
 	    diff-=86400; // rollover tod correction
 	}
-        d = div( dbp.tod_stamp, UPDATE_TIME_RRD);
+        d = div( dbp.tod_stamp, UPDATE_TIME_RRD );
 	if (step == FIRST_STEP) {
 	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
 	}
@@ -713,6 +713,7 @@ void update_calculations(struct datablock_plot dbp) {
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
     }
 
+    //log_printf(LOG_NORMAL, "tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
     //printf("\ndbp.tod_stamp:%3.3f step:%3.3f\n\n",dbp.tod_stamp, step); //printf("\033[1A");
     if (forced_exit || (step<FIRST_STEP && ((dbp.tod_stamp + midnight_t) > step)) ) {
 	int i,j;
@@ -734,6 +735,8 @@ void update_calculations(struct datablock_plot dbp) {
 	double p99_cat20=0.0, p99_cat21=0.0;
 	double p99_cat34=0.0, p99_cat48=0.0;
 
+        //log_printf(LOG_NORMAL, "0>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
+
 	if (!forced_exit) {
 	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
 	    last_tod_stamp = dbp.tod_stamp;
@@ -741,7 +744,8 @@ void update_calculations(struct datablock_plot dbp) {
 	    dbp.tod_stamp = last_tod_stamp + UPDATE_TIME_RRD;
 	}
 
-	//log_printf(LOG_NORMAL, "RADAR CAT timestamp    plts media dsv   moda   max   min   p99\n");
+        //log_printf(LOG_NORMAL, "1>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
+        //log_printf(LOG_NORMAL, "RADAR CAT timestamp    plts media dsv   moda   max   min   p99\n");
 
 	for(i=0; i<MAX_RADAR_NUMBER; i++) {
 	    if (radar_delay[i].sac || radar_delay[i].sic) {
@@ -1236,6 +1240,8 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
     float min, float media, float stdev, float moda, float p99) {
     char *cmd;
     int ret = 0;
+    ldiv_t q;
+
     if ( cat != 1 && cat != 48 && cat != 20)
 	return;
 
@@ -1245,6 +1251,9 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
 
     if (rrd_directory != NULL)
         create_database(sac, sic, cat, timestamp);
+
+    q = ldiv(timestamp, UPDATE_TIME_RRD);
+    timestamp = timestamp - q.rem;
 
 /*mysql -u root cocir -e "REPLACE INTO availability3
 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) VALUES

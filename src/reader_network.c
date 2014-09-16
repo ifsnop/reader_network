@@ -87,6 +87,7 @@ void setup_asterix_versions() {
     unsigned char *buf = NULL;
     MD5_CTX ctx;
     unsigned char digest[16];
+    char *env = NULL;
 /*
     FILE* fstab = setmntent("/etc/mtab", "r");
     struct mntent *e;
@@ -102,6 +103,14 @@ void setup_asterix_versions() {
 */
 // "/var/lib/dbus/machine-id"
 // "/sys/class/dmi/id/board_serial"
+
+    if ( ((env = getenv("asterix_versions")) != NULL) && strlen(env) == 32 ) {
+        digest_hex = (char *) mem_alloc(16*2 + 1); //md5 length in ascii + null terminator3
+        strncpy(digest_hex, env, 32);
+        digest_hex[32] = '\0';
+        return;
+    }
+
     if ( stat("/var/lib/dbus/machine-id", &sb) == -1 ) { /* To obtain file size */
 	log_printf(LOG_VERBOSE, "asterix_versions fstat error (%s)\n", strerror(errno)); return; // exit(EXIT_FAILURE);
     }

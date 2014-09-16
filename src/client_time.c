@@ -819,6 +819,8 @@ int main(int argc, char *argv[]) {
     log_printf(LOG_NORMAL, "end...\n");
 //    log_flush();
 
+    radar_delay_free();
+
     exit(EXIT_SUCCESS);
 }
 
