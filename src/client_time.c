@@ -529,16 +529,20 @@ int main(int argc, char *argv[]) {
 	    struct timeval calcdelay1; struct timeval calcdelay2; float calcdelay = 0.0;
 	    char *sac_s=0, *sic_l=0;
 	    float l1=0.0, l2=0.0, l8=0.0, l10=0.0;
-	    float l21=0.0, l34=0.0, l48=0.0;
+            float l19=0.0, l20=0.0;
+            float l21=0.0, l34=0.0, l48=0.0;
 	    float sc1_1=0.0, sc1_2=0.0, sc1_3=0.0;
 	    float sc2_1=0.0, sc2_2=0.0, sc2_3=0.0;
 	    float sc8_1=0.0, sc8_2=0.0, sc8_3=0.0;
 	    float sc10_1=0.0, sc10_2=0.0, sc10_3=0.0;
+	    float sc19_1=0.0, sc19_2=0.0, sc19_3=0.0;
+	    float sc20_1=0.0, sc20_2=0.0, sc20_3=0.0;
 	    float sc21_1=0.0, sc21_2=0.0, sc21_3=0.0;
 	    float sc34_1=0.0, sc34_2=0.0, sc34_3=0.0;
 	    float sc48_1=0.0, sc48_2=0.0, sc48_3=0.0;
 	    float moda=0.0, p99_cat1=0.0, p99_cat2=0.0;
-	    float p99_cat8=0.0, p99_cat10=0.0, p99_cat21=0.0;
+	    float p99_cat8=0.0, p99_cat10=0.0, p99_cat19=0.0;
+	    float p99_cat20=0.0, p99_cat21=0.0;
 	    float p99_cat34=0.0, p99_cat48=0.0;
 //	    struct current_time_tm tm;
 	    
@@ -589,6 +593,24 @@ int main(int argc, char *argv[]) {
 			    }
 			    if (radar_delay[i].segmentos_cat10[j]>0) {
 				insertList(&radar_delay[i].sorted_list_cat10, j, radar_delay[i].segmentos_cat10[j]);
+			    }
+			}
+			if (radar_delay[i].cuenta_plot_cat19>0) {
+			    if (radar_delay[i].segmentos_cat19[j] > radar_delay[i].segmentos_max_cat19) {
+				radar_delay[i].segmentos_ptr_cat19 = j;
+				radar_delay[i].segmentos_max_cat19 = radar_delay[i].segmentos_cat19[j];
+			    }
+			    if (radar_delay[i].segmentos_cat19[j]>0) {
+				insertList(&radar_delay[i].sorted_list_cat19, j, radar_delay[i].segmentos_cat19[j]);
+			    }
+			}
+			if (radar_delay[i].cuenta_plot_cat20>0) {
+			    if (radar_delay[i].segmentos_cat20[j] > radar_delay[i].segmentos_max_cat20) {
+				radar_delay[i].segmentos_ptr_cat20 = j;
+				radar_delay[i].segmentos_max_cat20 = radar_delay[i].segmentos_cat20[j];
+			    }
+			    if (radar_delay[i].segmentos_cat20[j]>0) {
+				insertList(&radar_delay[i].sorted_list_cat20, j, radar_delay[i].segmentos_cat20[j]);
 			    }
 			}
 			if (radar_delay[i].cuenta_plot_cat21>0) {
@@ -722,6 +744,58 @@ int main(int argc, char *argv[]) {
 		    	    radar_delay[i].max_retardo_cat10 == -10000 ? 0 : radar_delay[i].max_retardo_cat10,
 			    radar_delay[i].min_retardo_cat10 ==  10000 ? 0 : radar_delay[i].min_retardo_cat10,
 			    p99_cat10);
+		    }
+		    if (radar_delay[i].cuenta_plot_cat19>0) {
+			l19 =    ( ((float) radar_delay[i].segmentos_ptr_cat19) / 10000.0*50.0 ) - 8.0;
+			sc19_1 = ( ((float) radar_delay[i].segmentos_cat19[radar_delay[i].segmentos_ptr_cat19]) / 10000.0*50.0 ) - 8.0;
+			sc19_2 = ( ((float) radar_delay[i].segmentos_cat19[radar_delay[i].segmentos_ptr_cat19 + 1]) / 10000.0*50.0 ) - 8.0;
+			sc19_3 = ( ((float) radar_delay[i].segmentos_cat19[radar_delay[i].segmentos_ptr_cat19 - 1]) / 10000.0*50.0 ) - 8.0;
+			if(radar_delay[i].sorted_list_cat19!=NULL) {
+			    struct sorted_list *p = radar_delay[i].sorted_list_cat19;
+			    struct sorted_list *p_old = NULL;
+			    long count = 0;
+			    float count_percentil_99 = ((float)radar_delay[i].cuenta_plot_cat19)*99.0/100.0;
+			    while(p!=NULL) {
+				if ((count + p->count)>count_percentil_99) { break; }
+				count += p->count; p_old = p; p = p->next;
+			    }
+			    if (p!=NULL && p_old!=NULL) { p99_cat19 = p->segment; }
+			}
+			moda = l19 + ( (sc19_1 - sc19_3) / ( (sc19_1 - sc19_3) + (sc19_1 - sc19_2) ) ) * 0.005;
+			log_printf(LOG_NORMAL, "%s %s\t19\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat19,
+			    radar_delay[i].suma_retardos_cat19/radar_delay[i].cuenta_plot_cat19,
+			    sqrt((radar_delay[i].suma_retardos_cuad_cat19 / radar_delay[i].cuenta_plot_cat19) - pow(radar_delay[i].suma_retardos_cat19 / radar_delay[i].cuenta_plot_cat19,2)),
+			    (moda < -7.994) || (moda > 7.996) ? 0 : moda,
+                            radar_delay[i].max_retardo_cat19 == -10000 ? 0 : radar_delay[i].max_retardo_cat19,
+                            radar_delay[i].min_retardo_cat19 ==  10000 ? 0 : radar_delay[i].min_retardo_cat19,
+			    p99_cat19);
+		    }
+		    if (radar_delay[i].cuenta_plot_cat20>0) {
+			l20 =    ( ((float) radar_delay[i].segmentos_ptr_cat20) / 10000.0*50.0 ) - 8.0;
+			sc20_1 = ( ((float) radar_delay[i].segmentos_cat20[radar_delay[i].segmentos_ptr_cat20]) / 10000.0*50.0 ) - 8.0;
+			sc20_2 = ( ((float) radar_delay[i].segmentos_cat20[radar_delay[i].segmentos_ptr_cat20 + 1]) / 10000.0*50.0 ) - 8.0;
+			sc20_3 = ( ((float) radar_delay[i].segmentos_cat20[radar_delay[i].segmentos_ptr_cat20 - 1]) / 10000.0*50.0 ) - 8.0;
+			if(radar_delay[i].sorted_list_cat20!=NULL) {
+			    struct sorted_list *p = radar_delay[i].sorted_list_cat20;
+			    struct sorted_list *p_old = NULL;
+			    long count = 0;
+			    float count_percentil_99 = ((float)radar_delay[i].cuenta_plot_cat20)*99.0/100.0;
+			    while(p!=NULL) {
+				if ((count + p->count)>count_percentil_99) { break; }
+				count += p->count; p_old = p; p = p->next;
+			    }
+			    if (p!=NULL && p_old!=NULL) { p99_cat20 = p->segment; }
+			}
+			moda = l20 + ( (sc20_1 - sc20_3) / ( (sc20_1 - sc20_3) + (sc20_1 - sc20_2) ) ) * 0.005;
+			log_printf(LOG_NORMAL, "%s %s\t20\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat20,
+			    radar_delay[i].suma_retardos_cat20/radar_delay[i].cuenta_plot_cat20,
+			    sqrt((radar_delay[i].suma_retardos_cuad_cat20 / radar_delay[i].cuenta_plot_cat20) - pow(radar_delay[i].suma_retardos_cat20 / radar_delay[i].cuenta_plot_cat20,2)),
+			    (moda < -7.994) || (moda > 7.996) ? 0 : moda,
+                            radar_delay[i].max_retardo_cat20 == -10000 ? 0 : radar_delay[i].max_retardo_cat20,
+                            radar_delay[i].min_retardo_cat20 ==  10000 ? 0 : radar_delay[i].min_retardo_cat20,
+			    p99_cat20);
 		    }
 		    if (radar_delay[i].cuenta_plot_cat21>0) {
 			l21 =    ( ((float) radar_delay[i].segmentos_ptr_cat21) / 10000.0*50.0 ) - 8.0;

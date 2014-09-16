@@ -975,10 +975,6 @@ unsigned long count2_plot_filtered = 0;
 		current_time_today = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
 	    }
 
-	    // esto esta comentado porque al meter dest_file_format, hay que pensar como
-	    // se convierte de fichero gps a fichero .ast, y nada de esto esta validado.
-	    // introducido para las modificaciones en malaga/sevilla, grabador en tiempo 
-	    // real de lan
             filter_struct fs;
             fs.size_datablock = 0;
             fs.ptr_raw = NULL;
@@ -1013,7 +1009,7 @@ unsigned long count2_plot_filtered = 0;
 		} else if (ast_ptr_raw[ast_pos] == '\x30') {
                     count2_plot_processed++;
 		    ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, &fs);
-                    if (fs.size_datablock == 0) {
+                    if (fs.filter_type != FILTER_NONE && fs.size_datablock == 0) {
                         volcar = false;
                         count2_plot_filtered++;
                     } else if ( fs.size_datablock == ast_size_datablock ) {

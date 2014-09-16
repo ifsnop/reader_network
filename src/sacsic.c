@@ -172,7 +172,7 @@ char *tmp;
 			    case 3:  { strncpy(tmp, "Barajas", TEXT_LENGTH_LONG); break; }
 			    case 4:  { strncpy(tmp, "Alcolea", TEXT_LENGTH_LONG); break; }
 			    case 5:  { strncpy(tmp, "Cancho...", TEXT_LENGTH_LONG); break; }
-			    case 6:  { strncpy(tmp, "Espiñe...", TEXT_LENGTH_LONG); break; }
+			    case 6:  { strncpy(tmp, "Espine...", TEXT_LENGTH_LONG); break; }
 			    case 7:  { strncpy(tmp, "Solorzano", TEXT_LENGTH_LONG); break; }
 			    case 8:  { strncpy(tmp, "Valdes...", TEXT_LENGTH_LONG); break; }
 			    case 9:  { strncpy(tmp, "Vallad...", TEXT_LENGTH_LONG); break; }

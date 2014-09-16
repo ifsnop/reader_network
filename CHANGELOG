@@ -1,5 +1,8 @@
 0.68beta2
-- SOPORTE: delays in category 20 are now exported.
+- SOPORTE: delays in category 20 are now exported, in
+both client & client_time.
+- BUG: Si no había filtro seleccionado, se filtraban todos
+los blancos de categoría 34/48!!
 
 0.68beta1
 - SOPORTE: filtersacsic, to filter gps files by sac/sic.
