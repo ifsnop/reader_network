@@ -126,6 +126,8 @@ int index = 0;
 	dbp.modec_status = 0;
 	dbp.flag_test = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
+        dbp.rho = 0;
+        dbp.theta = 0;
 	dbp.radar_responses = 0;
 
 	if (sizeFSPEC == 0) {
@@ -367,6 +369,8 @@ int index = 0;
 	dbp.flag_sim = T_NO;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
+	dbp.rho = 0;
+	dbp.theta = 0;
 
 	if (sizeFSPEC == 0) {
 	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
@@ -851,6 +855,8 @@ unsigned char *datablock_start = NULL;
 	dbp.flag_test = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
+	dbp.rho = 0;
+	dbp.theta = 0;
 //	if (sizeFSPEC == 0) {
 //	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 //	    return T_ERROR;
@@ -893,7 +899,14 @@ unsigned char *datablock_start = NULL;
 	    size_current += 4; j+= 4;
 	    dbp.available |= IS_MEASURED_POLAR;
 	}
-	if ( ptr_raw[0] & 8 ) {  /* I048/070 */ j += 2; size_current += 2; }
+	if ( ptr_raw[0] & 8 ) {  /* I048/070 */
+            dbp.modea_status |= (ptr_raw[j] & 128) ? STATUS_MODEA_NOTVALIDATED : 0;
+	    dbp.modea_status |= (ptr_raw[j] & 64) ? STATUS_MODEA_GARBLED : 0;
+	    dbp.modea_status |= (ptr_raw[j] & 32) ? STATUS_MODEA_SMOOTHED : 0;
+	    dbp.modea = (ptr_raw[j] & 15)*256 + ptr_raw[j+1];
+	    size_current += 2; j += 2;
+	    dbp.available |= IS_MODEA;
+	}
 	if ( ptr_raw[0] & 4 ) {  /* I048/090 */ j += 2; size_current += 2; }
 	if ( ptr_raw[0] & 2 ) {  /* I048/130 */ int k = j; //log_printf(LOG_NORMAL, "I048/130[%02X]\n", ptr_raw[j]);
 	    if ( ptr_raw[k] & 128 ) { j++; size_current++; }
@@ -937,7 +950,55 @@ unsigned char *datablock_start = NULL;
                     if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type); j += 2; size_current += 2;
                 }
 		if ( ptr_raw[2] & 1 ) { // FX3
-		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ j += 7; size_current += 7; }
+		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ 
+		        struct bds30s{ 
+		            unsigned bds1 :4;
+		            unsigned bds2 :4;
+		            unsigned ara  :14;
+		            unsigned rac  :4;
+		            unsigned ra_terminated :1;
+		            unsigned multiple :1;
+		            unsigned thread_type :2;
+		            unsigned thread_identity :26;
+		        };
+                        //struct bds30s *bds30 = (struct bds30s *) (ptr_raw + j);
+
+		        char ptr_260[3*7+1]; int i;
+		    	for( i = 0; i < 7; i++ ) sprintf((char *)(ptr_260 + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
+		    	ptr_260[3*7-1] = '\0';
+                        log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
+                            dbp.sac, dbp.sic, 
+                            (dbp.available & IS_MODEA) ? dbp.modea : 0,
+                            (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+                            (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+                            (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+                            dbp.rho, dbp.theta, dbp.tod);
+                        
+                        {
+                            int bds1 = 0; // 4
+                            int bds2 = 0; // 4   8
+                            int ara = 0; // 14   16 6
+                            int rac = 0;  // 4   24 2
+                            int rat = 0;  // 1      3
+                            int mte = 0;  // 1      4
+                            int tti = 0;  // 2      6
+                            int tid = 0; // 26   32... 
+                             int tida = 0;// 13
+                             int tidr = 0; // 7
+                             int tidb = 0; // 6
+                            bds1 = (ptr_raw[j + 0] & 0xF0) >> 4;
+                            bds2 = (ptr_raw[j + 0] & 0x0F);
+                            
+                        //log_printf(LOG_NORMAL, "%08X %08X\n", bds30->bds1, (ptr_raw+j));
+                        
+                            log_printf(LOG_NORMAL, "\tI048/260 bds1(%d) bds2(%d) [%s]\n", bds1, bds2, ptr_260);
+                        }
+                        //bds(%08X)\n", bds30->bds1);
+                        //log_printf(LOG_NORMAL, "I048/260 bds(%014X)\n", bds30->ara);
+                        
+		        j += 7; size_current += 7; 
+		        //log_printf(LOG_ERROR, "DETECTED I048/260 in %ld !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", id);
+		    }
 		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
 		    if ( ptr_raw[3] & 32 ) {  /* I048/050 */ j += 2; size_current += 2; }
 		    if ( ptr_raw[3] & 16 ) {  /* I048/065 */ j += 1; size_current += 1; }

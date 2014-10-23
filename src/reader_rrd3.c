@@ -65,6 +65,7 @@ int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
 int stdout_output = 0;
+int update_last = 0;
 
 struct Queue {
     rb_red_blk_node **node;
@@ -452,6 +453,7 @@ int main(int argc, char *argv[]) {
         {"timestamp",	  required_argument, 0,  't' },
         {"source_file",	  required_argument, 0,  'f' },
         {"ouput", 	  no_argument,	     0,  'o' },
+        {"update_last",   no_argument,	     0,  'l' },
         {"region_name",	  required_argument, 0,  'r' },
         {"rrd_directory", required_argument, 0,  'd' },
         {0,		  0,		     0,  0   }
@@ -469,7 +471,7 @@ int main(int argc, char *argv[]) {
 
     setup_time(0);
 
-    while ((opt = getopt_long(argc, argv,"t:s:or:d:",
+    while ((opt = getopt_long(argc, argv,"t:s:olr:d:",
 	long_options, &long_index )) != -1) {
         switch (opt) {
 	    case 't' :
@@ -486,17 +488,22 @@ int main(int argc, char *argv[]) {
 	    case 'r' :
 		region_name = optarg;
 		break;
-            case 'o' : stdout_output = 1; 
+            case 'o' : 
+                stdout_output = 1; 
+		break;
+	    case 'l' :
+		update_last = 1;
 		break;
 	    case 'd' :
 		rrd_directory = optarg;
 		break;
 	    default:
 		log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-		log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
+		log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file [-o] [-l] -r region_name -d rrd_directory \n\n"
 		    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
 		    "\t-s asterix input source file\n"
 		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
+		    "\t-l put last decoded timestamp (default not)\n"
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
 		    "\t-d rrd directory\n\n"
 		    , argv[0], midnight_t);
@@ -506,10 +513,11 @@ int main(int argc, char *argv[]) {
 
     if (source_file == NULL) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
 	log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	log_printf(LOG_ERROR, "usage: %s -t midnight_timestamp -s asterix_gps_file [-o] -r region_name -d rrd_directory \n\n"
+	log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file [-o] [-l] -r region_name -d rrd_directory \n\n"
 	    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
 	    "\t-s asterix input source file\n"
 	    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
+	    "\t-l put last decoded timestamp (default not)\n"
 	    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
 	    "\t-d rrd directory\n\n"
 	    , argv[0], midnight_t);
@@ -651,14 +659,16 @@ int main(int argc, char *argv[]) {
 	mem_free(ast_ptr_raw);
 
 //    }
-
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;
 	dbp.cat = CAT_255; dbp.available = IS_ERROR;
-	update_calculations(dbp);
-//	if (sendto(s, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
-//	    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
-//	}
+        // don't update last block. Because recordings are from 00:00 to 04:01, there will be an update
+        // for 04:00 to 04:01 (namely 04:00), which doesn't make sense, since updates has to be for the
+        // full 5 minutes blocks. Last should be 03:55.
+        // If not, we will need to update with the next recording, which is not guarranted to happen.
+	if (update_last) {
+	    update_calculations(dbp);
+	}
     }
 
     log_flush();
@@ -683,10 +693,12 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+int cuenta = 0;
+
 void update_calculations(struct datablock_plot dbp) {
     double diff = 0.0, stdev = 0.0, media = 0.0;
     div_t d;
-
+    
     d.quot = 0; d.rem = 0;
 
     if (dbp.cat == CAT_255) {
@@ -711,11 +723,17 @@ void update_calculations(struct datablock_plot dbp) {
 	//printf("sac:%d sic:%d tod:%s tod_stamp:%s diff:%3.3f\n", dbp.sac, dbp.sic, parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff);
 	//log_printf(LOG_VERBOSE, "%3.7f\n", d.quot*UPDATE_TIME_RRD + UPDATE_TIME_RRD);
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
+
+
+        if (fabs(dbp.tod_stamp  - last_tod_stamp) > 86000)
+            midnight_t += 86400; // new day
+        last_tod_stamp = dbp.tod_stamp;
     }
 
-    //log_printf(LOG_NORMAL, "tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
+    //log_printf(LOG_NORMAL,"%03d;%03d;%3.3f;%3.3f;%3.3f\n", dbp.sac, dbp.sic, dbp.tod_stamp, dbp.tod, diff);
+    //log_printf(LOG_NORMAL, "tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f) forced_exit(%d)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, (dbp.tod_stamp + (double)midnight_t), step, forced_exit);
     //printf("\ndbp.tod_stamp:%3.3f step:%3.3f\n\n",dbp.tod_stamp, step); //printf("\033[1A");
-    if (forced_exit || (step<FIRST_STEP && ((dbp.tod_stamp + midnight_t) > step)) ) {
+    if (forced_exit || (step<FIRST_STEP && (((double)dbp.tod_stamp + (double)midnight_t) > step)) ) {
 	int i,j;
 	char *sac_s=0, *sic_l=0;
 	double l1=0.0, l2=0.0, l8=0.0, l10=0.0;
@@ -735,6 +753,7 @@ void update_calculations(struct datablock_plot dbp) {
 	double p99_cat20=0.0, p99_cat21=0.0;
 	double p99_cat34=0.0, p99_cat48=0.0;
 
+        cuenta = 0;
         //log_printf(LOG_NORMAL, "0>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
 
 	if (!forced_exit) {
@@ -1060,9 +1079,10 @@ void update_calculations(struct datablock_plot dbp) {
     //log_printf(LOG_NORMAL,"0) %03d %03d\n", dbp.sac, dbp.sic);
     if (dbp.available & IS_TOD) {
 	int i=0;
+	cuenta++;
 	//diff = dbp.tod_stamp - dbp.tod;
 	//if (dbp.sic==9 && dbp.cat==48)
-	//log_printf(LOG_NORMAL,"%03d;%03d;%3.3f;%3.3f;%3.3f\n", dbp.sac, dbp.sic, dbp.tod_stamp, dbp.tod, diff);
+	//log_printf(LOG_NORMAL,"%03d;%03d;%03d;%d;%3.3f;%3.3f;%3.3f\n", dbp.sac, dbp.sic, dbp.cat, cuenta, dbp.tod_stamp, dbp.tod, diff);
 	//while ( (i < MAX_RADAR_NUMBER) && 
 	//    ( (dbp.sac != radar_delay[i].sac) ||
 	//    (dbp.sic != radar_delay[i].sic) ) &&
@@ -1242,7 +1262,7 @@ void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, 
     int ret = 0;
     ldiv_t q;
 
-    if ( cat != 1 && cat != 48 && cat != 20)
+    if ( cat != 1 && cat != 48 && cat !=19 && cat != 20)
 	return;
 
     moda = (moda < -7.994) || (moda > 7.996) ? 0 : moda;

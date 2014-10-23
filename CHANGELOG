@@ -1,8 +1,20 @@
+0.68beta4
+- SOPORTE: reader_rrd3 exports cat1, 48, 19 & 20 delays.
+
+0.68beta3
+- SOPORTE: reader_rrd3 comienza a volcar en bbdd en el
+minuto 00, y acaba en el ultimo minuto multiplo de 5. una
+grabación que va de 00:00 a 04:03, vuelca datos desde
+00:00 hasta 03:55. Como no ha llegado a 04:05, no se
+vuelcan los correspondientes de 04:00 a 04:05, que irían en 04:00.
+
 0.68beta2
 - SOPORTE: delays in category 20 are now exported, in
 both client & client_time.
 - BUG: Si no había filtro seleccionado, se filtraban todos
 los blancos de categoría 34/48!!
+- BUG: Only send complete blocks from reader_rrd3 to db,
+unless requested to do so (update_last=1).
 
 0.68beta1
 - SOPORTE: filtersacsic, to filter gps files by sac/sic.
