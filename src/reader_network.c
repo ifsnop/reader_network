@@ -1379,7 +1379,18 @@ unsigned long count2_plot_filtered = 0;
 					    unsigned char byte;
 					    unsigned char output_ptr[MAX_PACKET_LENGTH];
 					    memcpy(output_ptr, ast_ptr_raw_tmp, ast_size_datablock);
-					    memset(output_ptr + ast_size_datablock, 0, 10);
+                                            memset(output_ptr + ast_size_datablock, 0, 10);
+
+					    byte = (cast_group.sin_addr.s_addr >> 24) & 0xFF;
+					    memcpy(output_ptr + ast_size_datablock + 0, &byte, 1);
+					    byte = (cast_group.sin_addr.s_addr >> 16) & 0xFF;
+					    memcpy(output_ptr + ast_size_datablock + 1, &byte, 1);
+					    byte = (cast_group.sin_addr.s_addr >> 8) & 0xFF;
+					    memcpy(output_ptr + ast_size_datablock + 2, &byte, 1);
+					    byte = (cast_group.sin_addr.s_addr) & 0xFF;
+					    memcpy(output_ptr + ast_size_datablock + 3, &byte, 1);
+
+                                            // 4, 5 & 9 are still empty
 
 					    timegps = current_time_today * 128.0;
 					    byte = (timegps >> 16) & 0xFF;

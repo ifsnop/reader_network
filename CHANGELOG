@@ -1,5 +1,6 @@
 0.68beta4
 - SOPORTE: reader_rrd3 exports cat1, 48, 19 & 20 delays.
+- SOPORTE: added source ip address to gps timestamp field.
 
 0.68beta3
 - SOPORTE: reader_rrd3 comienza a volcar en bbdd en el
