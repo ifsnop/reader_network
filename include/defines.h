@@ -36,7 +36,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 #define TEXT_LENGTH_SHORT 4
-#define TEXT_LENGTH_LONG  32
+#define TEXT_LENGTH_LONG  20
 
 #define MULTICAST_PLOTS_GROUP "224.0.0.49"
 #define MULTICAST_PLOTS_PORT 7001

@@ -97,9 +97,8 @@ int main(int argc, char *argv[]) {
 		    diff -= 86400;
 		}
 	    }
-	    log_printf(LOG_VERBOSE, "sac(%d) sic(%d) %ld [%s/%s] [%s%s%s%s%s]%s [AZI %03.3f]"
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s]%s [AZI %03.3f]"
 		" [DST %03.3f] [MODEA %04o%s%s%s] [FL%03d%s%s] r%d [%s] (%5.3f) [%s] (%3.4f)\n", 
-                dbp.sac, dbp.sic,
                 dbp.id, /* IFSNOP MOD */
 		sac_s , sic_l, 
 		(dbp.type == NO_DETECTION) ? "NODET" : "",
@@ -184,7 +183,7 @@ int main(int argc, char *argv[]) {
 		}
 	    }
 
-	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s%s%s%s%s%s%s%s%s] [%s] [%s] (%3.4f)\n", dbp.id,
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s%s%s%s%s%s%s%s%s] [AZI %03.3f] [DST %03.3f] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l,
 		(dbp.type == TYPE_C10_TARGET_REPORT) ? "PLOT" : "",
 		(dbp.type == TYPE_C10_START_UPDATE_CYCLE) ? "UPDATE" : "",
@@ -199,6 +198,8 @@ int main(int argc, char *argv[]) {
 		(dbp.plot_type == TYPE_C10_PLOT_HF_MULTI) ? "HFM" : "",
 		(dbp.plot_type == TYPE_C10_PLOT_NOT_DEFINED) ? "und" : "",
 		(dbp.plot_type == TYPE_C10_PLOT_OTHER) ? "OTHER" : "",
+		(dbp.available & IS_MEASURED_POLAR) ? dbp.theta : 0.0,
+		(dbp.available & IS_MEASURED_POLAR) ? dbp.rho : 0.0,
 		hora1, hora2,
 		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);
@@ -256,8 +257,24 @@ int main(int argc, char *argv[]) {
 		}
 	    }
 
-	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%04X] [%s] [%s] (%3.4f)\n", dbp.id,
-		sac_s, sic_l, dbp.type, 
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s%s%s%s%s%s%s%s%s%s] [X %03.3f] [Y %03.3f] [%s] [%s] (%3.4f)\n", dbp.id,
+		sac_s, sic_l, 
+		(dbp.type == TYPE_C20_NONMODESMLAT) ? "SSR_MLAT" : "",
+		(dbp.type == TYPE_C20_MODESMLAT) ? "MODES_MLAT" : "",
+		(dbp.type == TYPE_C20_HFMLAT) ? "HF_MLAT" : "",
+		(dbp.type == TYPE_C20_VDLMLAT) ? "VDL_MAT" : "",
+		(dbp.type == TYPE_C20_UATMLAT) ? "UAT_MAT" : "",
+		(dbp.type == TYPE_C20_DMEMLAT) ? "DME_MAT" : "",
+		(dbp.type == TYPE_C20_OTHERMLAT) ? "OTHER_MAT" : "",
+		(dbp.type == TYPE_C20_RAB) ? " fixed" : "",
+		(dbp.type == TYPE_C20_SPI) ? " spi" : "",
+		(dbp.type == TYPE_C20_CHN) ? " CHN1" : "CHN2", 
+		(dbp.type == TYPE_C20_GBS) ? " GBS" : "",
+		(dbp.type == TYPE_C20_CRT) ? " CRT" : "",
+		(dbp.type == TYPE_C20_SIM) ? " SIM" : "",
+		(dbp.type == TYPE_C20_CRT) ? " TEST" : "",
+		(dbp.available & IS_MEASURED_CARTE) ? dbp.x : 0.0,
+		(dbp.available & IS_MEASURED_CARTE) ? dbp.y : 0.0,
 		hora1, hora2,
 		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);

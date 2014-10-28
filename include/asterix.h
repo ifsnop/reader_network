@@ -103,6 +103,22 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define TYPE_C19_PERIODIC_STATUS 2
 #define TYPE_C19_EVENT_STATUS 4
 
+#define TYPE_C20_NONMODESMLAT 1
+#define TYPE_C20_MODESMLAT 2
+#define TYPE_C20_HFMLAT 4
+#define TYPE_C20_VDLMLAT 8
+#define TYPE_C20_UATMLAT 16
+#define TYPE_C20_DMEMLAT 32
+#define TYPE_C20_OTHERMLAT 64
+
+#define TYPE_C20_RAB 128
+#define TYPE_C20_SPI 256
+#define TYPE_C20_CHN 512
+#define TYPE_C20_GBS 1024
+#define TYPE_C20_CRT 2048
+#define TYPE_C20_SIM 4096
+#define TYPE_C20_TST 8192
+
 #define TYPE_C34_NORTH_MARKER 1
 #define TYPE_C34_SECTOR_CROSSING 2
 #define TYPE_C34_GEOGRAPHICAL_FILTERING 4

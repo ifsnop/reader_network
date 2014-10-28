@@ -234,7 +234,7 @@ int index = 0;
 		exit(EXIT_FAILURE);
 	    }
 */	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT001
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
@@ -294,7 +294,7 @@ struct datablock_plot dbp;
 	    default: dbp.type = NO_DETECTION;				break;
 	}
 	if (enviar) {
-	    if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+            if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT002
 		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	    }
         } else {
@@ -336,7 +336,7 @@ struct datablock_plot dbp;
 			(ptr_raw[sizeFSPEC + 4]<<8) + 
 			(ptr_raw[sizeFSPEC + 5])) / 128.0;
 	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT008
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		    exit(EXIT_FAILURE);
 		}
@@ -420,7 +420,12 @@ int index = 0;
 	    dbp.available |= IS_TOD;
 	}
 	if ( ptr_raw[0] & 8 ) { /* I010/041 */ j +=8; size_current += 8; }
-	if ( ptr_raw[0] & 4 ) { /* I010/040 */ j += 4; size_current += 4;}
+	if ( ptr_raw[0] & 4 ) { /* I010/040 */
+            dbp.rho = (ptr_raw[j]*256 + ptr_raw[j+1]);
+	    dbp.theta = (ptr_raw[j+2]*256 + ptr_raw[j+3]) * 360.0/65536.0;
+	    size_current += 4; j+= 4;
+	    dbp.available |= IS_MEASURED_POLAR;
+	}
 	if ( ptr_raw[0] & 2 ) { /* I010/042 */ j += 4; size_current += 4;}
 	if ( ptr_raw[0] & 1 ) { /* FX1 */ 
 	    if ( ptr_raw[1] & 128 ) { /* I010/200 */ j +=4; size_current += 4; }
@@ -459,7 +464,7 @@ int index = 0;
 	    }
 */
 	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT010
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
@@ -505,7 +510,7 @@ struct datablock_plot dbp;
 	    default: dbp.type = IS_ERROR;				break;
 	}
 	if (enviar) {
-	    if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+            if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT019
 		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	    }
         } else {
@@ -559,11 +564,26 @@ int index = 0;
 	}
 	if ( ptr_raw[0] & 64 ) { /* I020/020 */  // FIXME
 	    dbp.type = 0;
-	    while (ptr_raw[j] & 1) { 
-		dbp.type = dbp.type<<8; dbp.type += ptr_raw[j]; 
-		j++; size_current++; 
-	    }; 
-	    dbp.type = dbp.type<<8; dbp.type += ptr_raw[j]; 
+	    switch(ptr_raw[j] >> 1) {
+	        case 64: dbp.type = TYPE_C20_NONMODESMLAT; break;
+	        case 32: dbp.type = TYPE_C20_MODESMLAT; break;
+	        case 16: dbp.type = TYPE_C20_HFMLAT; break;
+                case 8: dbp.type = TYPE_C20_VDLMLAT; break;
+                case 4: dbp.type = TYPE_C20_UATMLAT; break;
+                case 2: dbp.type = TYPE_C20_DMEMLAT; break;
+                case 1: dbp.type = TYPE_C20_OTHERMLAT; break;
+                default: dbp.type = IS_ERROR; break;
+            }
+            if (ptr_raw[j] & 1) { 
+                j++; size_current++;
+                if ((ptr_raw[j] & 128) == 128) dbp.type |= TYPE_C20_RAB;
+                if ((ptr_raw[j] & 64) == 128) dbp.type |= TYPE_C20_SPI;
+                if ((ptr_raw[j] & 32) == 128) dbp.type |= TYPE_C20_CHN;
+                if ((ptr_raw[j] & 16) == 128) dbp.type |= TYPE_C20_GBS;
+                if ((ptr_raw[j] & 8) == 128) dbp.type |= TYPE_C20_CRT;
+                if ((ptr_raw[j] & 4) == 128) dbp.type |= TYPE_C20_SIM;
+                if ((ptr_raw[j] & 2) == 128) dbp.type |= TYPE_C20_TST;
+            }
 	    j++;size_current++; 
 	    dbp.available |= IS_TYPE;
 	}
@@ -575,7 +595,12 @@ int index = 0;
 	    dbp.available |= IS_TOD;
 	}
 	if ( ptr_raw[0] & 16 ) { /* I020/041 */ j += 8; size_current += 8; }
-	if ( ptr_raw[0] & 8 ) { /* I020/042 */ j += 6; size_current += 6; }
+	if ( ptr_raw[0] & 8 ) { /* I020/042 */ 
+            dbp.x = (ptr_raw[j+0]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]) / 0.5;
+	    dbp.y = (ptr_raw[j+3]*256*256 + ptr_raw[j+4]*256 + ptr_raw[j+5]) / 0.5;
+	    j += 6; size_current += 6; 
+	    dbp.available |= IS_MEASURED_CARTE;
+	}
 	if ( ptr_raw[0] & 4 ) { /* I020/161 */ j += 2; size_current += 2; }
 	if ( ptr_raw[0] & 2 ) { /* I020/170 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
 	if ( ptr_raw[0] & 1 ) { /* I020/FX1 */
@@ -620,7 +645,7 @@ int index = 0;
 		exit(EXIT_FAILURE);
 //	    }
 */	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT020
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
@@ -747,7 +772,7 @@ int index = 0;
 	    }
 */
 	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT021
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
@@ -812,7 +837,7 @@ int index = 0;
 	    dbp.tod = ((float)(ptr_raw[j]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]))/128.0;
 	    size_current += 3; j += 3;
 	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT034
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
@@ -1024,7 +1049,7 @@ unsigned char *datablock_start = NULL;
 //		exit(EXIT_FAILURE);
 //	    }
 	    if (enviar) {
-		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) {
+		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT048
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {

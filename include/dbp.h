@@ -31,6 +31,8 @@ struct datablock_plot {
     unsigned int track_plot_number; 	//	CAT01
     float rho;				//	CAT01 CAT48
     float theta;			//	CAT01 CAT48
+    float x;                            //      CAT20
+    float y;                            //      CAT20
     int modea;				//	CAT01
     int modec;				//	CAT01
     int modec_status;			//	CAT01

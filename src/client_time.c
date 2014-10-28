@@ -525,6 +525,7 @@ int main(int argc, char *argv[]) {
 //	if ( ( ((float)t2.tv_sec + t2.tv_usec/1000000.0) -
 //	    ((float)t.tv_sec + t.tv_usec/1000000.0) > UPDATE_TIME ) ||
 //	    forced_exit) {
+
 	if ( (t2.tv_sec >= (old_t2.tv_sec + UPDATE_TIME)) || forced_exit ) {
 	    struct timeval calcdelay1; struct timeval calcdelay2; float calcdelay = 0.0;
 	    char *sac_s=0, *sic_l=0;
@@ -549,8 +550,7 @@ int main(int argc, char *argv[]) {
 	    old_t2.tv_sec = t2.tv_sec;
 
 	    gettimeofday(&calcdelay1, NULL);
-	    log_printf(LOG_NORMAL, "%s\t\tCAT\tplots\tmedia\tdesv\tmoda\tmax\tmin\tp99\n", "RADAR");
-
+	    log_printf(LOG_NORMAL, "%-24s\tCAT\tplots\tmedia\tdesv\tmoda\tmax\tmin\tp99\n", "RADAR");
 	    for(i=0; i<MAX_RADAR_NUMBER; i++) {
 		if (radar_delay[i].sac || radar_delay[i].sic) {
 		    sac_s = ast_get_SACSIC((unsigned char *) &radar_delay[i].sac,
@@ -658,7 +658,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat1 = p->segment; }
 			}
 			moda = l1 + ( (sc1_1 - sc1_3) / ( (sc1_1 - sc1_3) + (sc1_1 - sc1_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t1\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t 1\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat1,
 			    radar_delay[i].suma_retardos_cat1/radar_delay[i].cuenta_plot_cat1,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat1 / radar_delay[i].cuenta_plot_cat1) - pow(radar_delay[i].suma_retardos_cat1 / radar_delay[i].cuenta_plot_cat1,2)),
@@ -684,7 +684,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat2 = p->segment; }
 			}
 			moda = l2 + ( (sc2_1 - sc2_3) / ( (sc2_1 - sc2_3) + (sc2_1 - sc2_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t2\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t 2\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat2,
 			    radar_delay[i].suma_retardos_cat2/radar_delay[i].cuenta_plot_cat2,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat2 / radar_delay[i].cuenta_plot_cat2) - pow(radar_delay[i].suma_retardos_cat2 / radar_delay[i].cuenta_plot_cat2,2)),
@@ -710,7 +710,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat8 = p->segment; }
 			}
 			moda = l8 + ( (sc8_1 - sc8_3) / ( (sc8_1 - sc8_3) + (sc8_1 - sc8_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t8\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t 8\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat8,
 			    radar_delay[i].suma_retardos_cat8/radar_delay[i].cuenta_plot_cat8,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat8 / radar_delay[i].cuenta_plot_cat8) - pow(radar_delay[i].suma_retardos_cat8 / radar_delay[i].cuenta_plot_cat8,2)),
@@ -736,7 +736,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat10 = p->segment; }
 			}
 			moda = l10 + ( (sc10_1 - sc10_3) / ( (sc10_1 - sc10_3) + (sc10_1 - sc10_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t10\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t10\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat10,
 			    radar_delay[i].suma_retardos_cat10/radar_delay[i].cuenta_plot_cat10,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat10 / radar_delay[i].cuenta_plot_cat10) - pow(radar_delay[i].suma_retardos_cat10 / radar_delay[i].cuenta_plot_cat10,2)),
@@ -762,7 +762,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat19 = p->segment; }
 			}
 			moda = l19 + ( (sc19_1 - sc19_3) / ( (sc19_1 - sc19_3) + (sc19_1 - sc19_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t19\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t19\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat19,
 			    radar_delay[i].suma_retardos_cat19/radar_delay[i].cuenta_plot_cat19,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat19 / radar_delay[i].cuenta_plot_cat19) - pow(radar_delay[i].suma_retardos_cat19 / radar_delay[i].cuenta_plot_cat19,2)),
@@ -788,7 +788,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat20 = p->segment; }
 			}
 			moda = l20 + ( (sc20_1 - sc20_3) / ( (sc20_1 - sc20_3) + (sc20_1 - sc20_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t20\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t20\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat20,
 			    radar_delay[i].suma_retardos_cat20/radar_delay[i].cuenta_plot_cat20,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat20 / radar_delay[i].cuenta_plot_cat20) - pow(radar_delay[i].suma_retardos_cat20 / radar_delay[i].cuenta_plot_cat20,2)),
@@ -814,7 +814,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat21 = p->segment; }
 			}
 			moda = l21 + ( (sc21_1 - sc21_3) / ( (sc21_1 - sc21_3) + (sc21_1 - sc21_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t21\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t21\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat21,
 			    radar_delay[i].suma_retardos_cat21/radar_delay[i].cuenta_plot_cat21,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat21 / radar_delay[i].cuenta_plot_cat21) - pow(radar_delay[i].suma_retardos_cat21 / radar_delay[i].cuenta_plot_cat21,2)),
@@ -840,7 +840,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat34 = p->segment; }
 			}
 			moda = l34 + ( (sc34_1 - sc34_3) / ( (sc34_1 - sc34_3) + (sc34_1 - sc34_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t34\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t34\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat34,
 			    radar_delay[i].suma_retardos_cat34/radar_delay[i].cuenta_plot_cat34,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat34 / radar_delay[i].cuenta_plot_cat34) - pow(radar_delay[i].suma_retardos_cat34 / radar_delay[i].cuenta_plot_cat34,2)),
@@ -866,7 +866,7 @@ int main(int argc, char *argv[]) {
 			    if (p!=NULL && p_old!=NULL) { p99_cat48 = p->segment; }
 			}
 			moda = l48 + ( (sc48_1 - sc48_3) / ( (sc48_1 - sc48_3) + (sc48_1 - sc48_2) ) ) * 0.005;
-			log_printf(LOG_NORMAL, "%s %s\t48\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
+			log_printf(LOG_NORMAL, "%-3s/%-20s\t48\t%ld\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\t%3.3f\n",
 			    sac_s, sic_l, radar_delay[i].cuenta_plot_cat48,
 			    radar_delay[i].suma_retardos_cat48/radar_delay[i].cuenta_plot_cat48,
 			    sqrt((radar_delay[i].suma_retardos_cuad_cat48 / radar_delay[i].cuenta_plot_cat48) - pow(radar_delay[i].suma_retardos_cat48 / radar_delay[i].cuenta_plot_cat48,2)),
@@ -875,7 +875,7 @@ int main(int argc, char *argv[]) {
 			    radar_delay[i].min_retardo_cat48 ==  10000 ? 0 : radar_delay[i].min_retardo_cat48,
 			    p99_cat48);
 		    }
-		    log_printf(LOG_NORMAL, "-----------------------------------------------------------------------------\n");
+		    log_printf(LOG_NORMAL, "---------------------------------------------------------------------------------------------\n");
 		    mem_free(sac_s);
 		    mem_free(sic_l);
 		}
