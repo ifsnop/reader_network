@@ -1041,7 +1041,7 @@ unsigned char *datablock_start = NULL;
                             // generated (when MTE = 0)
                             // ara41 = 1 Either there is only one threat or the RA is intended to provide separation in
                             // the same direction for all threats.
-                            mte = (ptr_raw[j + 3] & 0x01) >> 4;
+                            mte = (ptr_raw[j + 3] & 0x10) >> 4;
                             // mte = 0 One threat is being processed by the resolution logic (when ARA bit 41 = 1); or no threat is
                             // being processed by the resolution logic (when ARA bit 41 = 0)
                             // color orange
