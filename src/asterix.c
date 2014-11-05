@@ -986,7 +986,7 @@ unsigned char *datablock_start = NULL;
 	            } else if (dbp.aircraft_id[i] == 32) {
 	                dbp.aircraft_id[i] = 32;
 	            } else if (dbp.aircraft_id[i]>47 && dbp.aircraft_id[i]<=57) {
-	                dbp.aircraft_id[i] = dbp.aircraft_id[i];
+	                continue; //dbp.aircraft_id[i] = dbp.aircraft_id[i];
 	            } else {
 	                dbp.aircraft_id[i] = 32;
 	            }
