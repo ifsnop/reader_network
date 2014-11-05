@@ -37,7 +37,9 @@ struct datablock_plot {
     int modec;				//	CAT01
     int modec_status;			//	CAT01
     int modea_status;			//	CAT01
-    char modes[7];			//	CAT48
+    //char modes[7];			//	CAT48
+    int modes_address;                  //      CAT48
+    char aircraft_id[9];                //      CAT048
     int modes_status;			//	CAT48
     int radar_responses;		//	CAT01
     int available;			//	CAT01

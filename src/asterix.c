@@ -882,6 +882,17 @@ unsigned char *datablock_start = NULL;
 	dbp.radar_responses = 0;
 	dbp.rho = 0;
 	dbp.theta = 0;
+	dbp.modes_address = 0;
+	dbp.aircraft_id[0] = 0;
+	dbp.aircraft_id[1] = 0;
+	dbp.aircraft_id[2] = 0;
+	dbp.aircraft_id[3] = 0;
+	dbp.aircraft_id[4] = 0;
+	dbp.aircraft_id[5] = 0;
+	dbp.aircraft_id[6] = 0;
+	dbp.aircraft_id[7] = 0;
+	dbp.aircraft_id[8] = 0;
+
 //	if (sizeFSPEC == 0) {
 //	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 //	    return T_ERROR;
@@ -944,15 +955,46 @@ unsigned char *datablock_start = NULL;
 	    j++; size_current++;
 	}
 	if ( ptr_raw[0] & 1 ) { // FX1
-	    if ( ptr_raw[1] & 128 ) { /* I048/220 */ j += 3; size_current += 3; }
-	    if ( ptr_raw[1] & 64 ) {  /* I048/240 */ j += 6; size_current += 6; 
+	    if ( ptr_raw[1] & 128 ) { /* I048/220 */
+	        dbp.modes_address = ptr_raw[j]<<16 | ptr_raw[j+1] <<8 | ptr_raw[j+2];
+	        j += 3; size_current += 3;
+	        dbp.available |= IS_MODES;
+	    }
+	    if ( ptr_raw[1] & 64 ) {  /* I048/240 */
+        	//char * ptr_tmp;
+        	int i;
+        	//ptr_tmp = (char *) mem_alloc(6*3 + 1);
+	        //Bmemset(ptr_tmp, 0x0, 6*3 + 1);
+	        //for( i = 0; i < 6; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
+                //log_printf(LOG_NORMAL, "I048/240[%s]\n", ptr_tmp);
+                //mem_free(ptr_tmp);
 
-//	ptr_tmp = (char *) mem_alloc(6*3 + 1);
-//	memset(ptr_tmp, 0x0, 6*3 + 1);
-//	for( i = 0; i < 6; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[j-6+i]));
-//        log_printf(LOG_NORMAL, "I048/240[%s]\n", ptr_tmp);
-//        mem_free(ptr_tmp);
+	        dbp.aircraft_id[0] = ptr_raw[j] >> 2;
+	        dbp.aircraft_id[1] = ((ptr_raw[j] & 0x03) << 4) | ((ptr_raw[j+1] & 0xF0) >> 4);
+	        dbp.aircraft_id[2] = ((ptr_raw[j+1] & 0x0F) << 2) | ((ptr_raw[j+2] & 0xC0) >> 6);
+	        dbp.aircraft_id[3] = (ptr_raw[j+2] & 0x3F);
+	        dbp.aircraft_id[4] = ptr_raw[j+3] >> 2;
+	        dbp.aircraft_id[5] = ((ptr_raw[j+3] & 0x03) << 4) | ((ptr_raw[j+4] & 0xF0) >> 4);
+	        dbp.aircraft_id[6] = ((ptr_raw[j+4] & 0x0F) << 2) | ((ptr_raw[j+5] & 0xC0) >> 6);
+	        dbp.aircraft_id[7] = (ptr_raw[j+5] & 0x3F);
+	        dbp.aircraft_id[8] = 0;
 
+	        for(i=0;i<8;i++) {
+	            //log_printf(LOG_NORMAL, ">%02X<\n", dbp.aircraft_id[i]);
+	            if (dbp.aircraft_id[i]>0 && dbp.aircraft_id[i]<=26) {
+	                dbp.aircraft_id[i] += 64;
+	            } else if (dbp.aircraft_id[i] == 32) {
+	                dbp.aircraft_id[i] = 32;
+	            } else if (dbp.aircraft_id[i]>47 && dbp.aircraft_id[i]<=57) {
+	                dbp.aircraft_id[i] = dbp.aircraft_id[i];
+	            } else {
+	                dbp.aircraft_id[i] = 32;
+	            }
+	        }
+                //log_printf(LOG_NORMAL, ">%s<\n", dbp.aircraft_id);
+
+	        j += 6; size_current += 6;
+                dbp.available |= IS_AIRCRAFTID;
 	    }
 	    if ( ptr_raw[1] & 32 ) {  /* I048/250 */ int k = j; j += ptr_raw[k]*8 + 1 ; size_current += ptr_raw[k]*8 + 1; }
 	    if ( ptr_raw[1] & 16 ) {  /* I048/161 */ j += 2; size_current += 2; }
@@ -991,8 +1033,10 @@ unsigned char *datablock_start = NULL;
 		        char ptr_260[3*7+1]; int i;
 		    	for( i = 0; i < 7; i++ ) sprintf((char *)(ptr_260 + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
 		    	ptr_260[3*7-1] = '\0';
-                        log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
-                            dbp.sac, dbp.sic, 
+                        log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) a_id(%s) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
+                            dbp.sac, dbp.sic,
+                            (dbp.available & IS_MODES) ? dbp.modes_address : 0,
+                            (dbp.available & IS_AIRCRAFTID) ? dbp.aircraft_id : "",
                             (dbp.available & IS_MODEA) ? dbp.modea : 0,
                             (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
                             (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
@@ -1245,6 +1289,19 @@ unsigned char *datablock_start = NULL;
 //		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
 //		exit(EXIT_FAILURE);
 //	    }
+
+/*
+        log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) a_id(%s) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
+            dbp.sac, dbp.sic,
+            (dbp.available & IS_MODES) ? dbp.modes_address : 0,
+            (dbp.available & IS_AIRCRAFTID) ? dbp.aircraft_id : "",
+            (dbp.available & IS_MODEA) ? dbp.modea : 0,
+            (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+            (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+            (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+            dbp.rho, dbp.theta, dbp.tod);
+*/
+
 	    if (enviar) {
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT048
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
