@@ -65,8 +65,14 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define IS_TRACK 256
 #define IS_TOD 512
 #define IS_PLOT 1024
-#define IS_MODES 2048
-#define IS_AIRCRAFTID 4096
+#define IS_MODES_ADDRESS 2048
+#define IS_AIRCRAFT_ID 4096
+#define IS_COMM_CAP 8192
+
+#define BDS_EMPTY 0
+#define BDS_10 1
+#define BDS_17 2
+#define BDS_30 4
 
 #define STATUS_MODEC_GARBLED 1
 #define STATUS_MODEC_NOTVALIDATED 2

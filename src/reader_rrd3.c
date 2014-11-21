@@ -66,6 +66,7 @@ long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
 int stdout_output = 0;
 int update_last = 0;
+int error_count = 0;
 
 struct Queue {
     rb_red_blk_node **node;
@@ -499,13 +500,13 @@ int main(int argc, char *argv[]) {
 		break;
 	    default:
 		log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-		log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file [-o] [-l] -r region_name -d rrd_directory \n\n"
+		log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file [-o] [-l] -r region_name [-d rrd_directory] \n\n"
 		    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
 		    "\t-s asterix input source file\n"
 		    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
 		    "\t-l put last decoded timestamp (default not)\n"
 		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n" 
-		    "\t-d rrd directory\n\n"
+		    "\t-d rrd directory, to create rrd database\n\n"
 		    , argv[0], midnight_t);
 		exit(EXIT_SUCCESS);
 	}
@@ -513,13 +514,13 @@ int main(int argc, char *argv[]) {
 
     if (source_file == NULL) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
 	log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file [-o] [-l] -r region_name -d rrd_directory \n\n"
+	log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file [-o] [-l] -r region_name [-d rrd_directory]\n\n"
 	    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
 	    "\t-s asterix input source file\n"
 	    "\t-o output to stdout, default execute /usr/local/bin/rrd_update3.sh\n"
 	    "\t-l put last decoded timestamp (default not)\n"
 	    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
-	    "\t-d rrd directory\n\n"
+	    "\t-d rrd directory, to create rrd database\n\n"
 	    , argv[0], midnight_t);
 	exit(EXIT_SUCCESS);
     }
@@ -674,8 +675,6 @@ int main(int argc, char *argv[]) {
     log_flush();
 //    log_printf(LOG_ERROR, "stats received[%ld] processed[%ld]/ignored[%ld]\n",
 //	count2_udp_received, count2_plot_processed, count2_plot_ignored);
-
-
 
 //    log_flush();
     if (mode_scrm) {
@@ -1106,11 +1105,6 @@ void update_calculations(struct datablock_plot dbp) {
 		radar_delay[i].sac = dbp.sac; radar_delay[i].sic = dbp.sic;
 	    }
 	}
-	/*
-	if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
-	    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
-	}
-	*/
 
 	if (diff <= -86000) { // cuando tod esta en el dia anterior y tod_stamp en el siguiente, la resta es negativa
 	    diff += 86400;    // le sumamos un dia entero para cuadrar el calculo
@@ -1118,14 +1112,16 @@ void update_calculations(struct datablock_plot dbp) {
 	    diff -= 86400;
 	}
 
-
-
 	//printf("retardo de sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
         if (fabs(diff) >= 8.0) { // jadpascual 121219 123600
-	    //printf("retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
-	    log_printf(LOG_ERROR, "retardo mayor de 8 segundos sac(%d) sic(%d) demora(%3.3f)\n", dbp.sac, dbp.sic, diff);
+	    if (error_count == 100) {
+                log_printf(LOG_ERROR, "max error count reached, no more errors will be printed\n");
+                error_count++;
+            } else if (error_count < 100) {
+                log_printf(LOG_ERROR, "delay greater than 8 seconds for sensor sac(%d) sic(%d) delay(%3.3f)\n", dbp.sac, dbp.sic, diff);
+                error_count++;
+            }
 	    return;
-//          exit(EXIT_FAILURE);
         }
 
 	switch (dbp.cat) {

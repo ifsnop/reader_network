@@ -365,7 +365,7 @@ int main(int argc, char *argv[]) {
 		}
 	    }
 
-	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s%s%s%s%s] [AZI %03.3f] [DST %03.3f] [%s] [%s] (%3.4f)\n", dbp.id,
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s%s%s%s%s%s] [AZI %03.3f] [DST %03.3f] [AID %s] [MS%06X] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l, 
 		(dbp.type == NO_DETECTION) ? "NODET" : "",
 		(dbp.type & TYPE_C48_PSR) ? "PSR" : "",
@@ -378,6 +378,8 @@ int main(int argc, char *argv[]) {
 		(dbp.type & TYPE_C48_FIXED_TRANSPONDER) ? "TRN" : "",
 		(dbp.available & IS_MEASURED_POLAR) ? dbp.theta : 0.0,
 		(dbp.available & IS_MEASURED_POLAR) ? dbp.rho : 0.0,
+		(dbp.available & IS_AIRCRAFT_ID) ? dbp.aircraft_id : (unsigned char *) "",
+		(dbp.available & IS_MODES_ADDRESS) ? dbp.modes_address : 0,
 		hora1, hora2,
 		(dbp.available & IS_TOD) ? diff : 0.0);
 	    mem_free(hora1);

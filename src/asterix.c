@@ -106,6 +106,244 @@ int sizeFSPEC = 0;
     return sizeFSPEC;
 }
 
+char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
+
+    char ptr_260[3*7+1]; int i;
+    for( i = 0; i < 7; i++ ) sprintf((char *)(ptr_260 + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
+    ptr_260[3*7-1] = '\0';
+/*
+    log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
+        dbp.sac, dbp.sic,
+        (dbp.available & IS_MODES_ADDRESS) ? dbp.modes_address : 0,
+        (dbp.available & IS_MODEA) ? dbp.modea : 0,
+        (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+        (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+        (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+        (dbp.available & IS_AIRCRAFT_ID) ? dbp.aircraft_id : (unsigned char*) "",
+        dbp.rho, dbp.theta, dbp.tod);
+*/
+    {
+        int bds1 = 0; // 4   0..4        0         0
+        int bds2 = 0; // 4   5..8        0         4
+        int ara = 0;  //     9..22       1,2       0
+        int ara41 = 0; //     9           1            bit41
+        int ara42 = 0; //     10          1            bit42
+        int ara43 = 0; //     11          1            bit43
+        int ara44 = 0; //     12          1            bit44
+        int ara45 = 0; //     13          1            bit45
+        int ara46 = 0; //     14          1            bit46
+        int ara47 = 0; //     15          1            bit47
+
+        int rac  = 0;  // 4   23..26      2,3
+        int rac1 = 0;  //     23          2            bit55
+        int rac2 = 0;  //     24          2            bit55
+        int rac3 = 0;  //     25          3            bit55
+        int rac4 = 0;  //     26          3            bit55
+        int rat = 0;  // 1   27          3
+        int mte = 0;  // 1   28          3
+        int tti = 0;  // 2   29..30      3
+        //int tid = 0; // 26   31..56      3,4,5,6
+        int tid_ms = 0;// 26   31..54    3,4,5,6
+        int tid_modec = 0; //13 31..43      3,4,5      bit63..bit75
+        int tid_range = 0; // 7     44..50        5,6       bit76..bit82
+        float tid_rangef = 0.0;
+
+        int tid_bearing = 0.0;
+
+        bds1 = (ptr_raw[j + 0] & 0xF0) >> 4;
+        bds2 = (ptr_raw[j + 0] & 0x0F);
+        ara41 = (ptr_raw[j + 1] & 0x80) >> 7;
+        ara42 = (ptr_raw[j + 1] & 0x40) >> 6;
+        ara43 = (ptr_raw[j + 1] & 0x20) >> 5;
+        ara44 = (ptr_raw[j + 1] & 0x10) >> 4;
+        ara45 = (ptr_raw[j + 1] & 0x08) >> 3;
+        ara46 = (ptr_raw[j + 1] & 0x04) >> 2;
+        ara47 = (ptr_raw[j + 1] & 0x02) >> 1;
+        // ara41 = 0 There is more than one threat and the RA is intended to provide separation
+        // below some threat(s) and above some other threat(s) or no RA has been
+        // generated (when MTE = 0)
+        // ara41 = 1 Either there is only one threat or the RA is intended to provide separation in
+        // the same direction for all threats.
+        mte = (ptr_raw[j + 3] & 0x10) >> 4;
+        // mte = 0 One threat is being processed by the resolution logic (when ARA bit 41 = 1); or no threat is
+        // being processed by the resolution logic (when ARA bit 41 = 0)
+        // color orange
+        // mte = 1 Two or more simultaneous threats are being processed by the resolution logic
+        // color red
+        if (ara41==1 && mte==0) { // one threat is being processed by the resolution logic
+            /*  Bit Coding
+                42 0 RA is preventive  // color orange
+                   1 RA is corrective  // color red
+                43 0 Upward sense RA has been generated // up arrow
+                   1 Downward sense RA has been generated // down arrow
+                44 0 RA is not increased rate
+                   1 RA is increased rate
+                45 0 RA is not a sense reversal
+                   1 RA is a sense reversal
+                46 0 RA is not altitude crossing
+                   1 RA is altitude crossing
+                47 0 RA is vertical speed limit
+                   1 RA is positive
+                48-54 Reserved for ACAS III
+            */
+            ara = ara42<<5 | ara43<<4 | ara44<<3 | ara45<<2 | ara46<<1 | ara47;
+        } else if (ara41==0 && mte==1) { // RA is intended to provide separation below some threat(s) and above some other threat(s)
+            /*  Bit Coding
+                42 0 RA does not require a correction in the upward sense
+                   1 RA requires a correction in the upward sense
+                43 0 RA does not require a positive climb
+                   1 RA requires a positive climb
+                44 0 RA does not require a correction in the downward sense
+                   1 RA requires a correction in the downward sense
+                45 0 RA does not require a positive descend
+                   1 RA requires a positive descend
+                46 0 RA does not require a crossing
+                   1 RA requires a crossing
+                47 0 RA is not a sense reversal
+                   1 RA is a sense reversal
+                48-54 Reserved for ACAS III
+            */
+            ara = ara42<<5 | ara43<<4 | ara44<<3 | ara45<<2 | ara46<<1 | ara47;
+            } else if (ara41==0 && mte==0) {
+                // no vertical RA has been generated
+                // color green
+                ara = 0;
+            }
+            //log_printf(LOG_NORMAL, "%08X %08X\n", bds30->bds1, (ptr_raw+j));
+            /* received from other ACAS aircraft. The bits in RAC shall have the following meanings:
+                Bit Resolution advisory complement
+                55 Do not pass below
+                56 Do not pass above
+                57 Do not turn left
+                58 Do not turn right
+                A bit set to 1 shall indicate that the associated RAC is active. A bit set to 0 shall indicate that the associated RAC is inactive.
+            */
+            rac1 = (ptr_raw[j + 2] & 0x02) >> 1;
+            rac2 = (ptr_raw[j + 2] & 0x01);
+            rac3 = (ptr_raw[j + 3] & 0x80) >> 7;
+            rac4 = (ptr_raw[j + 3] & 0x40) >> 6;
+            rac = rac1<<3 | rac2<<2 | rac3<<1 | rac4;
+
+            /*
+                This 1-bit (59) subfield shall indicate when an RA previously generated
+                by ACAS has ceased being generated. After an RA has been terminated by ACAS, it is still required to be reported by the Mode S transponder for 18±1 s
+                (4.3.11.4.1). The RA terminated indicator may be used, for example, to permit timely removal of an RA indication from an air
+                traffic controller’s display, or for assessments of RA duration within a particular airspace.
+            */
+            rat = (ptr_raw[j + 3] & 0x20) >> 5;
+            /*
+                TTI (threat type indicator subfield). This 2-bit subfield (61-62) shall define the type of identity data
+                contained in the TID subfield.
+                Coding
+                    0 No identity data in TID
+                    1 TID contains a Mode S transponder address
+                    2 TID contains altitude, range and bearing data
+                    3 Not assigned
+            */
+            tti = (ptr_raw[j + 3] & 0x0C) >> 2;
+            switch (tti) {
+                case 0:
+                    break;
+                case 1:
+                    tid_ms = (ptr_raw[j+3] & 0x03) << 6;
+                    tid_ms |= (ptr_raw[j+4] & 0xFC) >> 2;
+                    tid_ms = tid_ms << 8;
+                    tid_ms |= (ptr_raw[j+4] & 0x03) << 6;
+                    tid_ms |= (ptr_raw[j+5] & 0xFC) >> 2;
+                    tid_ms = tid_ms << 8;
+                    tid_ms |= (ptr_raw[j+5] & 0x03) << 6;
+                    tid_ms |= (ptr_raw[j+6] & 0xFC) >> 2;
+                    //log_printf(LOG_NORMAL, "%06X\n", tid_ms);
+                    //tid_ms = tid_ms << 8;
+                    if ((ptr_raw[j+6] & 0x03) != 0) {
+                        log_printf(LOG_ERROR, "error with Threat Identity Data subfield in bds3,0, bit87 & 88 should be zero\n");
+                    }
+                    break;
+                case 2: {
+                    int a1 = 0, a2 = 0, a4 = 0;
+                    int b1 = 0, b2 = 0, b4 = 0;
+                    int c1 = 0, c2 = 0, c4 = 0;
+                    int d1 = 0, d2 = 0, d4 = 0;
+                    int tidr76 = 0, tidr77 = 0, tidr78 = 0;
+                    int tidr79 = 0, tidr80 = 0, tidr81 = 0;
+                    int tidr82 = 0;
+                    int tidb83 = 0, tidb84 = 0, tidb85 = 0;
+                    int tidb86 = 0, tidb87 = 0, tidb88 = 0;
+                
+                    c1 = (ptr_raw[j+3] & 0x02) >> 1;
+                    a1 = (ptr_raw[j+3] & 0x01);
+                    c2 = (ptr_raw[j+4] & 0x80) >> 7;
+                    a2 = (ptr_raw[j+4] & 0x40) >> 6;
+                    c4 = (ptr_raw[j+4] & 0x20) >> 5;
+                    a4 = (ptr_raw[j+4] & 0x10) >> 4;
+                    b1 = (ptr_raw[j+4] & 0x04) >> 2;
+                    d1 = (ptr_raw[j+4] & 0x02) >> 1;
+                    b2 = (ptr_raw[j+4] & 0x01);
+                    d2 = (ptr_raw[j+5] & 0x80) >> 7;
+                    b4 = (ptr_raw[j+5] & 0x40) >> 6;
+                    d4 = (ptr_raw[j+5] & 0x20) >> 5;
+                    tid_modec = d1<<11 | d2<<10 | d4<<9 | a1<<8 | a2<<7 | a4<<6 | b1<<5 | b2<<4 | b4<<3 | c1<<2 | c2<<1 | c4;
+                    //Format MSB to LSB: D2 D4 A1 A2 A4 B1 B2 B4 C1 C2 C4
+                    tid_modec ^= (tid_modec >> 8);
+                    tid_modec ^= (tid_modec >> 4);
+                    tid_modec ^= (tid_modec >> 2);
+                    tid_modec ^= (tid_modec >> 1);
+                    tid_modec -= (((tid_modec >> 4) * 6) + ((((tid_modec) % 16) / 5) * 2));
+                    tid_modec = (tid_modec - 13)*100;
+
+                    tidr76 = (ptr_raw[j+5] & 0x10) >> 4;
+                    tidr77 = (ptr_raw[j+5] & 0x08) >> 3;
+                    tidr78 = (ptr_raw[j+5] & 0x04) >> 2;
+                    tidr79 = (ptr_raw[j+5] & 0x02) >> 1;
+                    tidr80 = (ptr_raw[j+5] & 0x01);
+                    tidr81 = (ptr_raw[j+6] & 0x80) >> 7;
+                    tidr82 = (ptr_raw[j+6] & 0x40) >> 6;
+
+                    tid_range = tidr76 << 6 | tidr77 << 5 | tidr78 << 4 | 
+                        tidr79 << 3 | tidr80 << 2 | tidr81 << 1 | tidr82;
+                    if (tid_range == 0)
+                        tid_rangef = 0;
+                    else if (tid_range == 1)
+                        tid_rangef = 0.05;
+                    else if (tid_range == 127)
+                        tid_rangef = 12.55;
+                    else
+                        tid_rangef = (tid_range-1.0)/10.0;
+
+                    tidb83 = (ptr_raw[j+6] & 0x20) >> 5;
+                    tidb84 = (ptr_raw[j+6] & 0x10) >> 4;
+                    tidb85 = (ptr_raw[j+6] & 0x08) >> 3;
+                    tidb86 = (ptr_raw[j+6] & 0x04) >> 2;
+                    tidb87 = (ptr_raw[j+6] & 0x02) >> 1;
+                    tidb88 = (ptr_raw[j+6] & 0x01);
+
+                    tid_bearing = tidb83 << 5 | tidb84 << 4 | tidb85 << 3 |
+                        tidb86 << 2 | tidb87 << 1 | tidb88;
+                            
+                    if (tid_bearing >= 1 && tid_bearing <=60)
+                        tid_bearing = (tid_bearing-1) * 6;
+                    break;
+                }
+                case 3:
+                    default:
+                    break;
+            }
+            /*
+            if (tti == 1) {
+                log_printf(LOG_NORMAL, "\t048/260 [1] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) ms[%06X] [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, tid_ms, ptr_260);
+            } else if (tti == 2) {
+                log_printf(LOG_NORMAL, "\t048/260 [2] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) modec(%04d) range(%3.2fNM) bearing(%03dº) [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, tid_modec, tid_rangef, tid_bearing, ptr_260);
+            } else {
+                log_printf(LOG_NORMAL, "\t048/260 [0] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, ptr_260);
+            }
+            */
+        }
+
+    return NULL;
+
+}
+
+
 int ast_procesarCAT01(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar) {
 int size_current = 0, j = 0;
 int index = 0;
@@ -873,6 +1111,7 @@ unsigned char *datablock_start = NULL;
 	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
 	dbp.cat = CAT_48;
 	dbp.available = IS_ERROR;
+	dbp.bds_available = BDS_EMPTY;
 	dbp.type = NO_DETECTION;
 	dbp.plot_type = IS_ERROR;
 	dbp.modea_status = 0;
@@ -883,15 +1122,16 @@ unsigned char *datablock_start = NULL;
 	dbp.rho = 0;
 	dbp.theta = 0;
 	dbp.modes_address = 0;
-	dbp.aircraft_id[0] = 0;
-	dbp.aircraft_id[1] = 0;
-	dbp.aircraft_id[2] = 0;
-	dbp.aircraft_id[3] = 0;
-	dbp.aircraft_id[4] = 0;
-	dbp.aircraft_id[5] = 0;
-	dbp.aircraft_id[6] = 0;
-	dbp.aircraft_id[7] = 0;
-	dbp.aircraft_id[8] = 0;
+	memset(dbp.aircraft_id, 0, 9);
+	memset(dbp.bds_10, 0, 7);
+	memset(dbp.bds_17, 0, 7);
+	memset(dbp.bds_30, 0, 7);
+	dbp.di048_230_com = 0; //      CAT48
+        dbp.di048_230_mssc = 0;//      CAT48
+	dbp.di048_230_arc = 0; //      CAT48
+	dbp.di048_230_aic = 0; //      CAT48
+	dbp.di048_230_b1a = 0; //      CAT48
+	dbp.di048_230_b1b = 0; //      CAT48
 
 //	if (sizeFSPEC == 0) {
 //	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
@@ -958,7 +1198,7 @@ unsigned char *datablock_start = NULL;
 	    if ( ptr_raw[1] & 128 ) { /* I048/220 */
 	        dbp.modes_address = ptr_raw[j]<<16 | ptr_raw[j+1] <<8 | ptr_raw[j+2];
 	        j += 3; size_current += 3;
-	        dbp.available |= IS_MODES;
+	        dbp.available |= IS_MODES_ADDRESS;
 	    }
 	    if ( ptr_raw[1] & 64 ) {  /* I048/240 */
         	//char * ptr_tmp;
@@ -991,10 +1231,15 @@ unsigned char *datablock_start = NULL;
 	                dbp.aircraft_id[i] = 32;
 	            }
 	        }
+	        for(i=7;i>=0;i--)
+	            if (dbp.aircraft_id[i]==32)
+	                dbp.aircraft_id[i]=0;
+	            else
+	                break;
                 //log_printf(LOG_NORMAL, ">%s<\n", dbp.aircraft_id);
 
 	        j += 6; size_current += 6;
-                dbp.available |= IS_AIRCRAFTID;
+                dbp.available |= IS_AIRCRAFT_ID;
 	    }
 	    if ( ptr_raw[1] & 32 ) {  /* I048/250 */ int k = j; j += ptr_raw[k]*8 + 1 ; size_current += ptr_raw[k]*8 + 1; }
 	    if ( ptr_raw[1] & 16 ) {  /* I048/161 */ j += 2; size_current += 2; }
@@ -1014,7 +1259,15 @@ unsigned char *datablock_start = NULL;
 		}
 		if ( ptr_raw[2] & 2 ) { /* I048/230 */
                     //log_printf(LOG_ERROR, "en I048/230\n");
-                    if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type); j += 2; size_current += 2;
+                    if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type);
+                    dbp.di048_230_com = (ptr_raw[j] & 0xe0) >> 5;
+                    dbp.di048_230_mssc = (ptr_raw[j+1] & 0x80) >> 7;
+                    dbp.di048_230_arc = (ptr_raw[j+1] & 0x40) >> 6;
+                    dbp.di048_230_aic = (ptr_raw[j+1] & 0x20) >> 5;
+                    dbp.di048_230_b1a = (ptr_raw[j+1] & 0x10) >> 4;
+                    dbp.di048_230_b1b = (ptr_raw[j+1] & 0x0f);
+                    dbp.available |= IS_COMM_CAP;
+                    j += 2; size_current += 2;
                 }
 		if ( ptr_raw[2] & 1 ) { // FX3
 		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ 
@@ -1030,236 +1283,10 @@ unsigned char *datablock_start = NULL;
 		        };
                         //struct bds30s *bds30 = (struct bds30s *) (ptr_raw + j);
 */
-		        char ptr_260[3*7+1]; int i;
-		    	for( i = 0; i < 7; i++ ) sprintf((char *)(ptr_260 + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
-		    	ptr_260[3*7-1] = '\0';
-                        log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) a_id(%s) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
-                            dbp.sac, dbp.sic,
-                            (dbp.available & IS_MODES) ? dbp.modes_address : 0,
-                            (dbp.available & IS_AIRCRAFTID) ? dbp.aircraft_id : "",
-                            (dbp.available & IS_MODEA) ? dbp.modea : 0,
-                            (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
-                            (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
-                            (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
-                            dbp.rho, dbp.theta, dbp.tod);
-
-                        {
-                            int bds1 = 0; // 4   0..4        0         0
-                            int bds2 = 0; // 4   5..8        0         4
-                            int ara = 0;  //     9..22       1,2       0
-                            int ara41 = 0; //     9           1            bit41
-                            int ara42 = 0; //     10          1            bit42
-                            int ara43 = 0; //     11          1            bit43
-                            int ara44 = 0; //     12          1            bit44
-                            int ara45 = 0; //     13          1            bit45
-                            int ara46 = 0; //     14          1            bit46
-                            int ara47 = 0; //     15          1            bit47
-
-                            int rac  = 0;  // 4   23..26      2,3
-                            int rac1 = 0;  //     23          2            bit55
-                            int rac2 = 0;  //     24          2            bit55
-                            int rac3 = 0;  //     25          3            bit55
-                            int rac4 = 0;  //     26          3            bit55
-                            int rat = 0;  // 1   27          3
-                            int mte = 0;  // 1   28          3
-                            int tti = 0;  // 2   29..30      3
-                            //int tid = 0; // 26   31..56      3,4,5,6
-                            int tid_ms = 0;// 26   31..54    3,4,5,6
-                            int tid_modec = 0; //13 31..43      3,4,5      bit63..bit75
-                            int tid_range = 0; // 7     44..50        5,6       bit76..bit82
-                            float tid_rangef = 0.0;
-                            
-                            int tid_bearing = 0.0;
-
-                            bds1 = (ptr_raw[j + 0] & 0xF0) >> 4;
-                            bds2 = (ptr_raw[j + 0] & 0x0F);
-                            ara41 = (ptr_raw[j + 1] & 0x80) >> 7;
-                            ara42 = (ptr_raw[j + 1] & 0x40) >> 6;
-                            ara43 = (ptr_raw[j + 1] & 0x20) >> 5;
-                            ara44 = (ptr_raw[j + 1] & 0x10) >> 4;
-                            ara45 = (ptr_raw[j + 1] & 0x08) >> 3;
-                            ara46 = (ptr_raw[j + 1] & 0x04) >> 2;
-                            ara47 = (ptr_raw[j + 1] & 0x02) >> 1;
-                            // ara41 = 0 There is more than one threat and the RA is intended to provide separation
-                            // below some threat(s) and above some other threat(s) or no RA has been
-                            // generated (when MTE = 0)
-                            // ara41 = 1 Either there is only one threat or the RA is intended to provide separation in
-                            // the same direction for all threats.
-                            mte = (ptr_raw[j + 3] & 0x10) >> 4;
-                            // mte = 0 One threat is being processed by the resolution logic (when ARA bit 41 = 1); or no threat is
-                            // being processed by the resolution logic (when ARA bit 41 = 0)
-                            // color orange
-                            // mte = 1 Two or more simultaneous threats are being processed by the resolution logic
-                            // color red
-                            if (ara41==1 && mte==0) { // one threat is being processed by the resolution logic
-                            /*  Bit Coding
-                                42 0 RA is preventive  // color orange
-                                   1 RA is corrective  // color red
-                                43 0 Upward sense RA has been generated // up arrow
-                                   1 Downward sense RA has been generated // down arrow
-                                44 0 RA is not increased rate
-                                   1 RA is increased rate
-                                45 0 RA is not a sense reversal
-                                   1 RA is a sense reversal
-                                46 0 RA is not altitude crossing
-                                   1 RA is altitude crossing
-                                47 0 RA is vertical speed limit
-                                   1 RA is positive
-                                48-54 Reserved for ACAS III
-                            */
-                                ara = ara42<<5 | ara43<<4 | ara44<<3 | ara45<<2 | ara46<<1 | ara47;
-                            } else if (ara41==0 && mte==1) { // RA is intended to provide separation below some threat(s) and above some other threat(s)
-                            /*  Bit Coding
-                                42 0 RA does not require a correction in the upward sense
-                                   1 RA requires a correction in the upward sense
-                                43 0 RA does not require a positive climb
-                                   1 RA requires a positive climb
-                                44 0 RA does not require a correction in the downward sense
-                                   1 RA requires a correction in the downward sense
-                                45 0 RA does not require a positive descend
-                                   1 RA requires a positive descend
-                                46 0 RA does not require a crossing
-                                   1 RA requires a crossing
-                                47 0 RA is not a sense reversal
-                                   1 RA is a sense reversal
-                                48-54 Reserved for ACAS III
-                            */
-                                ara = ara42<<5 | ara43<<4 | ara44<<3 | ara45<<2 | ara46<<1 | ara47;
-                            } else if (ara41==0 && mte==0) {
-                                // no vertical RA has been generated
-                                // color green
-                                ara = 0;
-                            }
-                            //log_printf(LOG_NORMAL, "%08X %08X\n", bds30->bds1, (ptr_raw+j));
-                            /* received from other ACAS aircraft. The bits in RAC shall have the following meanings:
-                                Bit Resolution advisory complement
-                                55 Do not pass below
-                                56 Do not pass above
-                                57 Do not turn left
-                                58 Do not turn right
-                                A bit set to 1 shall indicate that the associated RAC is active. A bit set to 0 shall indicate that the associated RAC is inactive.
-                            */
-                            rac1 = (ptr_raw[j + 2] & 0x02) >> 1;
-                            rac2 = (ptr_raw[j + 2] & 0x01);
-                            rac3 = (ptr_raw[j + 3] & 0x80) >> 7;
-                            rac4 = (ptr_raw[j + 3] & 0x40) >> 6;
-                            rac = rac1<<3 | rac2<<2 | rac3<<1 | rac4;
-
-                            /*
-                                This 1-bit (59) subfield shall indicate when an RA previously generated
-                                by ACAS has ceased being generated. After an RA has been terminated by ACAS, it is still required to be reported by the Mode S transponder for 18±1 s
-                                (4.3.11.4.1). The RA terminated indicator may be used, for example, to permit timely removal of an RA indication from an air
-                                traffic controller’s display, or for assessments of RA duration within a particular airspace.
-                            */
-                            rat = (ptr_raw[j + 3] & 0x20) >> 5;
-                            /*
-                            TTI (threat type indicator subfield). This 2-bit subfield (61-62) shall define the type of identity data
-                            contained in the TID subfield.
-                            Coding
-                                0 No identity data in TID
-                                1 TID contains a Mode S transponder address
-                                2 TID contains altitude, range and bearing data
-                                3 Not assigned
-                            */
-                            tti = (ptr_raw[j + 3] & 0x0C) >> 2;
-
-                            switch (tti) {
-                                case 0:
-                                    break;
-                                case 1:
-                                    tid_ms = (ptr_raw[j+3] & 0x03) << 6;
-                                    tid_ms |= (ptr_raw[j+4] & 0xFC) >> 2;
-                                    tid_ms = tid_ms << 8;
-                                    tid_ms |= (ptr_raw[j+4] & 0x03) << 6;
-                                    tid_ms |= (ptr_raw[j+5] & 0xFC) >> 2;
-                                    tid_ms = tid_ms << 8;
-                                    tid_ms |= (ptr_raw[j+5] & 0x03) << 6;
-                                    tid_ms |= (ptr_raw[j+6] & 0xFC) >> 2;
-                                    //log_printf(LOG_NORMAL, "%06X\n", tid_ms);
-                                    //tid_ms = tid_ms << 8;
-                                    if ((ptr_raw[j+6] & 0x03) != 0) {
-                                        log_printf(LOG_ERROR, "error with Threat Identity Data subfield in bds3,0, bit87 & 88 should be zero\n");
-                                    }
-                                    break;
-                                case 2: {
-                                    int a1 = 0, a2 = 0, a4 = 0;
-                                    int b1 = 0, b2 = 0, b4 = 0;
-                                    int c1 = 0, c2 = 0, c4 = 0;
-                                    int d1 = 0, d2 = 0, d4 = 0;
-                                    int tidr76 = 0, tidr77 = 0, tidr78 = 0;
-                                    int tidr79 = 0, tidr80 = 0, tidr81 = 0;
-                                    int tidr82 = 0;
-                                    int tidb83 = 0, tidb84 = 0, tidb85 = 0;
-                                    int tidb86 = 0, tidb87 = 0, tidb88 = 0;
-                                    
-                                    c1 = (ptr_raw[j+3] & 0x02) >> 1;
-                                    a1 = (ptr_raw[j+3] & 0x01);
-                                    c2 = (ptr_raw[j+4] & 0x80) >> 7;
-                                    a2 = (ptr_raw[j+4] & 0x40) >> 6;
-                                    c4 = (ptr_raw[j+4] & 0x20) >> 5;
-                                    a4 = (ptr_raw[j+4] & 0x10) >> 4;
-                                    b1 = (ptr_raw[j+4] & 0x04) >> 2;
-                                    d1 = (ptr_raw[j+4] & 0x02) >> 1;
-                                    b2 = (ptr_raw[j+4] & 0x01);
-                                    d2 = (ptr_raw[j+5] & 0x80) >> 7;
-                                    b4 = (ptr_raw[j+5] & 0x40) >> 6;
-                                    d4 = (ptr_raw[j+5] & 0x20) >> 5;
-                                    tid_modec = d1<<11 | d2<<10 | d4<<9 | a1<<8 | a2<<7 | a4<<6 | b1<<5 | b2<<4 | b4<<3 | c1<<2 | c2<<1 | c4;
-                                    //Format MSB to LSB: D2 D4 A1 A2 A4 B1 B2 B4 C1 C2 C4
-                                    tid_modec ^= (tid_modec >> 8);
-                                    tid_modec ^= (tid_modec >> 4);
-                                    tid_modec ^= (tid_modec >> 2);
-                                    tid_modec ^= (tid_modec >> 1);
-                                    tid_modec -= (((tid_modec >> 4) * 6) + ((((tid_modec) % 16) / 5) * 2));
-                                    tid_modec = (tid_modec - 13)*100;
-                                    
-                                    tidr76 = (ptr_raw[j+5] & 0x10) >> 4;
-                                    tidr77 = (ptr_raw[j+5] & 0x08) >> 3;
-                                    tidr78 = (ptr_raw[j+5] & 0x04) >> 2;
-                                    tidr79 = (ptr_raw[j+5] & 0x02) >> 1;
-                                    tidr80 = (ptr_raw[j+5] & 0x01);
-                                    tidr81 = (ptr_raw[j+6] & 0x80) >> 7;
-                                    tidr82 = (ptr_raw[j+6] & 0x40) >> 6;
-                                    
-                                    tid_range = tidr76 << 6 | tidr77 << 5 | tidr78 << 4 | 
-                                        tidr79 << 3 | tidr80 << 2 | tidr81 << 1 | tidr82;
-                                    if (tid_range == 0)
-                                        tid_rangef = 0;
-                                    else if (tid_range == 1)
-                                        tid_rangef = 0.05;
-                                    else if (tid_range == 127)
-                                        tid_rangef = 12.55;
-                                    else
-                                        tid_rangef = (tid_range-1.0)/10.0;
-
-                                    tidb83 = (ptr_raw[j+6] & 0x20) >> 5;
-                                    tidb84 = (ptr_raw[j+6] & 0x10) >> 4;
-                                    tidb85 = (ptr_raw[j+6] & 0x08) >> 3;
-                                    tidb86 = (ptr_raw[j+6] & 0x04) >> 2;
-                                    tidb87 = (ptr_raw[j+6] & 0x02) >> 1;
-                                    tidb88 = (ptr_raw[j+6] & 0x01);
-                                    
-                                    tid_bearing = tidb83 << 5 | tidb84 << 4 | tidb85 << 3 |
-                                        tidb86 << 2 | tidb87 << 1 | tidb88;
-                                        
-                                    if (tid_bearing >= 1 && tid_bearing <=60)
-                                        tid_bearing = (tid_bearing-1) * 6;
-                                    break;
-                                    }
-                                case 3:
-                                default:
-                                    break;
-                            }
-
-                            if (tti == 1) {
-                                log_printf(LOG_NORMAL, "\tI048/260 [1] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) ms[%06X] [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, tid_ms, ptr_260);
-                            } else if (tti == 2) {
-                                log_printf(LOG_NORMAL, "\tI048/260 [2] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) modec(%04d) range(%3.2fNM) bearing(%03dº) [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, tid_modec, tid_rangef, tid_bearing, ptr_260);
-                            } else {
-                                log_printf(LOG_NORMAL, "\tI048/260 [0] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, ptr_260);
-                            }
-
-                        }
+                        memcpy(dbp.bds_30, ptr_raw + j, 7);
+                        dbp.bds_available |= BDS_30;
+                        //decode_bds30(dbp.bds_30, 0, dbp);
+                        
                         //bds(%08X)\n", bds30->bds1);
                         //log_printf(LOG_NORMAL, "I048/260 bds(%014X)\n", bds30->ara);
                         
@@ -1289,19 +1316,26 @@ unsigned char *datablock_start = NULL;
 //		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
 //		exit(EXIT_FAILURE);
 //	    }
-
-/*
-        log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) a_id(%s) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
-            dbp.sac, dbp.sic,
-            (dbp.available & IS_MODES) ? dbp.modes_address : 0,
-            (dbp.available & IS_AIRCRAFTID) ? dbp.aircraft_id : "",
-            (dbp.available & IS_MODEA) ? dbp.modea : 0,
-            (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
-            (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
-            (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
-            dbp.rho, dbp.theta, dbp.tod);
-*/
-
+            /*
+            if (dbp.bds_available & BDS_30) {
+                log_printf(LOG_NORMAL, "sac(%d) sic(%d) modes(%06X) a_id(%s) modea(%04o%s%s%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n\t048/230(%s[%01X %01X %01X %01X %01X %01X])\n\n", 
+                    dbp.sac, dbp.sic,
+                    (dbp.available & IS_MODES_ADDRESS) ? dbp.modes_address : 0,
+                    (dbp.available & IS_AIRCRAFT_ID) ? dbp.aircraft_id : (unsigned char*) "",
+                    (dbp.available & IS_MODEA) ? dbp.modea : 0,
+                    (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+                    (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+                    (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+                    dbp.rho, dbp.theta, dbp.tod,
+                    (dbp.available & IS_COMM_CAP) ? "OK" : "NO",
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_com : 0,
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_mssc : 0,
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_arc : 0,
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_aic : 0,            
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_b1a : 0,
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_b1b : 0);
+            }
+            */
 	    if (enviar) {
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT048
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));

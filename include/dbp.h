@@ -29,17 +29,30 @@ struct datablock_plot {
     int type; 				//	CAT01 CAT02 CAT08  CAT10 CAT34 CAT48 // psr-ssr-cmb-track/pasonorte.../sop-eop.../
     int plot_type; 			//	CAT10
     unsigned int track_plot_number; 	//	CAT01
-    float rho;				//	CAT01 CAT48
-    float theta;			//	CAT01 CAT48
-    float x;                            //      CAT20
-    float y;                            //      CAT20
+    union {
+        float rho;			//	CAT01 CAT48
+        float x;                        //      CAT20
+    };
+    union {
+        float theta;			//	CAT01 CAT48
+        float y;                        //      CAT20
+    };
     int modea;				//	CAT01
     int modec;				//	CAT01
     int modec_status;			//	CAT01
     int modea_status;			//	CAT01
-    //char modes[7];			//	CAT48
     int modes_address;                  //      CAT48
-    char aircraft_id[9];                //      CAT048
+    unsigned char aircraft_id[9];       //      CAT48
+    unsigned char di048_230_com;        //      CAT48
+    unsigned char di048_230_mssc;       //      CAT48
+    unsigned char di048_230_arc;        //      CAT48
+    unsigned char di048_230_aic;        //      CAT48
+    unsigned char di048_230_b1a;        //      CAT48
+    unsigned char di048_230_b1b;        //      CAT48
+    unsigned char bds_available;        //      CAT48
+    unsigned char bds_10[7];            //      CAT48
+    unsigned char bds_17[7];            //      CAT48
+    unsigned char bds_30[7];            //      CAT48
     int modes_status;			//	CAT48
     int radar_responses;		//	CAT01
     int available;			//	CAT01
