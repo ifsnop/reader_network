@@ -557,6 +557,7 @@ void send_output_file() {
     char noproxy_host[1024];
     int slash_pos = 6, i = 0;
 
+    memset(file, 0, 1024);
 
     if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
 	snprintf(file, 1023, "%s%s", dest_file_final_ast, (dest_file_compress ? ".bz2" : "") );
@@ -660,7 +661,11 @@ int loop=1;
 	log_printf(LOG_ERROR, "ERROR socket: %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
     }
-    setsockopt(s_output_multicast, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
+
+    if ( setsockopt(s_output_multicast, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) < 0 ) {
+	log_printf(LOG_ERROR, "ERROR setsockopt: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 
     return;
 }

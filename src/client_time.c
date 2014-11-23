@@ -149,14 +149,17 @@ void server_connect(void) {
     addr.sin_port = htons(MULTICAST_PLOTS_PORT);
     if ( (s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
 	log_printf(LOG_ERROR, "socket %s\n", strerror(errno));
-	exit(1);
+	exit(EXIT_FAILURE);
     }
     FD_SET(s, &reader_set);
-    
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+
+    if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+	log_printf(LOG_ERROR, "setsockopt %s\n", strerror(errno));
+	exit(EXIT_FAILURE);
+    }
     if ( bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));
-	exit(1);
+	exit(EXIT_FAILURE);
     }
 #if defined(__sun)
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
@@ -167,7 +170,7 @@ void server_connect(void) {
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_PLOTS_GROUP);
     if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 	log_printf(LOG_ERROR, "setsocktperror\n");
-	exit(1);
+	exit(EXIT_FAILURE);
     }
 
     return;

@@ -623,7 +623,7 @@ void RBDelete(rb_red_blk_tree* tree, rb_red_blk_node* z){
     /* y is the node to splice out and x is its child */
 
     if (!(y->red)) RBDeleteFixUp(tree,x);
-  
+
 //    tree->DestroyKey(z->key);
 //    tree->DestroyInfo(z->info);
     y->left=z->left;
@@ -636,14 +636,14 @@ void RBDelete(rb_red_blk_tree* tree, rb_red_blk_node* z){
     } else {
       z->parent->right=y;
     }
-    free(z); 
+    free(z);
   } else {
 //    tree->DestroyKey(y->key);
 //    tree->DestroyInfo(y->info);
     if (!(y->red)) RBDeleteFixUp(tree,x);
     free(y);
   }
-  
+
 #ifdef DEBUG_ASSERT
   Assert(!tree->nil->red,"nil not black in RBDelete");
 #endif

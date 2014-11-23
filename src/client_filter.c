@@ -58,20 +58,20 @@ int main(int argc, char *argv[]) {
     addr.sin_port = htons(MULTICAST_PLOTS_PORT);
     if ( (s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
 	log_printf(LOG_ERROR, "socket %s\n", strerror(errno));
-	exit(1);
+	exit(EXIT_FAILURE);
     }
-    
+
     setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     if ( bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));
-	exit(1);
+	exit(EXIT_FAILURE);
     }
-				
+
     mreq.imr_interface.s_addr = inet_addr("127.0.0.1"); //nHostAddress;
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_PLOTS_GROUP);
     if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 	log_printf(LOG_ERROR, "setsocktperror\n");
-	exit(1);
+	exit(EXIT_FAILURE);
     }
 
     while (1) {
@@ -81,27 +81,27 @@ int main(int argc, char *argv[]) {
 
 	if (recvfrom(s, &dbp, dbplen, 0, (struct sockaddr *) &addr, &addrlen) < 0) {
 	    log_printf(LOG_ERROR, "recvfrom\n");
-	    exit(1);
+	    exit(EXIT_FAILURE);
 	}
 
 	if (dbp.cat == CAT_02 ) {
 	    log_printf(LOG_VERBOSE, "--------------------------------\n");
 	}
-        
+
 	if ( (dbp.cat == CAT_01) && (dbp.available & IS_TYPE)/* && (dbp.available & IS_TOD)*/ ) {
 	    char *hora1,*hora2;
 	    if (azi_start != -1.0) {
 		if (! ( (dbp.available & IS_MEASURED_POLAR) && 
 			(dbp.theta >= azi_start ) &&
 			(dbp.theta <= azi_end)) ) {
-		    continue;	
+		    continue;
 		}
 	    }
 	    if (rng_start != -1.0) {
 		if (! ( (dbp.available & IS_MEASURED_POLAR) && 
 			(dbp.rho >= rng_start ) &&
 			(dbp.rho <= rng_end)) ) {
-		    continue;	
+		    continue;
 		}
 	    }
 
@@ -114,9 +114,9 @@ int main(int argc, char *argv[]) {
 	    }
 	    log_printf(LOG_VERBOSE, "[%s/%s] [PLOT %s%s%s%s%s] [AZI %3.3f]"
 		" [DST %03.3f] [MODEA %04o%s%s%s] [FL%03d%s%s] r%d [%s] (%5.3f) [%s] (%3.4f)\n",
-		sac_s , sic_l, 
+		sac_s , sic_l,
 		(dbp.type == NO_DETECTION) ? "unk" : "",
-		(dbp.type & TYPE_C1_PSR) ? "PSR" : "", 
+		(dbp.type & TYPE_C1_PSR) ? "PSR" : "",
 		(dbp.type & TYPE_C1_SSR) ? "SSR" : "",
 		(dbp.type & TYPE_C1_CMB) ? "CMB" : "",
 		(dbp.type & FROM_C1_FIXED_TRANSPONDER) ? "-TRN" : "",
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
 	        mem_free(hora1);
 	    mem_free(hora2);
 	    if (dbp.available & IS_SACSIC) {
-    		mem_free(sac_s);
+		mem_free(sac_s);
 		mem_free(sic_l);
 	    }
 
@@ -148,6 +148,6 @@ int main(int argc, char *argv[]) {
     log_printf(LOG_NORMAL, "end...\n");
 //    log_flush();
 
-    exit(0);
+    exit(EXIT_SUCCESS);
 }
 

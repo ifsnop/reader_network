@@ -67,10 +67,10 @@ DATA_TYPE StackPop(stk_stack * theStack) {
 }
 
 void StackDestroy(stk_stack * theStack,void DestFunc(void * a)) {
-  stk_stack_node * x=theStack->top;
-  stk_stack_node * y;
 
   if(theStack) {
+    stk_stack_node * x=theStack->top;
+    stk_stack_node * y;
     while(x) {
       y=x->next;
       DestFunc(x->info);
@@ -79,5 +79,4 @@ void StackDestroy(stk_stack * theStack,void DestFunc(void * a)) {
     }
     free(theStack);
   }
-} 
-    
+}

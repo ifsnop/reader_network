@@ -106,23 +106,26 @@ int sizeFSPEC = 0;
     return sizeFSPEC;
 }
 
-char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
+char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, struct bds30 * bds) {
+    int i;
 
-    char ptr_260[3*7+1]; int i;
-    for( i = 0; i < 7; i++ ) sprintf((char *)(ptr_260 + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
-    ptr_260[3*7-1] = '\0';
-/*
-    log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n", 
-        dbp.sac, dbp.sic,
-        (dbp.available & IS_MODES_ADDRESS) ? dbp.modes_address : 0,
-        (dbp.available & IS_MODEA) ? dbp.modea : 0,
-        (dbp.modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
-        (dbp.modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
-        (dbp.modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
-        (dbp.available & IS_AIRCRAFT_ID) ? dbp.aircraft_id : (unsigned char*) "",
-        dbp.rho, dbp.theta, dbp.tod);
-*/
-    {
+    for(i = 0; i < 7; i++ ) sprintf((char *)(bds->str30 + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
+    bds->str30[3*7] = '\0';
+
+    log_printf(LOG_NORMAL, "bds3,0 > %s\n", bds->str30);
+
+    log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n",
+        dbp->sac, dbp->sic,
+        (dbp->available & IS_MODES_ADDRESS) ? dbp->modes_address : 0,
+        (dbp->available & IS_MODEA) ? dbp->modea : 0,
+        (dbp->modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+        (dbp->modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+        (dbp->modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+        (dbp->available & IS_AIRCRAFT_ID) ? dbp->aircraft_id : (unsigned char*) "",
+        dbp->rho, dbp->theta, dbp->tod);
+
+    return NULL;
+
         int bds1 = 0; // 4   0..4        0         0
         int bds2 = 0; // 4   5..8        0         4
         int ara = 0;  //     9..22       1,2       0
@@ -147,8 +150,7 @@ char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
         int tid_modec = 0; //13 31..43      3,4,5      bit63..bit75
         int tid_range = 0; // 7     44..50        5,6       bit76..bit82
         float tid_rangef = 0.0;
-
-        int tid_bearing = 0.0;
+        int tid_bearing = 0;
 
         bds1 = (ptr_raw[j + 0] & 0xF0) >> 4;
         bds2 = (ptr_raw[j + 0] & 0x0F);
@@ -241,6 +243,7 @@ char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
                     3 Not assigned
             */
             tti = (ptr_raw[j + 3] & 0x0C) >> 2;
+            bds->tti = tti;
             switch (tti) {
                 case 0:
                     break;
@@ -258,6 +261,7 @@ char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
                     if ((ptr_raw[j+6] & 0x03) != 0) {
                         log_printf(LOG_ERROR, "error with Threat Identity Data subfield in bds3,0, bit87 & 88 should be zero\n");
                     }
+                    bds->tid_ms = tid_ms;
                     break;
                 case 2: {
                     int a1 = 0, a2 = 0, a4 = 0;
@@ -269,7 +273,7 @@ char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
                     int tidr82 = 0;
                     int tidb83 = 0, tidb84 = 0, tidb85 = 0;
                     int tidb86 = 0, tidb87 = 0, tidb88 = 0;
-                
+
                     c1 = (ptr_raw[j+3] & 0x02) >> 1;
                     a1 = (ptr_raw[j+3] & 0x01);
                     c2 = (ptr_raw[j+4] & 0x80) >> 7;
@@ -319,9 +323,14 @@ char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
 
                     tid_bearing = tidb83 << 5 | tidb84 << 4 | tidb85 << 3 |
                         tidb86 << 2 | tidb87 << 1 | tidb88;
-                            
+
                     if (tid_bearing >= 1 && tid_bearing <=60)
                         tid_bearing = (tid_bearing-1) * 6;
+
+                    bds->tid_modec = tid_modec;
+                    bds->tid_rangef = tid_rangef;
+                    bds->tid_bearing = tid_bearing;
+
                     break;
                 }
                 case 3:
@@ -337,7 +346,6 @@ char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot dbp) {
                 log_printf(LOG_NORMAL, "\t048/260 [0] bds1(%d) bds2(%d) ara41(%d) ara(%02X) rac(%02X) mte(%d) rat(%d) tti(%d) [%s]\n", bds1, bds2, ara41, ara, rac, mte, rat, tti, ptr_260);
             }
             */
-        }
 
     return NULL;
 
@@ -476,7 +484,7 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	    }
 	}
 	
@@ -536,7 +544,7 @@ struct datablock_plot dbp;
 		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	    }
         } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	}
     }
     return T_OK;
@@ -579,7 +587,7 @@ struct datablock_plot dbp;
 		    exit(EXIT_FAILURE);
 		}
 	    } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	    }
 	}
     }
@@ -706,7 +714,7 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	    }
 	}
 	
@@ -752,7 +760,7 @@ struct datablock_plot dbp;
 		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	    }
         } else {
-	    update_calculations(dbp);
+	    update_calculations(&dbp);
 	}
     }
     return T_OK;
@@ -812,17 +820,17 @@ int index = 0;
                 case 1: dbp.type = TYPE_C20_OTHERMLAT; break;
                 default: dbp.type = IS_ERROR; break;
             }
-            if (ptr_raw[j] & 1) { 
+            if (ptr_raw[j] & 1) {
                 j++; size_current++;
                 if ((ptr_raw[j] & 128) == 128) dbp.type |= TYPE_C20_RAB;
-                if ((ptr_raw[j] & 64) == 128) dbp.type |= TYPE_C20_SPI;
-                if ((ptr_raw[j] & 32) == 128) dbp.type |= TYPE_C20_CHN;
-                if ((ptr_raw[j] & 16) == 128) dbp.type |= TYPE_C20_GBS;
-                if ((ptr_raw[j] & 8) == 128) dbp.type |= TYPE_C20_CRT;
-                if ((ptr_raw[j] & 4) == 128) dbp.type |= TYPE_C20_SIM;
-                if ((ptr_raw[j] & 2) == 128) dbp.type |= TYPE_C20_TST;
+                if ((ptr_raw[j] & 64) == 64) dbp.type |= TYPE_C20_SPI;
+                if ((ptr_raw[j] & 32) == 32) dbp.type |= TYPE_C20_CHN;
+                if ((ptr_raw[j] & 16) == 16) dbp.type |= TYPE_C20_GBS;
+                if ((ptr_raw[j] & 8) == 8) dbp.type |= TYPE_C20_CRT;
+                if ((ptr_raw[j] & 4) == 4) dbp.type |= TYPE_C20_SIM;
+                if ((ptr_raw[j] & 2) == 2) dbp.type |= TYPE_C20_TST;
             }
-	    j++;size_current++; 
+	    j++;size_current++;
 	    dbp.available |= IS_TYPE;
 	}
 	if ( ptr_raw[0] & 32 ) { //I020/140
@@ -833,10 +841,10 @@ int index = 0;
 	    dbp.available |= IS_TOD;
 	}
 	if ( ptr_raw[0] & 16 ) { /* I020/041 */ j += 8; size_current += 8; }
-	if ( ptr_raw[0] & 8 ) { /* I020/042 */ 
+	if ( ptr_raw[0] & 8 ) { /* I020/042 */
             dbp.x = (ptr_raw[j+0]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]) / 0.5;
 	    dbp.y = (ptr_raw[j+3]*256*256 + ptr_raw[j+4]*256 + ptr_raw[j+5]) / 0.5;
-	    j += 6; size_current += 6; 
+	    j += 6; size_current += 6;
 	    dbp.available |= IS_MEASURED_CARTE;
 	}
 	if ( ptr_raw[0] & 4 ) { /* I020/161 */ j += 2; size_current += 2; }
@@ -854,7 +862,7 @@ int index = 0;
 		if ( ptr_raw[2] & 64 ) { /* I020/210 */ j += 2; size_current += 2; }
 		if ( ptr_raw[2] & 32 ) { /* I020/300 */ j += 1; size_current += 1; }
 		if ( ptr_raw[2] & 16 ) { /* I020/310 */ j += 1; size_current += 1; }
-		if ( ptr_raw[2] & 8 ) { /* I020/500 */ 
+		if ( ptr_raw[2] & 8 ) { /* I020/500 */
 		    int p = j;
 		    if (ptr_raw[p] & 128) { j += 6; size_current += 6; }
 		    if (ptr_raw[p] & 64) { j += 6; size_current += 6; }
@@ -863,7 +871,7 @@ int index = 0;
 		}
 		if ( ptr_raw[2] & 4 ) { /* I020/400 */ int p = ptr_raw[j]+1; j += p; size_current += p; }
 		if ( ptr_raw[2] & 2 ) { /* I020/250 */ int p = ptr_raw[j]*8+1; j += p; size_current += p; }
-		if ( ptr_raw[2] & 1 ) { /* I020/FX3 */ 
+		if ( ptr_raw[2] & 1 ) { /* I020/FX3 */
 		    if ( ptr_raw[3] & 128 ) { /* I020/230 */ j += 2; size_current += 2; }
 		    if ( ptr_raw[3] & 64 ) { /* I020/260 */ j += 7; size_current += 7; }
 		    if ( ptr_raw[3] & 32 ) { /* I020/030 */ while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++; }
@@ -887,7 +895,7 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	    }
 //	}
 	
@@ -1014,7 +1022,7 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	    }
 	}
 	
@@ -1079,7 +1087,7 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-	        update_calculations(dbp);
+	        update_calculations(&dbp);
 	    }
 	    ptr_raw += j;
 	    index++;
@@ -1116,9 +1124,9 @@ unsigned char *datablock_start = NULL;
 	dbp.plot_type = IS_ERROR;
 	dbp.modea_status = 0;
 	dbp.modec_status = 0;
-	dbp.flag_test = 0;
+	//dbp.flag_test = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
-	dbp.radar_responses = 0;
+	//dbp.radar_responses = 0;
 	dbp.rho = 0;
 	dbp.theta = 0;
 	dbp.modes_address = 0;
@@ -1228,7 +1236,7 @@ unsigned char *datablock_start = NULL;
 	            } else if (dbp.aircraft_id[i]>47 && dbp.aircraft_id[i]<=57) {
 	                continue; //dbp.aircraft_id[i] = dbp.aircraft_id[i];
 	            } else {
-	                dbp.aircraft_id[i] = 32;
+	                dbp.aircraft_id[i] = 64;
 	            }
 	        }
 	        for(i=7;i>=0;i--)
@@ -1258,9 +1266,12 @@ unsigned char *datablock_start = NULL;
 		    if ( ptr_raw[k] & 64 ) { int l = j; j += ptr_raw[l]*6 + 1; size_current += ptr_raw[l]*6 + 1; }
 		}
 		if ( ptr_raw[2] & 2 ) { /* I048/230 */
-                    //log_printf(LOG_ERROR, "en I048/230\n");
+                    // log_printf(LOG_ERROR, "en I048/230\n");
+                    // esto se hace aquí porque FILTER_GROUND se define en este dataitem
                     if (fs != NULL) filter_true = filter_test(ptr_raw, j, fs->filter_type);
                     dbp.di048_230_com = (ptr_raw[j] & 0xe0) >> 5;
+                    dbp.di048_230_stat = (ptr_raw[j] & 0x1c) >> 2;
+                    dbp.di048_230_si = (ptr_raw[j] & 0x02) >> 1;
                     dbp.di048_230_mssc = (ptr_raw[j+1] & 0x80) >> 7;
                     dbp.di048_230_arc = (ptr_raw[j+1] & 0x40) >> 6;
                     dbp.di048_230_aic = (ptr_raw[j+1] & 0x20) >> 5;
@@ -1270,7 +1281,7 @@ unsigned char *datablock_start = NULL;
                     j += 2; size_current += 2;
                 }
 		if ( ptr_raw[2] & 1 ) { // FX3
-		    if ( ptr_raw[3] & 128 ) { /* I048/260 */ 
+		    if ( ptr_raw[3] & 128 ) { /* I048/260 */
 /*		        struct bds30s {
 		            unsigned bds1 :4;
 		            unsigned bds2 :4;
@@ -1286,12 +1297,12 @@ unsigned char *datablock_start = NULL;
                         memcpy(dbp.bds_30, ptr_raw + j, 7);
                         dbp.bds_available |= BDS_30;
                         //decode_bds30(dbp.bds_30, 0, dbp);
-                        
+
                         //bds(%08X)\n", bds30->bds1);
                         //log_printf(LOG_NORMAL, "I048/260 bds(%014X)\n", bds30->ara);
-                        
-		        j += 7; size_current += 7; 
-		        //log_printf(LOG_ERROR, "DETECTED I048/260 in %ld !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", id);
+
+		        j += 7; size_current += 7;
+		        //log_printf(LOG_ERROR, "DETECTED I048/260 in %ld as (%d)!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", id, dbp.bds_available);
 		    }
 		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
 		    if ( ptr_raw[3] & 32 ) {  /* I048/050 */ j += 2; size_current += 2; }
@@ -1331,7 +1342,7 @@ unsigned char *datablock_start = NULL;
                     (dbp.available & IS_COMM_CAP) ? dbp.di048_230_com : 0,
                     (dbp.available & IS_COMM_CAP) ? dbp.di048_230_mssc : 0,
                     (dbp.available & IS_COMM_CAP) ? dbp.di048_230_arc : 0,
-                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_aic : 0,            
+                    (dbp.available & IS_COMM_CAP) ? dbp.di048_230_aic : 0,
                     (dbp.available & IS_COMM_CAP) ? dbp.di048_230_b1a : 0,
                     (dbp.available & IS_COMM_CAP) ? dbp.di048_230_b1b : 0);
             }
@@ -1341,7 +1352,7 @@ unsigned char *datablock_start = NULL;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-		update_calculations(dbp);
+		update_calculations(&dbp);
 	    }
 	}
 
@@ -1466,9 +1477,9 @@ int adjust = 0;
 
     for(i=0;i<MAX_RADAR_NUMBER*TTOD_WIDTH;i+=TTOD_WIDTH) {
 	if ( (full_tod[i] == 0) && (full_tod[i+1] == 0) )
-    	    break;
+	    break;
         if ( (full_tod[i] == sac) && (full_tod[i+1] == sic) )
-    	    break;
+	    break;
 	//log_printf(LOG_ERROR, "f)CAT02] (-) %02X %02X array[%02X%02X] i(%d)\n", sac, sic, full_tod[i], full_tod[i+1],i);
     }
 
@@ -1553,7 +1564,7 @@ int adjust = 0;
 };
 
 #ifndef CLIENT_RRD
-void update_calculations(struct datablock_plot dbp) {
+void update_calculations(struct datablock_plot * dbp) {
     return;
-}    
+}
 #endif

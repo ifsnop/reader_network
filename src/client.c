@@ -45,13 +45,17 @@ int main(int argc, char *argv[]) {
     addr.sin_port = htons(MULTICAST_PLOTS_PORT);
     if ( (s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
 	log_printf(LOG_ERROR, "socket %s\n", strerror(errno));
-	exit(1);
+	exit(EXIT_FAILURE);
     }
 
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0 ) {
+        log_printf(LOG_ERROR, "ERROR setsockopt: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
     if ( bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));
-	exit(1);
+	exit(EXIT_FAILURE);
     }
 #if defined(__linux)
     mreq.imr_interface.s_addr = inet_addr("127.0.0.1"); //nHostAddress;
@@ -62,7 +66,7 @@ int main(int argc, char *argv[]) {
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_PLOTS_GROUP);
     if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 	log_printf(LOG_ERROR, "setsocktperror\n");
-	exit(1);
+	exit(EXIT_FAILURE);
     }
 
     while (!forced_exit) {
@@ -73,7 +77,7 @@ int main(int argc, char *argv[]) {
 
 	if (recvfrom(s, &dbp, dbplen, 0, (struct sockaddr *) &addr, &addrlen) < 0) {
 	    log_printf(LOG_ERROR, "recvfrom\n");
-	    exit(1);
+	    exit(EXIT_FAILURE);
 	}
 	if (dbp.cat == CAT_255) {
 	    log_printf(LOG_ERROR, "fin de fichero\n");
@@ -394,6 +398,6 @@ int main(int argc, char *argv[]) {
     log_printf(LOG_NORMAL, "end...\n");
 //    log_flush();
 
-    exit(0);
+    exit(EXIT_SUCCESS);
 }
 

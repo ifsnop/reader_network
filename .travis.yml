@@ -8,9 +8,10 @@ install:
     - sudo apt-get update
     - sudo apt-get -qq install valgrind
 
-script: 
+script:
     - ./build.sh
     - valgrind --leak-check=full --show-reachable=yes bin/reader_network64 bin/conf/066test_filter.conf
+    - valgrind --lean-check=full --show-reachable=yes bin/reader_network64 bin/conf/068test_bds30.conf
     - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364 -s bin/datos/068test_rrd3.gps -o
     - valgrind --leak-check=full --show-reachable=yes bin/cleanast64 bin/datos/local.gps bin/datos/local.ast 2200 0 10
 

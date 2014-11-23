@@ -91,28 +91,28 @@ int main(int argc, char *argv[]) {
     //                                                       ^num extractor
     char ptr_destdir[256], ptr_mkdir[256], ptr_bzip[256], *ptr_filename;
 //    00,06 -> tamano en words
-//    00 -> 
+//    00 ->
 //    02 -> origen msg: ucs
 //    01 -> num. de extractor (si es al de la lan2, poner un 2)
 //    01 -> num. de extractores a los que se dirige el msg (siempre 1)
 //    03,e8 -> codigo del tipo de mensaje
 //    53,69,52,73 -> "SiRs" (si queremos respuestas) empezar
 //    4e,6f,52,73 -> "NoRs" (no queremos respuestas) parar
-//    214.25.250.14:1044 -> 214.25.250.255:5001 UDP (12 bytes)    
-//    214.25.250.14:1044 -> 214.25.250.255:2030 UDP (12 bytes)    
-    
+//    214.25.250.14:1044 -> 214.25.250.255:5001 UDP (12 bytes)
+//    214.25.250.14:1044 -> 214.25.250.255:2030 UDP (12 bytes)
+
     int s_out,ret,/*val=1,*/fd_out;
-    struct sockaddr_in addr1,addr2;
+    //struct sockaddr_in addr1,addr2;
     unsigned char* ptr_in;
     struct timeval current_date,old_date;
-    struct tm *t2;    
+    struct tm *t2;
 
     printf("memresp %s\n", VERSION);
-    
+
     if (argc<2 || argc>3) { //un parametro
 	printf("syntax error: memresp dest_dir [daemon]\ncurrent(%d)\n",argc); exit(EXIT_FAILURE);
     }
-   
+
     if (argc==3 && !strcmp(argv[2],"daemon")) {
         printf("going daemon...\n");
 #ifdef LINUX
@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 	// child (daemon) continues
 	setsid(); // obtain a new process group
 	// close all open filehandlers
-	{ 
+	{
 	    long retcode; int fd=0;
 	    if ( (retcode = sysconf(_SC_OPEN_MAX)) <0 ) {
 		printf("ERROR sysconf: %s\n", strerror(errno)); exit(EXIT_FAILURE);
@@ -140,34 +140,39 @@ int main(int argc, char *argv[]) {
 	    while (fd < retcode) close(fd++);
 	    retcode = open("/dev/null",O_RDWR); dup(retcode); dup(retcode); // handle standart I/O
 	    umask(027); // set newly created file permissions -> 750
-	    // chdir("/"); // change running directory  
+	    // chdir("/"); // change running directory
 	}
 #endif
     }
- 
-    ptr_in = (unsigned char*)malloc(65535);
-    memset(ptr_in, 0x00, 65535);	    
-    ptr_filename = (char*)malloc(256);
+
+    if ( (ptr_in = (unsigned char*)malloc(65535)) == NULL ) {
+        printf("ERROR malloc ptr_in\n"); exit(EXIT_FAILURE);
+    }
+    memset(ptr_in, 0x00, 65535);
+    if ( (ptr_filename = (char*)malloc(256)) == NULL ) {
+        printf("ERROR malloc ptr_filename\n"); exit(EXIT_FAILURE);
+    }
     memset(ptr_filename, 0x00, 256);
 
 // captura de senyales para salir limpiamente (mandando un stop al volcado de resp
     signal(SIGHUP,gotsig);signal(SIGINT,gotsig);
     signal(SIGKILL,gotsig);signal(SIGSTOP,gotsig);
     signal(SIGTERM,gotsig);
-    
+
 // envio del paquete para empezar el volcado
 // desativado, ya no es necesario pedir que empiece el volcado, la suscripción se hace 
 // a través del webbrowser
 
     s_out = 0; //socket(AF_INET, SOCK_DGRAM, 0);
     if (s_out<0) {printf("error socket out:%s\n",strerror(errno)); exit(EXIT_FAILURE);}
-    
+/*
     addr1.sin_family = AF_INET;
     addr1.sin_port = htons(8000); // puerto
     addr1.sin_addr.s_addr = inet_addr(MCAST_SOURCE_IP); // ip destino
     addr2.sin_family = AF_INET;
     addr2.sin_port = htons(8000); // puerto
     addr2.sin_addr.s_addr = inet_addr(MCAST_SOURCE_IP); // ip destino
+*/
 //    ret = setsockopt(s_out, SOL_SOCKET, SO_BROADCAST, (const char*)&val, sizeof(val)); // obligado para escribir en broadcast
 //    if (ret<0) {printf("error setsockopt(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE);}
 
@@ -188,28 +193,28 @@ int main(int argc, char *argv[]) {
     current_date.tv_sec = old_date.tv_sec = current_date.tv_sec - (current_date.tv_sec % LAP_TIME);
     t2 = gmtime(&current_date.tv_sec);
 
-    sprintf(ptr_destdir, "%s/%02d/", argv[1], t2->tm_mday);
-    sprintf(ptr_mkdir, "/bin/mkdir -p %s", ptr_destdir);
+    snprintf(ptr_destdir, 255, "%s/%02d/", argv[1], t2->tm_mday);
+    snprintf(ptr_mkdir, 255, "/bin/mkdir -p %s", ptr_destdir);
     if ((ret = system(ptr_mkdir)) < 0) {
        printf("error mkdir: %s\n", strerror(errno)); exit(EXIT_FAILURE);
     }
-    sprintf(ptr_filename, "%s%02d%02d%02d.bin", ptr_destdir, t2->tm_hour, t2->tm_min, t2->tm_sec);
+    snprintf(ptr_filename, 255, "%s%02d%02d%02d.bin", ptr_destdir, t2->tm_hour, t2->tm_min, t2->tm_sec);
     printf(">%s\n", ptr_filename);
-	
+
     fd_out = open(ptr_filename, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR
                       | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if (fd_out<0) { printf("error open(1): %s (%s)\n", strerror(errno), ptr_filename); exit(EXIT_FAILURE); }
 
-    while(do_exit==0) { 
+    while(do_exit==0) {
 	int select_count = 0;
 	struct timeval timeout;
 	fd_set reader_set;
 
 	timeout.tv_sec = 2; timeout.tv_usec = 0;
-	
+
 	FD_ZERO(&reader_set);
 	FD_SET(s_in, &reader_set);
-	
+
 ///
 	select_count = select(s_in+1, &reader_set, NULL, NULL, &timeout);
 ///
@@ -222,12 +227,12 @@ int main(int argc, char *argv[]) {
 	    sprintf(ptr_bzip, "/bin/sh -c '/bin/bzip2 %s' &", ptr_filename); 
 	    system(ptr_bzip);
 	    t2 = gmtime(&current_date.tv_sec);
-            sprintf(ptr_destdir, "%s/%02d/", argv[1], t2->tm_mday);
-            sprintf(ptr_mkdir, "/bin/mkdir -p %s", ptr_destdir);
+            snprintf(ptr_destdir, 255, "%s/%02d/", argv[1], t2->tm_mday);
+            snprintf(ptr_mkdir, 255, "/bin/mkdir -p %s", ptr_destdir);
             if ((ret = system(ptr_mkdir)) < 0) {
                printf("error mkdir: %s\n", strerror(errno)); exit(EXIT_FAILURE);
             }
-            sprintf(ptr_filename, "%s%02d%02d%02d.bin", ptr_destdir, t2->tm_hour, t2->tm_min, t2->tm_sec);
+            snprintf(ptr_filename, 255, "%s%02d%02d%02d.bin", ptr_destdir, t2->tm_hour, t2->tm_min, t2->tm_sec);
 
 	    fd_out = open(ptr_filename, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 	    if (fd_out<0) { printf("error open(2): %s (%s)\n", strerror(errno), ptr_filename); exit(EXIT_FAILURE); }
@@ -260,7 +265,7 @@ int main(int argc, char *argv[]) {
 	    }
 	}
 //	if (do_exit) { printf("salir\n"); }
-    }    
+    }
 //    printf("salido\n");
 /*
     // no es necesario enviar un "para el envio", porque lo controlamos desde el webbrowser

@@ -158,4 +158,6 @@ void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsign
 int ast_get_size_FSPEC(unsigned char *ptr_raw, ssize_t size_datablock);
 inline char* parse_hora(float segs);
 bool filter_test(unsigned char *ptr_raw, int ptr, int filter_type);
+char * decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, struct bds30 * bds);
+
 //void update_calculations(struct datablock_plot dbp);
