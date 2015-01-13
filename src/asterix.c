@@ -134,19 +134,19 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
 
     char modes_s[9] = "NULL\0\0\0\0\0";
     char aid_s[11] = "NULL\0\0\0\0\0\0\0";
-    char modea_s[6] = "NULL\0\0";
+    char modea_s[9] = "NULL\0\0\0\0\0";
     char modea_v_s[5] = "NULL\0";
     char modea_g_s[5] = "NULL\0";
     char modea_l_s[5] = "NULL\0";
-    char modec_s[6] = "NULL\0\0";
+    char modec_s[9] = "NULL\0\0\0\0\0";
     char modec_v_s[5] = "NULL\0";
     char modec_g_s[5] = "NULL\0";
     char rho_s[9] = "NULL\0\0\0\0\0";
     char theta_s[9] = "NULL\0\0\0\0\0";
     char tid_s[9] = "NULL\0\0\0\0\0";
-    char tida_s[5] = "NULL\0";
-    char tidr_s[5] = "NULL\0";
-    char tidb_s[5] = "NULL\0";
+    char tida_s[9] = "NULL\0\0\0\0\0";
+    char tidr_s[9] = "NULL\0\0\0\0\0";
+    char tidb_s[9] = "NULL\0\0\0\0\0";
 
     int i;
 
