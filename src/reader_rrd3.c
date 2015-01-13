@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2015 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -34,7 +34,87 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
-//date --utc --date "2012-03-02 00:00:00" +%s
+//DROP TABLE IF EXISTS ras;
+#define QUOTE(...) #__VA_ARGS__
+const char *init_table_bds30 = QUOTE(
+CREATE TABLE IF NOT EXISTS ras (
+    sac TINYINT(3) UNSIGNED NOT NULL DEFAULT '0',
+    sic TINYINT(3) UNSIGNED NOT NULL DEFAULT '0',
+    region varchar(12) NOT NULL DEFAULT 'none',
+    modea SMALLINT(5) UNSIGNED DEFAULT NULL,
+    modea_v TINYINT(1) DEFAULT NULL,
+    modea_g TINYINT(1) DEFAULT NULL,
+    modea_l TINYINT(1) DEFAULT NULL,
+    modec SMALLINT(5) DEFAULT NULL,
+    modec_v TINYINT(1) DEFAULT NULL,
+    modec_g TINYINT(1) DEFAULT NULL,
+    modes VARCHAR(6) DEFAULT NULL,
+    aid VARCHAR(8) DEFAULT NULL,
+    rho DECIMAL(7,4) DEFAULT NULL,
+    theta DECIMAL(7,4) DEFAULT NULL,
+    tod DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
+    tod_stamp DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
+    lat FLOAT DEFAULT NULL,
+    lon FLOAT DEFAULT NULL,
+    ara41 TINYINT(1) NOT NULL DEFAULT 0,
+    ara42 TINYINT(1) NOT NULL DEFAULT 0,
+    ara43 TINYINT(1) NOT NULL DEFAULT 0,
+    ara44 TINYINT(1) NOT NULL DEFAULT 0,
+    ara45 TINYINT(1) NOT NULL DEFAULT 0,
+    ara46 TINYINT(1) NOT NULL DEFAULT 0,
+    ara47 TINYINT(1) NOT NULL DEFAULT 0,
+    rac55 TINYINT(1) NOT NULL DEFAULT 0,
+    rac56 TINYINT(1) NOT NULL DEFAULT 0,
+    rac57 TINYINT(1) NOT NULL DEFAULT 0,
+    rac58 TINYINT(1) NOT NULL DEFAULT 0,
+    rat TINYINT(1) NOT NULL DEFAULT 0,
+    mte TINYINT(1) NOT NULL DEFAULT 0,
+    tti TINYINT(1) NOT NULL DEFAULT 0,
+    tid VARCHAR(6) DEFAULT NULL,
+    tida SMALLINT(5) UNSIGNED DEFAULT NULL,
+    tidr TINYINT(3) UNSIGNED DEFAULT NULL,
+    tidb TINYINT(3) UNSIGNED DEFAULT NULL,
+    bds30 VARCHAR(14) DEFAULT NULL,
+    insert_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (sac,sic,region,tod),
+    KEY timestamp (tod)
+    )
+);
+/*
+const char *init_table_bds30_create_idx = QUOTE(
+    CREATE UNIQUE INDEX ras_idx ON ras (sac, sic, tod, bds30)
+);
+const char *init_table_bds30_check_idx = QUOTE(
+    SELECT COUNT(*) AS count
+    FROM INFORMATION_SCHEMA.STATISTICS
+    WHERE table_schema='cocir' AND
+    table_name='ras' AND
+    index_name='ras_idx'
+);
+*/
+const char *init_table_availability3 = QUOTE(
+    CREATE TABLE IF NOT EXISTS availability3 (
+    sac_sic_cat varchar(12) NOT NULL,
+    region varchar(12) NOT NULL DEFAULT 'none',
+    timestamp int(11) NOT NULL,
+    cuenta int(11) NOT NULL,
+    max float NOT NULL,
+    min float NOT NULL,
+    media float NOT NULL,
+    stdev float NOT NULL,
+    p99 float NOT NULL,
+    insert_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (sac_sic_cat,region,timestamp),
+    KEY timestamp (timestamp)
+    )
+);
+
+//    seconds DECIMAL(9,4) NOT NULL DEFAULT '0.0000',
+//    seconds_midnight INT UNSIGNED NOT NULL DEFAULT '0',
+
+char stmt[2048]; // = NULL;
+
+// date --utc --date "2012-03-02 00:00:00" +%s
 // date -d @1193144433
 float current_time_today = 0.0;
 struct sockaddr_in cliaddr,srvaddr;
@@ -52,13 +132,13 @@ time_t midnight_t; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actua
 char *region_name = NULL;
 char *rrd_directory = NULL;
 char *dest_file = NULL,
-    *dest_file_final_ast = NULL, *dest_file_final_gps = NULL, 
+    *dest_file_final_ast = NULL, *dest_file_final_gps = NULL,
     *source_file = NULL, **radar_definition;
 char source[] = "file";
 int *radar_counter = NULL; // plots recibidos por cada flujo
 int *radar_counter_bytes = NULL; // bytes recibidos por cada flujo
 int dest_file_format = DEST_FILE_FORMAT_AST;
-int radar_count = 0; // numero de entradas en el array de definicion de radares. 
+int radar_count = 0; // numero de entradas en el array de definicion de radares.
     // para saber el numero de radares, hay que dividir entre 5! (5 columnas por radar)
 int socket_count = 0, s_output_multicast = -1, offset = 0;
 int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
@@ -69,6 +149,7 @@ int update_last = 0;
 int error_count = 0;
 int do_delays = 0;
 int do_bds30 = 0;
+int do_batch = 0;
 
 struct Queue {
     rb_red_blk_node **node;
@@ -169,6 +250,71 @@ void parse_config() {
     return;
 }
 
+MYSQL *mysql_con = NULL;
+MYSQL_RES *mysql_res;
+MYSQL_ROW mysql_row;
+
+void setup_mysql() {
+    if ( mysql_library_init(0, NULL, NULL) != 0 ) {
+        log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_library_init): %s\n", mysql_error(mysql_con));
+        exit(EXIT_FAILURE);
+    }
+    if ( (mysql_con = mysql_init(NULL)) == NULL ) {
+        log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_init): %s\n", mysql_error(mysql_con));
+        exit(EXIT_FAILURE);
+    }
+    if ( mysql_real_connect(mysql_con, "192.168.0.34",
+        "reader_rrd", "reader_rrd", "cocir", 0, NULL,
+        0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
+        log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_real_connect): %s\n", mysql_error(mysql_con));
+        exit(EXIT_FAILURE);
+    }
+    if ( do_bds30 ) {
+        if ( mysql_query(mysql_con, init_table_bds30) != 0 ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+/*
+        if ( mysql_query(mysql_con, init_table_bds30_check_idx) != 0 ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30_check_idx): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+        if ( (mysql_res = mysql_store_result(mysql_con)) == NULL ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_store_result): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+        if ( (mysql_row = mysql_fetch_row(mysql_res)) == NULL ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_fetch_row): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+        int index_count = atoi(mysql_row[0]);
+        if (index_count == 0) {
+            if ( mysql_query(mysql_con, init_table_bds30_create_idx) != 0 ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30_create_idx): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
+        }
+        mysql_free_result(mysql_res);
+*/
+    }
+    if ( do_delays ) {
+        if ( mysql_query(mysql_con, init_table_availability3) != 0 ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_availability3): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+    }
+    return;
+}
+
+void close_mysql() {
+    //mysql_thread_end();
+
+    mysql_close(mysql_con);
+    mysql_library_end();
+
+    return;
+}
+
 void setup_time(long timestamp) {
     struct timeval t;
     struct tm *t2;
@@ -177,7 +323,7 @@ void setup_time(long timestamp) {
 	log_printf(LOG_ERROR, "ERROR setenv\n");
 	exit(EXIT_FAILURE);
     }
-    if (timestamp>0) {
+    if (timestamp>=0) {
 	midnight_t = timestamp;
 	return;
     }
@@ -432,6 +578,21 @@ void radar_delay_free(void) {
     mem_free(radar_delay);
 }
 
+void usage(char *argv0) {
+    log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
+    log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file -y|-3 [-o] [-l] -r region_name [-d rrd_directory]\n\n"
+        "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
+        "\t-s asterix input source file\n"
+        "\t-o output to stdout instead of using /usr/local/bin/rrd_update3.sh\n"
+        "\t-y calculate and store plot delays\n"
+        "\t-3 extract and store bds3.0\n"
+        "\t-l put last decoded timestamp (default not)\n"
+        "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
+        "\t-d rrd directory, to create the rrd database\n\n"
+        , argv0, midnight_t);
+    return;
+}
+
 int main(int argc, char *argv[]) {
 
     ssize_t ast_size_total = 0;
@@ -447,7 +608,7 @@ int main(int argc, char *argv[]) {
     //unsigned long count2_plot_unique = 0;
     //unsigned long count2_plot_duped = 0;
     unsigned long count2_udp_received = 0;
-    long timestamp = 0;
+    long timestamp = -1;
 
     int opt = 0; // getopt
     int long_index = 0; // getopt
@@ -459,6 +620,7 @@ int main(int argc, char *argv[]) {
         {"region_name",	  required_argument, 0,  'r' },
         {"rrd_directory", required_argument, 0,  'd' },
         {"do_bds30"     , no_argument,       0,  '3' },
+        {"do_batch"     , no_argument,       0,  'b' },
         {"do_delays"    , no_argument,       0,  'y' },
         {0,		  0,		     0,  0   }
     };
@@ -475,7 +637,7 @@ int main(int argc, char *argv[]) {
 
     setup_time(0);
 
-    while ((opt = getopt_long(argc, argv,"t:s:ol3yr:d:",
+    while ((opt = getopt_long(argc, argv,"t:s:ol3ybr:d:",
 	long_options, &long_index )) != -1) {
         switch (opt) {
 	    case 't' :
@@ -504,37 +666,20 @@ int main(int argc, char *argv[]) {
 	    case '3' :
 		do_bds30 = 1;
 		break;
+	    case 'b' :
+		do_batch = 1;
+		break;
 	    case 'd' :
 		rrd_directory = optarg;
 		break;
 	    default:
-		log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-		log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file -y|-3 [-o] [-l] [-r region_name] [-d rrd_directory] \n\n"
-		    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
-		    "\t-s asterix input source file\n"
-		    "\t-o output to stdout instead of using /usr/local/bin/rrd_update3.sh\n"
-                    "\t-y calculate and store plot delays\n"
-                    "\t-3 extract and store bds3.0\n"
-		    "\t-l put last decoded timestamp (default not)\n"
-		    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
-		    "\t-d rrd directory, to create the rrd database\n\n"
-		    , argv[0], midnight_t);
-		exit(EXIT_SUCCESS);
+                usage(argv[0]);
+                exit(EXIT_SUCCESS);
 	}
     }
 
-    if (source_file == NULL || ( do_bds30 == 0 && do_delays == 0 ) ) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
-	log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file -y|-3 [-o] [-l] [-r region_name] [-d rrd_directory]\n\n"
-	    "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
-	    "\t-s asterix input source file\n"
-	    "\t-o output to stdout instead of using /usr/local/bin/rrd_update3.sh\n"
-            "\t-y calculate and store plot delays\n"
-            "\t-3 extract and store bds3.0\n"
-	    "\t-l put last decoded timestamp (default not)\n"
-	    "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
-	    "\t-d rrd directory, to create the rrd database\n\n"
-	    , argv[0], midnight_t);
+    if (region_name == NULL || source_file == NULL || ( do_bds30 == 0 && do_delays == 0 ) ) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
+        usage(argv[0]);
 	exit(EXIT_SUCCESS);
     }
 
@@ -555,6 +700,10 @@ int main(int argc, char *argv[]) {
 
     setup_time(timestamp);
     setup_crc32_table();
+
+    if (!stdout_output)
+        setup_mysql();
+
     if (mode_scrm) {
 	tree = RBTreeCreate(UIntComp,AddQueue,DeleteQueue);
 	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * SCRM_MAX_QUEUE_SIZE);
@@ -688,8 +837,12 @@ int main(int argc, char *argv[]) {
     log_flush();
 
     if (stdout_output == 0) {
-        log_printf(LOG_ERROR, "\nstats received[%ld] processed[%ld]/ignored[%ld]\n",
+        log_printf(LOG_ERROR, "stats received[%ld] processed[%ld]/ignored[%ld]\n",
             count2_udp_received, count2_plot_processed, count2_plot_ignored);
+    }
+
+    if (do_bds30 && !stdout_output) {
+        close_mysql();
     }
 
 //    log_flush();
@@ -721,10 +874,21 @@ void update_calculations(struct datablock_plot *dbp) {
 	forced_exit = true;
     }
     //log_printf(LOG_ERROR, "1(%d)\n", dbp->bds_available & BDS_30);
-    if ( do_bds30 && (dbp->bds_available & BDS_30) ) {
+    if ( do_bds30 && dbp->bds_available & BDS_30 ) {
         struct bds30 bds;
         //log_printf(LOG_ERROR, "2\n");
-        decode_bds30(dbp->bds_30, 0, dbp, &bds);
+        decode_bds30(dbp->bds_30, 0, dbp, &bds, stmt);
+
+        if (stdout_output) {
+            log_printf(LOG_NORMAL, "%s", stmt);
+        } else {
+            if (mysql_query(mysql_con, stmt) != 0) {
+                log_printf(LOG_ERROR, "ERROR decode_bds30 (mysql_query): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
+            //MYSQL_RES *mysql_res = mysql_use_result(mysql_con);
+            //mysql_free_result(mysql_res);
+        }
     }
     //log_printf(LOG_ERROR, "3\n");
 
@@ -748,7 +912,6 @@ void update_calculations(struct datablock_plot *dbp) {
 	//printf("sac:%d sic:%d tod:%s tod_stamp:%s diff:%3.3f\n", dbp.sac, dbp.sic, parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff);
 	//log_printf(LOG_VERBOSE, "%3.7f\n", d.quot*UPDATE_TIME_RRD + UPDATE_TIME_RRD);
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
-
 
         if (fabs(dbp->tod_stamp  - last_tod_stamp) > 86000)
             midnight_t += 86400; // new day
@@ -894,7 +1057,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l1 + ( (sc1_1 - sc1_3) / ( (sc1_1 - sc1_3) + (sc1_1 - sc1_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat1 / radar_delay[i].cuenta_plot_cat1) - 
 			pow(radar_delay[i].suma_retardos_cat1 / radar_delay[i].cuenta_plot_cat1,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 1, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 1, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat1, radar_delay[i].max_retardo_cat1, radar_delay[i].min_retardo_cat1,
 			media, stdev, moda, p99_cat1);
@@ -918,7 +1081,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l2 + ( (sc2_1 - sc2_3) / ( (sc2_1 - sc2_3) + (sc2_1 - sc2_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat2 / radar_delay[i].cuenta_plot_cat2) - 
 			pow(radar_delay[i].suma_retardos_cat2 / radar_delay[i].cuenta_plot_cat2,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 2, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 2, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat2, radar_delay[i].max_retardo_cat2, radar_delay[i].min_retardo_cat2,
 			media, stdev, moda, p99_cat2);
@@ -942,7 +1105,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l8 + ( (sc8_1 - sc8_3) / ( (sc8_1 - sc8_3) + (sc8_1 - sc8_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat8 / radar_delay[i].cuenta_plot_cat8) - 
 			pow(radar_delay[i].suma_retardos_cat8 / radar_delay[i].cuenta_plot_cat8,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 8, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 8, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat8, radar_delay[i].max_retardo_cat8, radar_delay[i].min_retardo_cat8,
 			media, stdev, moda, p99_cat8);
@@ -966,7 +1129,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l10 + ( (sc10_1 - sc10_3) / ( (sc10_1 - sc10_3) + (sc10_1 - sc10_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat10 / radar_delay[i].cuenta_plot_cat10) - 
 			pow(radar_delay[i].suma_retardos_cat10 / radar_delay[i].cuenta_plot_cat10,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 10, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 10, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat10, radar_delay[i].max_retardo_cat10, radar_delay[i].min_retardo_cat10,
 			media, stdev, moda, p99_cat10);
@@ -990,7 +1153,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l19 + ( (sc19_1 - sc19_3) / ( (sc19_1 - sc19_3) + (sc19_1 - sc19_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat19 / radar_delay[i].cuenta_plot_cat19) -
 			pow(radar_delay[i].suma_retardos_cat19 / radar_delay[i].cuenta_plot_cat19,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 19, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 19, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat19, radar_delay[i].max_retardo_cat19, radar_delay[i].min_retardo_cat19,
 			media, stdev, moda, p99_cat19);
@@ -1014,7 +1177,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l20 + ( (sc20_1 - sc20_3) / ( (sc20_1 - sc20_3) + (sc20_1 - sc20_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat20 / radar_delay[i].cuenta_plot_cat20) -
 			pow(radar_delay[i].suma_retardos_cat20 / radar_delay[i].cuenta_plot_cat20,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 20, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 20, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat20, radar_delay[i].max_retardo_cat20, radar_delay[i].min_retardo_cat20,
 			media, stdev, moda, p99_cat20);
@@ -1038,7 +1201,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l21 + ( (sc21_1 - sc21_3) / ( (sc21_1 - sc21_3) + (sc21_1 - sc21_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat21 / radar_delay[i].cuenta_plot_cat21) - 
 			pow(radar_delay[i].suma_retardos_cat21 / radar_delay[i].cuenta_plot_cat21,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 21, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 21, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat21, radar_delay[i].max_retardo_cat21, radar_delay[i].min_retardo_cat21,
 			media, stdev, moda, p99_cat21);
@@ -1062,7 +1225,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l34 + ( (sc34_1 - sc34_3) / ( (sc34_1 - sc34_3) + (sc34_1 - sc34_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat34 / radar_delay[i].cuenta_plot_cat34) - 
 			pow(radar_delay[i].suma_retardos_cat34 / radar_delay[i].cuenta_plot_cat34,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 34, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 34, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat34, radar_delay[i].max_retardo_cat34, radar_delay[i].min_retardo_cat34,
 			media, stdev, moda, p99_cat34);
@@ -1086,7 +1249,7 @@ void update_calculations(struct datablock_plot *dbp) {
 		    moda = l48 + ( (sc48_1 - sc48_3) / ( (sc48_1 - sc48_3) + (sc48_1 - sc48_2) ) ) * 0.005;
 		    stdev = sqrt((radar_delay[i].suma_retardos_cuad_cat48 / radar_delay[i].cuenta_plot_cat48) - 
 			pow(radar_delay[i].suma_retardos_cat48 / radar_delay[i].cuenta_plot_cat48,2));
-		    update_RRD(radar_delay[i].sac, radar_delay[i].sic, 48, i,
+		    update(radar_delay[i].sac, radar_delay[i].sic, 48, i,
 			((long) dbp->tod_stamp) + midnight_t - UPDATE_TIME_RRD,
 			radar_delay[i].cuenta_plot_cat48, radar_delay[i].max_retardo_cat48, radar_delay[i].min_retardo_cat48,
 			media, stdev, moda, p99_cat48);
@@ -1281,44 +1444,45 @@ RRA:MIN:0.5:288:797",rrd_path);
     return;
 }
 
-void update_RRD(int sac, int sic, int cat, int i, long timestamp, float cuenta, float max,
+void update(int sac, int sic, int cat, int i, long timestamp, float cuenta, float max,
     float min, float media, float stdev, float moda, float p99) {
-    char *cmd;
+
     int ret = 0;
     ldiv_t q;
 
     if ( cat != 1 && cat != 48 && cat !=19 && cat != 20)
-	return;
-
-    moda = (moda < -7.994) || (moda > 7.996) ? 0 : moda;
-    max = (max == -10000) ? 0 : max;
-    min = (min == +10000) ? 0 : min;
-
-    if (rrd_directory != NULL)
-        create_database(sac, sic, cat, timestamp);
+        return;
 
     q = ldiv(timestamp, UPDATE_TIME_RRD);
     timestamp = timestamp - q.rem;
 
-/*mysql -u root cocir -e "REPLACE INTO availability3
-(sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) VALUES
-(\"$1\",\"${REGION}\",$2,$3,$4,$5,$6,$7,$8,now());" >> /home/eval/cocir/logs/${REGION}_${1}_v3.log 2>&1*/
+    // do_delays = 1
+    snprintf(stmt, 2047, "REPLACE INTO availability3 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) "
+        "VALUES ('%03d_%03d_%03d', '%s', %ld, %3.0f, %f, %f, %f, %f, %f, now())\n",
+        sac, sic, cat,
+        (region_name != NULL ? region_name : "none"), timestamp,
+        cuenta, max, min, media, stdev, p99);
 
-    cmd = mem_alloc(512);
-    if (!stdout_output) { // == 0 ejecutando scripts
-	sprintf(cmd, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat, 
-	    (region_name != NULL ? region_name : ""), timestamp, cuenta, max, min, media, stdev, p99);
-	if ( (ret = system(cmd)) == -1 ) {
-            log_printf(LOG_ERROR, "error ejecutando cmd(%s)\n", cmd);
+    if ( stdout_output ) {
+        log_printf(LOG_NORMAL, "%s", stmt);
+    } else {
+        if (mysql_query(mysql_con, stmt) != 0) {
+            log_printf(LOG_ERROR, "ERROR decode_bds30 (mysql_query): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
         }
-    } else { // == 1, sacando directamente los inserts
-	sprintf(cmd, "REPLACE INTO availability3 (sac_sic_cat,region,timestamp,cuenta,max,min,media,stdev,p99,insert_date) "
-	    "VALUES ('%03d_%03d_%03d', '%s', %ld, %3.0f, %f, %f, %f, %f, %f, now());", 
-            sac, sic, cat,
-            (region_name != NULL ? region_name : ""), timestamp,
-            cuenta, max, min, media, stdev, p99);
-	log_printf(LOG_NORMAL,"%s\n",cmd);
     }
-    mem_free(cmd);
+
+    if ( do_batch) {
+        moda = (moda < -7.994) || (moda > 7.996) ? 0 : moda;
+        max = (max == -10000) ? 0 : max;
+        min = (min == +10000) ? 0 : min;
+
+	snprintf(stmt, 2047, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat,
+	    (region_name != NULL ? region_name : ""), timestamp, cuenta, max, min, media, stdev, p99);
+	if ( (ret = system(stmt)) != 0 ) {
+            log_printf(LOG_ERROR, "error(%d) ejecutando cmd(%s)\n", ret, stmt);
+        }
+    }
+
     return;
 }

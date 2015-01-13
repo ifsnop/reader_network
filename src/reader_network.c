@@ -42,7 +42,8 @@ bool mode_daemon = false;
 bool mode_scrm = false;
 long timed = 0;
 long timed_stats_interval = 0;
-time_t t3; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
+time_t midnight_t; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
+char *region_name = NULL; //not used in reader_networ, but in reader_rrd3 & asterix
 char *source, *dest_file = NULL, *dest_file_region = NULL,
     *dest_file_extension = NULL,
     *dest_file_final_ast = NULL, *dest_file_final_gps = NULL,
@@ -780,7 +781,7 @@ struct tm *t2;
 	exit(EXIT_FAILURE);
     }
     t2->tm_sec = 0; t2->tm_min = 0; t2->tm_hour = 0;
-    if ((t3 = mktime(t2))==-1) { //segundos a las 00:00:00 de hoy
+    if ((midnight_t = mktime(t2))==-1) { //segundos a las 00:00:00 de hoy
 	log_printf(LOG_ERROR, "ERROR mktime (setup_time): %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
     }
@@ -977,7 +978,7 @@ unsigned long count2_plot_filtered = 0;
 			(ast_ptr_raw[ast_pos + ast_size_datablock + 3] << 24) ) / 1000.0;
 		}
 	    } else {
-		current_time_today = (t.tv_sec - t3) + t.tv_usec / 1000000.0;
+		current_time_today = (t.tv_sec - midnight_t) + t.tv_usec / 1000000.0;
 	    }
 
             filter_struct fs;
@@ -1220,7 +1221,7 @@ unsigned long count2_plot_filtered = 0;
 	    select_count = select(s_reader[socket_count - 1] + 1, &reader_set, NULL, NULL, &timeout);
 
 	    gettimeofday(&t, NULL); // for gps & queue timestamp
-	    current_time_today = ((t.tv_sec - t3) % 86400) + t.tv_usec / 1000000.0; // segundos desde las 00:00:00
+	    current_time_today = ((t.tv_sec - midnight_t) % 86400) + t.tv_usec / 1000000.0; // segundos desde las 00:00:00
 	    current_timestamp = (t.tv_sec) + (t.tv_usec / 1000000.0); // segundos desde 01-01-1970 a las 00:00:00
 
 	    // PURGE OLD ELEMENTS FROM DUPE QUEUE

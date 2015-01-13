@@ -67,3 +67,6 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include "reader_rrd.h"
 #include "curl/multi.h"
 #include "md5.h"
+#ifdef CLIENT_RRD
+#include <mysql.h>
+#endif

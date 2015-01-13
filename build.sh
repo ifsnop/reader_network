@@ -105,8 +105,8 @@ for destarch in $destarchs; do
 
     gcc $gccopts -o bin/reader_network${destarch}${arch} $rncfiles src/reader_network.c $rnopts
     #strip bin/reader_network${destarch} 2> /dev/null
-    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts
-
+    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts -I/usr/include/mysql -DBIG_JOINS=1 -L/usr/lib/x86_64-linux-gnu -lmysqlclient
+#`mysql_config --libs | cut -d ' ' -f1`
     gcc $gccopts -o bin/client_time${destarch}${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
     gcc $gccopts -o bin/client${destarch}${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
     gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts

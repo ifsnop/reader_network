@@ -61,3 +61,4 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define DEST_FILE_FORMAT_UNKNOWN 1
 #define DEST_FILE_FORMAT_AST 2
 #define DEST_FILE_FORMAT_GPS 4
+
