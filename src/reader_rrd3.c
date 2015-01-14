@@ -263,8 +263,8 @@ void setup_mysql() {
         log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_init): %s\n", mysql_error(mysql_con));
         exit(EXIT_FAILURE);
     }
-    if ( mysql_real_connect(mysql_con, "192.168.0.34",
-        "reader_rrd", "reader_rrd", "cocir", 0, NULL,
+    if ( mysql_real_connect(mysql_con, NULL,
+        "root", NULL, "cocir", 0, NULL,
         0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
         log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_real_connect): %s\n", mysql_error(mysql_con));
         exit(EXIT_FAILURE);
@@ -635,7 +635,7 @@ int main(int argc, char *argv[]) {
 
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
 
-    setup_time(0);
+    setup_time(-1);
 
     while ((opt = getopt_long(argc, argv,"t:s:ol3ybr:d:",
 	long_options, &long_index )) != -1) {
