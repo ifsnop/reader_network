@@ -147,12 +147,39 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
     char tida_s[9] = "NULL\0\0\0\0\0";
     char tidr_s[9] = "NULL\0\0\0\0\0";
     char tidb_s[9] = "NULL\0\0\0\0\0";
+    
+    char com_s[5] = "NULL\0";
+    char stat_s[5] = "NULL\0";
+    char si_s[5] = "NULL\0";
+    char mssc_s[5] = "NULL\0";
+    char arc_s[5] = "NULL\0";
+    char aic_s[5] = "NULL\0";
+    char b1a_s[5] = "NULL\0";
+    char b1b_s[5] = "NULL\0";
 
+    char bds10[14] = "NULL\0";
+    char bds17[14] = "NULL\0";
+    char bds30_s[15] = "NULL\0";
+    char bds40_s[14] = "NULL\0";
+    char bds50_s[14] = "NULL\0";
+    char bds60_s[14] = "NULL\0";
+    
+/*
+    dbp.di048_230_com = (ptr_raw[j] & 0xe0) >> 5;
+    dbp.di048_230_stat = (ptr_raw[j] & 0x1c) >> 2;
+    dbp.di048_230_si = (ptr_raw[j] & 0x02) >> 1;
+    dbp.di048_230_mssc = (ptr_raw[j+1] & 0x80) >> 7;
+    dbp.di048_230_arc = (ptr_raw[j+1] & 0x40) >> 6;
+    dbp.di048_230_aic = (ptr_raw[j+1] & 0x20) >> 5;
+    dbp.di048_230_b1a = (ptr_raw[j+1] & 0x10) >> 4;
+    dbp.di048_230_b1b = (ptr_raw[j+1] & 0x0f);
+    dbp.available |= IS_COMM_CAP;
+*/
     int i;
 
     for(i = 0; i < 7; i++)
-        sprintf((char *)(bds->str30 + i*2), "%02X", (unsigned char) (ptr_raw[j+i]));
-    bds->str30[2*7] = '\0';
+        sprintf((char *)(bds30_s + i*2), "%02X", (unsigned char) (ptr_raw[j+i]));
+    bds30_s[2*7] = '\0';
 
     //log_printf(LOG_NORMAL, "bds3,0>%s<\n", bds->str30); 
 /*
@@ -175,7 +202,20 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
 
     if (bds1 != 3 || bds2 != 0) {
         log_printf(LOG_ERROR, "bds stored in 048/260 should be 3,0 and was %d,%d, aborting\n", bds1, bds2);
-        return;
+        log_printf(LOG_ERROR, "I048/260 sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) "
+            "FL(%d%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n",
+            dbp->sac, dbp->sic,
+            (dbp->available & IS_MODES_ADDRESS) ? dbp->modes_address : 0,
+            (dbp->available & IS_MODEA) ? dbp->modea : 0,
+            (dbp->modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+            (dbp->modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+            (dbp->modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+            (dbp->available & IS_MODEC) ? dbp->modec : -1,
+            (dbp->modec_status & STATUS_MODEC_GARBLED) ? "G" : "",
+            (dbp->modec_status & STATUS_MODEC_NOTVALIDATED) ? "I" : "",
+            (dbp->available & IS_AIRCRAFT_ID) ? dbp->aircraft_id : (unsigned char*) "",
+            dbp->rho, dbp->theta, dbp->tod + ((double)midnight_t));
+        //return;
     }
 
     ara41 = (ptr_raw[j + 1] & 0x80) >> 7;

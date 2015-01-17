@@ -77,7 +77,6 @@ struct datablock_plot {
 };
 
 struct bds30 {
-    char str30[3*7+1];          //      printable bds3,0
     unsigned char ara41;        //      CAT48
     unsigned char ara42;        //      CAT48
     unsigned char ara43;        //      CAT48
