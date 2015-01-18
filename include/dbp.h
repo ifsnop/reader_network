@@ -41,23 +41,26 @@ struct datablock_plot {
     int modea_status;			//	CAT01
     int available;			//	CAT01 CAT48
 
-    union {                                 //      CAT48
+    union {                                     //      CAT48
         struct {
-            int modes_address;                  //      CAT48
-            unsigned char aircraft_id[9];       //      CAT48
-            unsigned char di048_230_com;        //      CAT48
-            unsigned char di048_230_stat;       //      CAT48
-            unsigned char di048_230_si;         //      CAT48
-            unsigned char di048_230_mssc;       //      CAT48
-            unsigned char di048_230_arc;        //      CAT48
-            unsigned char di048_230_aic;        //      CAT48
-            unsigned char di048_230_b1a;        //      CAT48
-            unsigned char di048_230_b1b;        //      CAT48
-            unsigned char bds_available;        //      CAT48
-            unsigned char bds_10[7];            //      CAT48
-            unsigned char bds_17[7];            //      CAT48
-            unsigned char bds_30[7];            //      CAT48
-            int modes_status;			//	CAT48
+            int modes_address;
+            unsigned char aircraft_id[9];
+            unsigned char di048_230_com;
+            unsigned char di048_230_stat;
+            unsigned char di048_230_si;
+            unsigned char di048_230_mssc;
+            unsigned char di048_230_arc;
+            unsigned char di048_230_aic;
+            unsigned char di048_230_b1a;
+            unsigned char di048_230_b1b;
+            unsigned char bds_10[8];
+            unsigned char bds_17[8];
+            unsigned char bds_30[7];
+            unsigned char bds_40[8];
+            unsigned char bds_50[8];
+            unsigned char bds_60[8];
+            int modes_status;
+            int bds_available;
         };
         struct {
             int radar_responses;		//	CAT01

@@ -108,6 +108,25 @@ int sizeFSPEC = 0;
     return sizeFSPEC;
 }
 
+void error_cat48(struct datablock_plot * dbp) {
+
+    log_printf(LOG_ERROR, "sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) "
+        "FL(%d%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n",
+        dbp->sac, dbp->sic,
+        (dbp->available & IS_MODES_ADDRESS) ? dbp->modes_address : 0,
+        (dbp->available & IS_MODEA) ? dbp->modea : 0,
+        (dbp->modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
+        (dbp->modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
+        (dbp->modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
+        (dbp->available & IS_MODEC) ? dbp->modec : -1,
+        (dbp->modec_status & STATUS_MODEC_GARBLED) ? "G" : "",
+        (dbp->modec_status & STATUS_MODEC_NOTVALIDATED) ? "I" : "",
+        (dbp->available & IS_AIRCRAFT_ID) ? dbp->aircraft_id : (unsigned char*) "",
+        dbp->rho, dbp->theta, dbp->tod + ((double)midnight_t));
+    return;
+
+}
+
 void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, struct bds30 * bds, char * stmt) {
 
                    //          byte     bit from start
@@ -147,7 +166,7 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
     char tida_s[9] = "NULL\0\0\0\0\0";
     char tidr_s[9] = "NULL\0\0\0\0\0";
     char tidb_s[9] = "NULL\0\0\0\0\0";
-    
+
     char com_s[5] = "NULL\0";
     char stat_s[5] = "NULL\0";
     char si_s[5] = "NULL\0";
@@ -157,64 +176,51 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
     char b1a_s[5] = "NULL\0";
     char b1b_s[5] = "NULL\0";
 
-    char bds10[14] = "NULL\0";
-    char bds17[14] = "NULL\0";
-    char bds30_s[15] = "NULL\0";
-    char bds40_s[14] = "NULL\0";
-    char bds50_s[14] = "NULL\0";
-    char bds60_s[14] = "NULL\0";
-    
-/*
-    dbp.di048_230_com = (ptr_raw[j] & 0xe0) >> 5;
-    dbp.di048_230_stat = (ptr_raw[j] & 0x1c) >> 2;
-    dbp.di048_230_si = (ptr_raw[j] & 0x02) >> 1;
-    dbp.di048_230_mssc = (ptr_raw[j+1] & 0x80) >> 7;
-    dbp.di048_230_arc = (ptr_raw[j+1] & 0x40) >> 6;
-    dbp.di048_230_aic = (ptr_raw[j+1] & 0x20) >> 5;
-    dbp.di048_230_b1a = (ptr_raw[j+1] & 0x10) >> 4;
-    dbp.di048_230_b1b = (ptr_raw[j+1] & 0x0f);
-    dbp.available |= IS_COMM_CAP;
-*/
+    char bds10_s[8*2+2+1] = "NULL\0"; // 8 bytes + 2 comillas + 1 null
+    char bds17_s[8*2+2+1] = "NULL\0";
+    char bds30_s[7*2+1] = "NULL\0";
+    char bds40_s[8*2+2+1] = "NULL\0";
+    char bds50_s[8*2+2+1] = "NULL\0";
+    char bds60_s[8*2+2+1] = "NULL\0";
+
     int i;
 
-    for(i = 0; i < 7; i++)
-        sprintf((char *)(bds30_s + i*2), "%02X", (unsigned char) (ptr_raw[j+i]));
-    bds30_s[2*7] = '\0';
+    // already tested, never bds30 can be NULL
+    for(i = 0; i < 7; i++) sprintf((char *)(bds30_s + i*2), "%02X", (unsigned char) (ptr_raw[j+i])); bds30_s[2*7] = '\0';
 
-    //log_printf(LOG_NORMAL, "bds3,0>%s<\n", bds->str30); 
-/*
-    log_printf(LOG_NORMAL, "I048/260 sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) "
-        "FL(%d%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n",
-        dbp->sac, dbp->sic,
-        (dbp->available & IS_MODES_ADDRESS) ? dbp->modes_address : 0,
-        (dbp->available & IS_MODEA) ? dbp->modea : 0,
-        (dbp->modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
-        (dbp->modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
-        (dbp->modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
-        (dbp->available & IS_MODEC) ? dbp->modec : -1,
-        (dbp->modec_status & STATUS_MODEC_GARBLED) ? "G" : "",
-        (dbp->modec_status & STATUS_MODEC_NOTVALIDATED) ? "I" : "",
-        (dbp->available & IS_AIRCRAFT_ID) ? dbp->aircraft_id : (unsigned char*) "",
-        dbp->rho, dbp->theta, dbp->tod + ((double)midnight_t));
-*/
+    if (dbp->bds_available & BDS_10) {
+        bds10_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds10_s + i*2+1), "%02X", (unsigned char) (dbp->bds_10[i])); bds10_s[2*8+1] = '\''; bds10_s[2*8+2] = '\0';
+    }
+    if (dbp->bds_available & BDS_17) {
+        bds17_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds17_s + i*2+1), "%02X", (unsigned char) (dbp->bds_17[i])); bds17_s[2*8+1] = '\''; bds17_s[2*8+2] = '\0';
+    }
+    if (dbp->bds_available & BDS_40) {
+        bds40_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds40_s + i*2+1), "%02X", (unsigned char) (dbp->bds_40[i])); bds40_s[2*8+1] = '\''; bds40_s[2*8+2] = '\0';
+    }
+    if (dbp->bds_available & BDS_50) {
+        bds50_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds50_s + i*2+1), "%02X", (unsigned char) (dbp->bds_50[i])); bds50_s[2*8+1] = '\''; bds50_s[2*8+2] = '\0';
+    }
+    if (dbp->bds_available & BDS_60) {
+        bds60_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds60_s + i*2+1), "%02X", (unsigned char) (dbp->bds_60[i])); bds60_s[2*8+1] = '\''; bds60_s[2*8+2] = '\0';
+    }
+
+    if (dbp->available & IS_COMM_CAP) {
+        snprintf(com_s, 2, "%d", dbp->di048_230_com);
+        snprintf(stat_s, 2, "%d", dbp->di048_230_stat);
+        snprintf(si_s, 2, "%d", dbp->di048_230_si);
+        snprintf(mssc_s, 2, "%d", dbp->di048_230_mssc);
+        snprintf(arc_s, 2, "%d", dbp->di048_230_arc);;
+        snprintf(aic_s, 2, "%d", dbp->di048_230_aic);
+        snprintf(b1a_s, 2, "%d", dbp->di048_230_b1a);
+        snprintf(b1b_s, 2, "%d", dbp->di048_230_b1b);
+    }
+
     bds1 = (ptr_raw[j + 0] & 0xF0) >> 4;
     bds2 = (ptr_raw[j + 0] & 0x0F);
 
     if (bds1 != 3 || bds2 != 0) {
         log_printf(LOG_ERROR, "bds stored in 048/260 should be 3,0 and was %d,%d, aborting\n", bds1, bds2);
-        log_printf(LOG_ERROR, "I048/260 sac(%d) sic(%d) modes(%06X) modea(%04o%s%s%s) "
-            "FL(%d%s%s) aid(%s) rho(%3.3f) theta(%3.3f) tod(%3.3f)\n",
-            dbp->sac, dbp->sic,
-            (dbp->available & IS_MODES_ADDRESS) ? dbp->modes_address : 0,
-            (dbp->available & IS_MODEA) ? dbp->modea : 0,
-            (dbp->modea_status & STATUS_MODEA_GARBLED) ? "G" : "",
-            (dbp->modea_status & STATUS_MODEA_NOTVALIDATED) ? "I" : "",
-            (dbp->modea_status & STATUS_MODEA_SMOOTHED) ? "S" : "",
-            (dbp->available & IS_MODEC) ? dbp->modec : -1,
-            (dbp->modec_status & STATUS_MODEC_GARBLED) ? "G" : "",
-            (dbp->modec_status & STATUS_MODEC_NOTVALIDATED) ? "I" : "",
-            (dbp->available & IS_AIRCRAFT_ID) ? dbp->aircraft_id : (unsigned char*) "",
-            dbp->rho, dbp->theta, dbp->tod + ((double)midnight_t));
+        error_cat48(dbp);
         //return;
     }
 
@@ -256,6 +262,7 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
             tid |= (ptr_raw[j+6] & 0xFC) >> 2;
             if ((ptr_raw[j+6] & 0x03) != 0) {
                 log_printf(LOG_ERROR, "error with Threat Identity Data subfield in bds3,0, bit87 & 88 should be zero\n");
+                error_cat48(dbp);
             }
             bds->tid = tid;
             break;
@@ -358,27 +365,34 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
     }
 
 
+
 /*1*/   snprintf(stmt, 2048, "REPLACE INTO ras (sac, sic, region, modea, modea_v, modea_g, "
 /*2*/        "modea_l, modec, modec_v, modec_g, modes, "
 /*3*/        "aid, rho, theta, tod, tod_stamp, lat, lon, "
-/*5*/        "ara41, ara42, ara43, ara44, ara45, "
-/*6*/        "ara46, ara47, rac55, rac56, rac57, "
-/*7*/        "rac58, rat, mte, tti, tid, tida, "
-/*8*/        "tidr, tidb, bds30, insert_date) "
+/*4*/        "di48_230_com, di48_230_stat, di48_230_si, di48_230_mssc, di48_230_arc, di48_230_aic, di48_230_b1a, di48_230_b1b, "
+/*5*/        "bds30_ara41, bds30_ara42, bds30_ara43, bds30_ara44, bds30_ara45, "
+/*6*/        "bds30_ara46, bds30_ara47, bds30_rac55, bds30_rac56, bds30_rac57, "
+/*7*/        "bds30_rac58, bds30_rat, bds30_mte, bds30_tti, bds30_tid, bds30_tida, "
+/*8*/        "bds30_tidr, bds30_tidb, "
+/*9*/        "bds10, bds17, bds30, bds40, bds50, bds60, insert_date) "
 /*1*/        "VALUES (%d, %d, '%s', %s, %s, %s, "
 /*2*/        "%s, %s, %s, %s, %s, "
 /*3*/        "%s, %s, %s, %3.4f, %3.4f, NULL, NULL, "
+/*4*/        "%s, %s, %s, %s, %s, %s, %s, %s, "
 /*5*/        "%d, %d, %d, %d, %d, "
 /*6*/        "%d, %d, %d, %d, %d, "
 /*7*/        "%d, %d, %d, %d, %s, %s, "
-/*8*/        "%s, %s, '%s', NOW());\n",
+/*8*/        "%s, %s, "
+/*9*/        "%s, %s, '%s', %s, %s, %s, NOW());\n",
 /*1*/        dbp->sac, dbp->sic, region_name, modea_s, modea_v_s, modea_g_s,
 /*2*/        modea_l_s, modec_s, modec_v_s, modec_g_s, modes_s,
 /*3*/        aid_s, rho_s, theta_s, dbp->tod + ((double) midnight_t), dbp->tod_stamp + ((double) midnight_t),
+/*4*/        com_s, stat_s, si_s, mssc_s, arc_s, aic_s, b1a_s, b1b_s,
 /*5*/        bds->ara41, bds->ara42, bds->ara43, bds->ara44, bds->ara45,
 /*6*/        bds->ara46, bds->ara47, bds->rac55, bds->rac56, bds->rac57,
 /*7*/        bds->rac58, bds->rat59, bds->mte60, bds->tti61, tid_s, tida_s,
-/*8*/        tidr_s, tidb_s, bds->str30
+/*8*/        tidr_s, tidb_s,
+/*9*/        bds10_s, bds17_s, bds30_s, bds40_s, bds50_s, bds60_s
     );
 
     return;
@@ -1289,7 +1303,34 @@ unsigned char *datablock_start = NULL;
 	        j += 6; size_current += 6;
                 dbp.available |= IS_AIRCRAFT_ID;
 	    }
-	    if ( ptr_raw[1] & 32 ) {  /* I048/250 */ int k = j; j += ptr_raw[k]*8 + 1 ; size_current += ptr_raw[k]*8 + 1; }
+	    if ( ptr_raw[1] & 32 ) {  /* I048/250 */
+                int rep = ptr_raw[j];
+                size_current++; j++;
+                while (rep>0) {
+                    unsigned char *ptr = NULL;
+                    switch (ptr_raw[j+7]) {
+                        case 0x10: ptr = dbp.bds_10; dbp.bds_available |= BDS_10; break;
+                        case 0x17: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
+                        case 0x40: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
+                        case 0x50: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
+                        case 0x60: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
+                        default:
+                            log_printf(LOG_ERROR, "unknown BDS %02X\n", ptr_raw[j+7]);
+                            error_cat48(&dbp);
+                    }
+                    if (ptr) {
+                        int zero_count = 0, i = 0;
+                        for(i=0; i<8; i++) if (ptr_raw[j+i] == 0x0) zero_count++;
+                        if (zero_count == 8) { // bds was all zeros, print warning
+                            log_printf(LOG_ERROR, "BDS %02X was all zeros\n", ptr_raw[j+7]);
+                            error_cat48(&dbp);
+                        }
+                        memcpy(ptr, ptr_raw + j, 8);
+                    }
+                    j += 8; size_current += 8;
+                    rep--;
+                }
+            }
 	    if ( ptr_raw[1] & 16 ) {  /* I048/161 */ j += 2; size_current += 2; }
 	    if ( ptr_raw[1] & 8 ) {   /* I048/042 */ j += 4; size_current += 4; }
 	    if ( ptr_raw[1] & 4 ) {   /* I048/200 */ j += 4; size_current += 4; }
@@ -1322,27 +1363,9 @@ unsigned char *datablock_start = NULL;
                 }
 		if ( ptr_raw[2] & 1 ) { // FX3
 		    if ( ptr_raw[3] & 128 ) { /* I048/260 */
-/*		        struct bds30s {
-		            unsigned bds1 :4;
-		            unsigned bds2 :4;
-		            unsigned ara  :14;
-		            unsigned rac  :4;
-		            unsigned ra_terminated :1;
-		            unsigned multiple :1;
-		            unsigned thread_type :2;
-		            unsigned thread_identity :26;
-		        };
-                        //struct bds30s *bds30 = (struct bds30s *) (ptr_raw + j);
-*/
                         memcpy(dbp.bds_30, ptr_raw + j, 7);
                         dbp.bds_available |= BDS_30;
-                        //decode_bds30(dbp.bds_30, 0, dbp);
-
-                        //bds(%08X)\n", bds30->bds1);
-                        //log_printf(LOG_NORMAL, "I048/260 bds(%014X)\n", bds30->ara);
-
 		        j += 7; size_current += 7;
-		        //log_printf(LOG_ERROR, "DETECTED I048/260 in %ld as (%d)!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", id, dbp.bds_available);
 		    }
 		    if ( ptr_raw[3] & 64 ) {  /* I048/055 */ j += 1; size_current += 1; }
 		    if ( ptr_raw[3] & 32 ) {  /* I048/050 */ j += 2; size_current += 2; }
