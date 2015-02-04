@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS ras (
     modea_v TINYINT(1) DEFAULT NULL,
     modea_g TINYINT(1) DEFAULT NULL,
     modea_l TINYINT(1) DEFAULT NULL,
-    modec SMALLINT(5) DEFAULT NULL,
+    modec MEDIUMINT(9) DEFAULT NULL,
     modec_v TINYINT(1) DEFAULT NULL,
     modec_g TINYINT(1) DEFAULT NULL,
     modes VARCHAR(6) DEFAULT NULL,
@@ -54,8 +54,13 @@ CREATE TABLE IF NOT EXISTS ras (
     theta DECIMAL(7,4) DEFAULT NULL,
     tod DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
     tod_stamp DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
-    lat FLOAT DEFAULT NULL,
-    lon FLOAT DEFAULT NULL,
+    lat DOUBLE(9,6) DEFAULT NULL,
+    lon DOUBLE(9,6) DEFAULT NULL,
+    e DOUBLE DEFAULT NULL,
+    h DOUBLE DEFAULT NULL,
+    x DOUBLE DEFAULT NULL,
+    y DOUBLE DEFAULT NULL,
+    z DOUBLE DEFAULT NULL,
     di48_230_com TINYINT(3) DEFAULT NULL,
     di48_230_stat TINYINT(3) DEFAULT NULL,
     di48_230_si TINYINT(1) DEFAULT NULL,
@@ -84,13 +89,18 @@ CREATE TABLE IF NOT EXISTS ras (
     bds30_tidb TINYINT(3) UNSIGNED DEFAULT NULL,
     bds10 VARCHAR(16) DEFAULT NULL,
     bds17 VARCHAR(16) DEFAULT NULL,
-    bds30 VARCHAR(14) NOT NULL,
+    bds30 VARCHAR(16) DEFAULT NULL,
     bds40 VARCHAR(16) DEFAULT NULL,
     bds50 VARCHAR(16) DEFAULT NULL,
     bds60 VARCHAR(16) DEFAULT NULL,
     insert_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (sac,sic,region,tod),
-    KEY timestamp (tod)
+    KEY tod_idx (tod),
+    KEY lat_idx (lat),
+    KEY lon_idx (lon),
+    KEY x_idx (x),
+    KEY y_idx (y),
+    KEY z_idx (z)
     )
 );
 /*
@@ -277,8 +287,8 @@ void setup_mysql() {
         exit(EXIT_FAILURE);
     }
     if ( mysql_real_connect(mysql_con,
-        //NULL, "root", NULL, "cocir", 0, NULL,
-        "192.168.0.34", "reader_rrd", "reader_rrd", "cocir", 0, NULL,
+        NULL, "root", NULL, "cocir", 0, NULL,
+        //"192.168.0.34", "reader_rrd", "reader_rrd", "cocir", 0, NULL,
         0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
         log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_real_connect): %s\n", mysql_error(mysql_con));
         exit(EXIT_FAILURE);
@@ -891,7 +901,7 @@ void update_calculations(struct datablock_plot *dbp) {
     if ( do_bds30 && dbp->bds_available & BDS_30 ) {
         struct bds30 bds;
         //log_printf(LOG_ERROR, "2\n");
-        decode_bds30(dbp->bds_30, 0, dbp, &bds, stmt);
+        decode_bds30(dbp, &bds, stmt);
 
         if (stdout_output) {
             log_printf(LOG_NORMAL, "%s", stmt);

@@ -127,7 +127,7 @@ void error_cat48(struct datablock_plot * dbp) {
 
 }
 
-void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, struct bds30 * bds, char * stmt) {
+void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * dbp, struct bds30 * bds, char * stmt) {
 
                    //          byte     bit from start
     int bds1 = 0;  //    0      0       -- +4
@@ -178,16 +178,16 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
 
     char bds10_s[8*2+2+1] = "NULL\0"; // 8 bytes + 2 comillas + 1 null
     char bds17_s[8*2+2+1] = "NULL\0";
-    char bds30_s[7*2+1] = "NULL\0";
+    char bds30_s[8*2+2+1] = "NULL\0";
     char bds40_s[8*2+2+1] = "NULL\0";
     char bds50_s[8*2+2+1] = "NULL\0";
     char bds60_s[8*2+2+1] = "NULL\0";
 
     int i;
 
-    // already tested, never bds30 can be NULL
-    for(i = 0; i < 7; i++) sprintf((char *)(bds30_s + i*2), "%02X", (unsigned char) (ptr_raw[j+i])); bds30_s[2*7] = '\0';
-
+    if (dbp->bds_available & BDS_30) {
+        bds30_s[0] = '\''; for(i = 0; i < 7; i++) sprintf((char *)(bds30_s + i*2+1), "%02X", (unsigned char) (dbp->bds_30[i])); bds30_s[2*7+1] = '3'; bds30_s[2*7+2] = '0';  bds30_s[2*7+3] = '\'';  bds30_s[2*7+4] = '\0';
+    }
     if (dbp->bds_available & BDS_10) {
         bds10_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds10_s + i*2+1), "%02X", (unsigned char) (dbp->bds_10[i])); bds10_s[2*8+1] = '\''; bds10_s[2*8+2] = '\0';
     }
@@ -215,8 +215,8 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
         snprintf(b1b_s, 2, "%d", dbp->di048_230_b1b);
     }
 
-    bds1 = (ptr_raw[j + 0] & 0xF0) >> 4;
-    bds2 = (ptr_raw[j + 0] & 0x0F);
+    bds1 = (dbp->bds_30[0] & 0xF0) >> 4;
+    bds2 = (dbp->bds_30[0] & 0x0F);
 
     if (bds1 != 3 || bds2 != 0) {
         log_printf(LOG_ERROR, "bds stored in 048/260 should be 3,0 and was %d,%d, aborting\n", bds1, bds2);
@@ -224,43 +224,43 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
         //return;
     }
 
-    ara41 = (ptr_raw[j + 1] & 0x80) >> 7;
-    ara42 = (ptr_raw[j + 1] & 0x40) >> 6;
-    ara43 = (ptr_raw[j + 1] & 0x20) >> 5;
-    ara44 = (ptr_raw[j + 1] & 0x10) >> 4;
-    ara45 = (ptr_raw[j + 1] & 0x08) >> 3;
-    ara46 = (ptr_raw[j + 1] & 0x04) >> 2;
-    ara47 = (ptr_raw[j + 1] & 0x02) >> 1;
+    ara41 = (dbp->bds_30[1] & 0x80) >> 7;
+    ara42 = (dbp->bds_30[1] & 0x40) >> 6;
+    ara43 = (dbp->bds_30[1] & 0x20) >> 5;
+    ara44 = (dbp->bds_30[1] & 0x10) >> 4;
+    ara45 = (dbp->bds_30[1] & 0x08) >> 3;
+    ara46 = (dbp->bds_30[1] & 0x04) >> 2;
+    ara47 = (dbp->bds_30[1] & 0x02) >> 1;
     bds->ara41 = ara41; bds->ara42 = ara42;
     bds->ara43 = ara43; bds->ara44 = ara44;
     bds->ara45 = ara45; bds->ara46 = ara46;
     bds->ara47 = ara47;
-    rac55 = (ptr_raw[j + 2] & 0x02) >> 1;
-    rac56 = (ptr_raw[j + 2] & 0x01);
-    rac57 = (ptr_raw[j + 3] & 0x80) >> 7;
-    rac58 = (ptr_raw[j + 3] & 0x40) >> 6;
+    rac55 = (dbp->bds_30[2] & 0x02) >> 1;
+    rac56 = (dbp->bds_30[2] & 0x01);
+    rac57 = (dbp->bds_30[3] & 0x80) >> 7;
+    rac58 = (dbp->bds_30[3] & 0x40) >> 6;
     bds->rac55 = rac55; bds->rac56 = rac56;
     bds->rac57 = rac57; bds->rac58 = rac58;
-    rat59 = (ptr_raw[j + 3] & 0x20) >> 5;
+    rat59 = (dbp->bds_30[3] & 0x20) >> 5;
     bds->rat59 = rat59;
-    mte60 = (ptr_raw[j + 3] & 0x10) >> 4;
+    mte60 = (dbp->bds_30[3] & 0x10) >> 4;
     bds->mte60 = mte60;
-    tti61 = (ptr_raw[j + 3] & 0x0C) >> 2;
+    tti61 = (dbp->bds_30[3] & 0x0C) >> 2;
     bds->tti61 = tti61;
 
     switch (tti61) {
         case 0:
             break;
         case 1:
-            tid = (ptr_raw[j+3] & 0x03) << 6;
-            tid |= (ptr_raw[j+4] & 0xFC) >> 2;
+            tid = (dbp->bds_30[3] & 0x03) << 6;
+            tid |= (dbp->bds_30[4] & 0xFC) >> 2;
             tid <<= 8;
-            tid |= (ptr_raw[j+4] & 0x03) << 6;
-            tid |= (ptr_raw[j+5] & 0xFC) >> 2;
+            tid |= (dbp->bds_30[4] & 0x03) << 6;
+            tid |= (dbp->bds_30[5] & 0xFC) >> 2;
             tid <<= 8;
-            tid |= (ptr_raw[j+5] & 0x03) << 6;
-            tid |= (ptr_raw[j+6] & 0xFC) >> 2;
-            if ((ptr_raw[j+6] & 0x03) != 0) {
+            tid |= (dbp->bds_30[5] & 0x03) << 6;
+            tid |= (dbp->bds_30[6] & 0xFC) >> 2;
+            if ((dbp->bds_30[6] & 0x03) != 0) {
                 log_printf(LOG_ERROR, "error with Threat Identity Data subfield in bds3,0, bit87 & 88 should be zero\n");
                 error_cat48(dbp);
             }
@@ -277,18 +277,18 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
             int tidb83 = 0, tidb84 = 0, tidb85 = 0;
             int tidb86 = 0, tidb87 = 0, tidb88 = 0;
 
-            c1 = (ptr_raw[j+3] & 0x02) >> 1;
-            a1 = (ptr_raw[j+3] & 0x01);
-            c2 = (ptr_raw[j+4] & 0x80) >> 7;
-            a2 = (ptr_raw[j+4] & 0x40) >> 6;
-            c4 = (ptr_raw[j+4] & 0x20) >> 5;
-            a4 = (ptr_raw[j+4] & 0x10) >> 4;
-            b1 = (ptr_raw[j+4] & 0x04) >> 2;
-            d1 = (ptr_raw[j+4] & 0x02) >> 1;
-            b2 = (ptr_raw[j+4] & 0x01);
-            d2 = (ptr_raw[j+5] & 0x80) >> 7;
-            b4 = (ptr_raw[j+5] & 0x40) >> 6;
-            d4 = (ptr_raw[j+5] & 0x20) >> 5;
+            c1 = (dbp->bds_30[3] & 0x02) >> 1;
+            a1 = (dbp->bds_30[3] & 0x01);
+            c2 = (dbp->bds_30[4] & 0x80) >> 7;
+            a2 = (dbp->bds_30[4] & 0x40) >> 6;
+            c4 = (dbp->bds_30[4] & 0x20) >> 5;
+            a4 = (dbp->bds_30[4] & 0x10) >> 4;
+            b1 = (dbp->bds_30[4] & 0x04) >> 2;
+            d1 = (dbp->bds_30[4] & 0x02) >> 1;
+            b2 = (dbp->bds_30[4] & 0x01);
+            d2 = (dbp->bds_30[5] & 0x80) >> 7;
+            b4 = (dbp->bds_30[5] & 0x40) >> 6;
+            d4 = (dbp->bds_30[5] & 0x20) >> 5;
             tida = d1<<11 | d2<<10 | d4<<9 | a1<<8 | a2<<7 | a4<<6 | b1<<5 | b2<<4 | b4<<3 | c1<<2 | c2<<1 | c4;
             //Format MSB to LSB: D2 D4 A1 A2 A4 B1 B2 B4 C1 C2 C4
             tida ^= (tida >> 8); tida ^= (tida >> 4);
@@ -296,23 +296,23 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
             tida -= (((tida >> 4) * 6) + ((((tida) % 16) / 5) * 2));
             tida = (tida - 13)*100;
 
-            tidr76 = (ptr_raw[j+5] & 0x10) >> 4;
-            tidr77 = (ptr_raw[j+5] & 0x08) >> 3;
-            tidr78 = (ptr_raw[j+5] & 0x04) >> 2;
-            tidr79 = (ptr_raw[j+5] & 0x02) >> 1;
-            tidr80 = (ptr_raw[j+5] & 0x01);
-            tidr81 = (ptr_raw[j+6] & 0x80) >> 7;
-            tidr82 = (ptr_raw[j+6] & 0x40) >> 6;
+            tidr76 = (dbp->bds_30[5] & 0x10) >> 4;
+            tidr77 = (dbp->bds_30[5] & 0x08) >> 3;
+            tidr78 = (dbp->bds_30[5] & 0x04) >> 2;
+            tidr79 = (dbp->bds_30[5] & 0x02) >> 1;
+            tidr80 = (dbp->bds_30[5] & 0x01);
+            tidr81 = (dbp->bds_30[6] & 0x80) >> 7;
+            tidr82 = (dbp->bds_30[6] & 0x40) >> 6;
             tidr = tidr76 << 6 | tidr77 << 5 | tidr78 << 4 |
                 tidr79 << 3 | tidr80 << 2 | tidr81 << 1 | tidr82;
             // tid range float = (tid_range-1.0)/10.0;
 
-            tidb83 = (ptr_raw[j+6] & 0x20) >> 5;
-            tidb84 = (ptr_raw[j+6] & 0x10) >> 4;
-            tidb85 = (ptr_raw[j+6] & 0x08) >> 3;
-            tidb86 = (ptr_raw[j+6] & 0x04) >> 2;
-            tidb87 = (ptr_raw[j+6] & 0x02) >> 1;
-            tidb88 = (ptr_raw[j+6] & 0x01);
+            tidb83 = (dbp->bds_30[6] & 0x20) >> 5;
+            tidb84 = (dbp->bds_30[6] & 0x10) >> 4;
+            tidb85 = (dbp->bds_30[6] & 0x08) >> 3;
+            tidb86 = (dbp->bds_30[6] & 0x04) >> 2;
+            tidb87 = (dbp->bds_30[6] & 0x02) >> 1;
+            tidb88 = (dbp->bds_30[6] & 0x01);
             tidb = tidb83 << 5 | tidb84 << 4 | tidb85 << 3 |
                 tidb86 << 2 | tidb87 << 1 | tidb88;
             // tid bearing int = (tid_bearing-1) * 6;
@@ -383,7 +383,7 @@ void decode_bds30(unsigned char * ptr_raw, int j, struct datablock_plot * dbp, s
 /*6*/        "%d, %d, %d, %d, %d, "
 /*7*/        "%d, %d, %d, %d, %s, %s, "
 /*8*/        "%s, %s, "
-/*9*/        "%s, %s, '%s', %s, %s, %s, NOW());\n",
+/*9*/        "%s, %s, %s, %s, %s, %s, NOW());\n",
 /*1*/        dbp->sac, dbp->sic, region_name, modea_s, modea_v_s, modea_g_s,
 /*2*/        modea_l_s, modec_s, modec_v_s, modec_g_s, modes_s,
 /*3*/        aid_s, rho_s, theta_s, dbp->tod + ((double) midnight_t), dbp->tod_stamp + ((double) midnight_t),
@@ -1311,9 +1311,10 @@ unsigned char *datablock_start = NULL;
                     switch (ptr_raw[j+7]) {
                         case 0x10: ptr = dbp.bds_10; dbp.bds_available |= BDS_10; break;
                         case 0x17: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
-                        case 0x40: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
-                        case 0x50: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
-                        case 0x60: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
+                        case 0x30: ptr = dbp.bds_30; dbp.bds_available |= BDS_30; break;
+                        case 0x40: ptr = dbp.bds_40; dbp.bds_available |= BDS_40; break;
+                        case 0x50: ptr = dbp.bds_50; dbp.bds_available |= BDS_50; break;
+                        case 0x60: ptr = dbp.bds_60; dbp.bds_available |= BDS_60; break;
                         default:
                             log_printf(LOG_ERROR, "unknown BDS %02X\n", ptr_raw[j+7]);
                             error_cat48(&dbp);
