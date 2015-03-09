@@ -34,6 +34,8 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null, 3 full_tod, 2 max_ttod */
 
+
+// ICAO 4.3.8.4.2.2 Subfields in MB
 //DROP TABLE IF EXISTS ras;
 #define QUOTE(...) #__VA_ARGS__
 const char *init_table_bds30 = QUOTE(

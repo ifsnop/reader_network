@@ -40,7 +40,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include "defines.h"
 #define LAP_TIME 600
 
-#define MCAST_SOURCE_IP "214.25.250.1"
+#define MCAST_SOURCE_IP "214.25.250.2"
 #define MCAST_DEST_PORT 8008
 #define MCAST_GROUP_IP "225.25.250.8"
 
