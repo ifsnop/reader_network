@@ -1,6 +1,7 @@
 0.68beta5
 - BUG: reader_rrd3 default timestamp was 0, return to
 seconds from midnight of current day.
+- SOPORTE: added filtercat, to filter gps files by category.
 
 0.68beta4
 - SOPORTE: reader_rrd3 exports cat1, 48, 19 & 20 delays.
