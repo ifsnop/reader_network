@@ -53,6 +53,7 @@ struct datablock_plot {
             unsigned char di048_230_aic;
             unsigned char di048_230_b1a;
             unsigned char di048_230_b1b;
+            unsigned char bds_00[8];
             unsigned char bds_10[8];
             unsigned char bds_17[8];
             unsigned char bds_30[7];

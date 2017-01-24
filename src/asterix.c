@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2015 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -176,6 +176,7 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
     char b1a_s[5] = "NULL\0";
     char b1b_s[5] = "NULL\0";
 
+    char bds00_s[8*2+2+1] = "NULL\0"; // 8 bytes + 2 comillas + 1 null
     char bds10_s[8*2+2+1] = "NULL\0"; // 8 bytes + 2 comillas + 1 null
     char bds17_s[8*2+2+1] = "NULL\0";
     char bds30_s[8*2+2+1] = "NULL\0";
@@ -202,6 +203,9 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
     }
     if (dbp->bds_available & BDS_60) {
         bds60_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds60_s + i*2+1), "%02X", (unsigned char) (dbp->bds_60[i])); bds60_s[2*8+1] = '\''; bds60_s[2*8+2] = '\0';
+    }
+    if (dbp->bds_available & BDS_00) {
+        bds00_s[0] = '\''; for(i = 0; i < 8; i++) sprintf((char *)(bds00_s + i*2+1), "%02X", (unsigned char) (dbp->bds_00[i])); bds00_s[2*8+1] = '\''; bds00_s[2*8+2] = '\0';
     }
 
     if (dbp->available & IS_COMM_CAP) {
@@ -366,7 +370,7 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
 
 
 
-/*1*/   snprintf(stmt, 2048, "REPLACE INTO ras (sac, sic, region, modea, modea_v, modea_g, "
+/*1*/   snprintf(stmt, 2048, "REPLACE INTO ras (sac, sic, modea, modea_v, modea_g, "
 /*2*/        "modea_l, modec, modec_v, modec_g, modes, "
 /*3*/        "aid, rho, theta, tod, tod_stamp, lat, lon, "
 /*4*/        "di48_230_com, di48_230_stat, di48_230_si, di48_230_mssc, di48_230_arc, di48_230_aic, di48_230_b1a, di48_230_b1b, "
@@ -374,8 +378,8 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
 /*6*/        "bds30_ara46, bds30_ara47, bds30_rac55, bds30_rac56, bds30_rac57, "
 /*7*/        "bds30_rac58, bds30_rat, bds30_mte, bds30_tti, bds30_tid, bds30_tida, "
 /*8*/        "bds30_tidr, bds30_tidb, "
-/*9*/        "bds10, bds17, bds30, bds40, bds50, bds60, insert_date) "
-/*1*/        "VALUES (%d, %d, '%s', %s, %s, %s, "
+/*9*/        "bds00, bds10, bds17, bds30, bds40, bds50, bds60, insert_date) "
+/*1*/        "VALUES (%d, %d, %s, %s, %s, "
 /*2*/        "%s, %s, %s, %s, %s, "
 /*3*/        "%s, %s, %s, %3.4f, %3.4f, NULL, NULL, "
 /*4*/        "%s, %s, %s, %s, %s, %s, %s, %s, "
@@ -383,8 +387,8 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
 /*6*/        "%d, %d, %d, %d, %d, "
 /*7*/        "%d, %d, %d, %d, %s, %s, "
 /*8*/        "%s, %s, "
-/*9*/        "%s, %s, %s, %s, %s, %s, NOW());\n",
-/*1*/        dbp->sac, dbp->sic, region_name, modea_s, modea_v_s, modea_g_s,
+/*9*/        "%s, %s, %s, %s, %s, %s, %s, NOW());\n",
+/*1*/        dbp->sac, dbp->sic, modea_s, modea_v_s, modea_g_s,
 /*2*/        modea_l_s, modec_s, modec_v_s, modec_g_s, modes_s,
 /*3*/        aid_s, rho_s, theta_s, dbp->tod + ((double) midnight_t), dbp->tod_stamp + ((double) midnight_t),
 /*4*/        com_s, stat_s, si_s, mssc_s, arc_s, aic_s, b1a_s, b1b_s,
@@ -392,7 +396,7 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
 /*6*/        bds->ara46, bds->ara47, bds->rac55, bds->rac56, bds->rac57,
 /*7*/        bds->rac58, bds->rat59, bds->mte60, bds->tti61, tid_s, tida_s,
 /*8*/        tidr_s, tidb_s,
-/*9*/        bds10_s, bds17_s, bds30_s, bds40_s, bds50_s, bds60_s
+/*9*/        bds00_s, bds10_s, bds17_s, bds30_s, bds40_s, bds50_s, bds60_s
     );
 
     return;
@@ -1309,6 +1313,7 @@ unsigned char *datablock_start = NULL;
                 while (rep>0) {
                     unsigned char *ptr = NULL;
                     switch (ptr_raw[j+7]) {
+                        case 0x00: ptr = dbp.bds_00; dbp.bds_available |= BDS_00; break;
                         case 0x10: ptr = dbp.bds_10; dbp.bds_available |= BDS_10; break;
                         case 0x17: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
                         case 0x30: ptr = dbp.bds_30; dbp.bds_available |= BDS_30; break;

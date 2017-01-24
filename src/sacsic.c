@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2016 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -28,11 +28,11 @@ char *ast_get_SACSIC(unsigned char *sac, unsigned char *sic, int action) {
 char *tmp;
 
     if ( (action == GET_SAC_SHORT) || (action == GET_SIC_SHORT) ) {
-	tmp = (char *) mem_alloc(TEXT_LENGTH_SHORT);
-	memset(tmp, 0x0, TEXT_LENGTH_SHORT);
+	tmp = (char *) mem_alloc(TEXT_LENGTH_SHORT+1);
+	memset(tmp, 0x0, TEXT_LENGTH_SHORT+1);
     } else {
-	tmp = (char *) mem_alloc(TEXT_LENGTH_LONG);
-	memset(tmp, 0x0, TEXT_LENGTH_LONG);
+	tmp = (char *) mem_alloc(TEXT_LENGTH_LONG+1);
+	memset(tmp, 0x0, TEXT_LENGTH_LONG+1);
     }
 
     switch(sac[0]) {
@@ -165,11 +165,13 @@ char *tmp;
 			    case 133:{ strncpy(tmp, "RAN", TEXT_LENGTH_SHORT); break; }
 			    case 134:{ strncpy(tmp, "ALI", TEXT_LENGTH_SHORT); break; }
 			    case 135:{ strncpy(tmp, "TUR", TEXT_LENGTH_SHORT); break; }
+			    case 190:{ strncpy(tmp, "FTV", TEXT_LENGTH_SHORT); break; }
 			    case 193:{ strncpy(tmp, "GNC", TEXT_LENGTH_SHORT); break; }
 			    case 194:{ strncpy(tmp, "TNS", TEXT_LENGTH_SHORT); break; }
 			    case 195:{ strncpy(tmp, "PDC", TEXT_LENGTH_SHORT); break; }
 			    case 196:{ strncpy(tmp, "LPM", TEXT_LENGTH_SHORT); break; }
 			    case 197:{ strncpy(tmp, "TBN", TEXT_LENGTH_SHORT); break; }
+			    case 199:{ strncpy(tmp, "FPV", TEXT_LENGTH_SHORT); break; }
 			    case 201:{ strncpy(tmp, "AST", TEXT_LENGTH_SHORT); break; }
 			    default: sprintf(tmp, "U%03d", sic[0]);
 			}
@@ -193,7 +195,7 @@ char *tmp;
 			    case 54: { strncpy(tmp, "Villatobas", TEXT_LENGTH_LONG); break; }
 			    case 55: { strncpy(tmp, "Pozo Nieves", TEXT_LENGTH_LONG); break; }
 			    case 56: { strncpy(tmp, "Torrejon", TEXT_LENGTH_LONG); break; }
-			    case 57: { strncpy(tmp, "Peñas Chache", TEXT_LENGTH_LONG); break; }
+			    case 57: { strncpy(tmp, "Penas Chache", TEXT_LENGTH_LONG); break; }
 			    case 58: { strncpy(tmp, "Sierra Espuña", TEXT_LENGTH_LONG); break; }
 			    case 59: { strncpy(tmp, "Alcala Gazules", TEXT_LENGTH_LONG); break; }
 			    case 60: { strncpy(tmp, "Rosas", TEXT_LENGTH_LONG); break; }
@@ -212,10 +214,13 @@ char *tmp;
 			    case 133:{ strncpy(tmp, "Randa", TEXT_LENGTH_LONG); break; }
 			    case 134:{ strncpy(tmp, "Alicante", TEXT_LENGTH_LONG); break; }
 			    case 135:{ strncpy(tmp, "Turrillas", TEXT_LENGTH_LONG); break; }
+                            case 190:{ strncpy(tmp, "Fuerteventura", TEXT_LENGTH_LONG); break; }
 			    case 193:{ strncpy(tmp, "Gran Canaria", TEXT_LENGTH_LONG); break; }
 			    case 194:{ strncpy(tmp, "Tenerife Sur", TEXT_LENGTH_LONG); break; }
 			    case 195:{ strncpy(tmp, "Peñas del Chache", TEXT_LENGTH_LONG); break; }
 			    case 196:{ strncpy(tmp, "La Palma", TEXT_LENGTH_LONG); break; }
+			    case 197:{ strncpy(tmp, "Taborno", TEXT_LENGTH_LONG); break; }
+			    case 199:{ strncpy(tmp, "Fuerteventura PV", TEXT_LENGTH_LONG); break; }
 			    case 201:{ strncpy(tmp, "Asturias WAM", TEXT_LENGTH_LONG); break; }
 			    default: sprintf(tmp, "U%03d", sic[0]);
 		        }

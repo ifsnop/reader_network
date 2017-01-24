@@ -228,38 +228,37 @@ char *dest_file_format_string = NULL;
 	log_printf(LOG_VERBOSE, "not displaying pkt crc\n");
     }
 
-    if ( cfg_get_str_array(&asterix_versions, &asterix_versions_count, "asterix_versions") ) {
-        if (0 == asterix_versions_count) {
-	    log_printf(LOG_ERROR, "asterix_versions entry missing\n");
-	    exit(EXIT_FAILURE);
-        }
-        if (NULL == digest_hex) {
-	    log_printf(LOG_VERBOSE, "asterix_versions not parsed\n");
-	} else {
-            int i;
-            bool equal = false;
-            for ( i=0; i<asterix_versions_count; i++) {
-	        int j = 0;
-	        if ( strlen(asterix_versions[i]) != 32 ) {
-	            log_printf(LOG_ERROR, "asterix_versions corrupted\n");
-	            exit(EXIT_FAILURE);
-                }
-                equal = true;
-	        for( j = 0; j<32; j++)
-		    if ( digest_hex[j] != asterix_versions[i][j] )
-		        equal = false;
-                if (equal)
-		    break;
-            }
-            if (equal) {
-	        log_printf(LOG_VERBOSE, "asterix_versions match\n");
-	    } else {
-		log_printf(LOG_ERROR, "asterix_versions mismatch\n");
-		exit(EXIT_FAILURE);
-	    }
-        }
+    cfg_get_str_array(&asterix_versions, &asterix_versions_count, "asterix_versions");
+    if (0 == asterix_versions_count) {
+        log_printf(LOG_ERROR, "asterix_versions entry missing\n");
+        exit(EXIT_FAILURE);
     }
-
+    if (NULL == digest_hex) {
+        log_printf(LOG_VERBOSE, "asterix_versions not parsed\n");
+    } else {
+        int i;
+        bool equal = false;
+        for ( i=0; i<asterix_versions_count; i++) {
+	    int j = 0;
+	    if ( strlen(asterix_versions[i]) != 32 ) {
+	        log_printf(LOG_ERROR, "asterix_versions corrupted\n");
+	        exit(EXIT_FAILURE);
+            }
+            equal = true;
+	    for( j = 0; j<32; j++)
+	    if ( digest_hex[j] != asterix_versions[i][j] )
+	        equal = false;
+            if (equal)
+                break;
+        }
+        if (equal) {
+	    log_printf(LOG_VERBOSE, "asterix_versions match\n");
+	} else {
+	log_printf(LOG_ERROR, "asterix_versions mismatch\n");
+	exit(EXIT_FAILURE);
+	}
+    }
+    
     if (!cfg_get_str(&source, "source")) {
 	log_printf(LOG_VERBOSE, "source must be file, multicast or broadcast\n");
 	exit(EXIT_FAILURE);
@@ -552,7 +551,7 @@ void send_output_file() {
     char file[1024];
     char buff_1[1024];
     char buff_2[CURL_ERROR_SIZE];
-    //char buff_active[1024];
+    const char buff_ftpactive[] = "-";
     struct stat file_info;
     curl_off_t fsize;
     char noproxy_host[1024];
@@ -606,9 +605,8 @@ void send_output_file() {
 	    curl_easy_setopt(ch, CURLOPT_URL, buff_1);
 	    curl_easy_setopt(ch, CURLOPT_HTTPPROXYTUNNEL, 0L);
 
-	    /* disable PASSIVE transfers */
-	    // NOT TESTED
-	    // curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_active);
+	    /* disable PASSIVE transfers http://curl.haxx.se/libcurl/c/CURLOPT_FTPPORT.html */
+	    curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_ftpactive);
 
 	    /* now specify which file to upload */
 	    curl_easy_setopt(ch, CURLOPT_READDATA, fh);
@@ -624,8 +622,12 @@ void send_output_file() {
 	    res = curl_easy_perform(ch);
 
 	    if (res != CURLE_OK) {
-		log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
-	    }
+                log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
+                res = curl_easy_perform(ch);
+                if (res != CURLE_OK) {
+		    log_printf(LOG_ERROR, "ERROR curl(3): %s\nERROR curl(4): %s\n", curl_easy_strerror(res), buff_2);
+		}
+            }
 
 	    /* always cleanup */
 	    curl_easy_cleanup(ch);

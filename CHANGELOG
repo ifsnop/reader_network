@@ -1,7 +1,23 @@
+0.70
+- SOPORTE reader_network: retry ftp upload once
+
+0.69
+- SOPORTE: define mysql host, port, user, passwd in commandline
+- BUG: remove region from reader_rrd3 when exporting bds30
+- BUG: now ftp transfers are active. Disabled EPASV/PASV.
+- SOPORTE: added Fuerteventura in sacsic.c
+- BUG: missing Fuerteventura PV in sacsic.c
+- TODO: finish database storage of reader_rrd3
+
+0.68beta6
+- BUG: asterix_versions was disabled. fixed.
+
 0.68beta5
 - BUG: reader_rrd3 default timestamp was 0, return to
-seconds from midnight of current day.
+  seconds from midnight of current day.
 - SOPORTE: added filtercat, to filter gps files by category.
+- BUG: added Taborno in sacsic.c
+- BUG: fixed Penas del Chache description, was using UTF8
 
 0.68beta4
 - SOPORTE: reader_rrd3 exports cat1, 48, 19 & 20 delays.

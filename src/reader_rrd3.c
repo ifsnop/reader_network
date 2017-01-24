@@ -37,12 +37,12 @@ extern unsigned char full_tod[MAX_RADAR_NUMBER*TTOD_WIDTH]; /* 2 sacsic, 1 null,
 
 // ICAO 4.3.8.4.2.2 Subfields in MB
 //DROP TABLE IF EXISTS ras;
+//    region varchar(12) NOT NULL DEFAULT 'none',
 #define QUOTE(...) #__VA_ARGS__
 const char *init_table_bds30 = QUOTE(
 CREATE TABLE IF NOT EXISTS ras (
     sac TINYINT(3) UNSIGNED NOT NULL DEFAULT '0',
     sic TINYINT(3) UNSIGNED NOT NULL DEFAULT '0',
-    region varchar(12) NOT NULL DEFAULT 'none',
     modea VARCHAR(4) DEFAULT NULL,
     modea_v TINYINT(1) DEFAULT NULL,
     modea_g TINYINT(1) DEFAULT NULL,
@@ -63,32 +63,40 @@ CREATE TABLE IF NOT EXISTS ras (
     x DOUBLE DEFAULT NULL,
     y DOUBLE DEFAULT NULL,
     z DOUBLE DEFAULT NULL,
-    di48_230_com TINYINT(3) DEFAULT NULL,
-    di48_230_stat TINYINT(3) DEFAULT NULL,
-    di48_230_si TINYINT(1) DEFAULT NULL,
-    di48_230_mssc TINYINT(1) DEFAULT NULL,
-    di48_230_arc TINYINT(1) DEFAULT NULL,
-    di48_230_aic TINYINT(1) DEFAULT NULL,
-    di48_230_b1a TINYINT(1) DEFAULT NULL,
-    di48_230_b1b TINYINT(1) DEFAULT NULL,
-    bds30_ara41 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_ara42 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_ara43 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_ara44 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_ara45 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_ara46 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_ara47 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_rac55 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_rac56 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_rac57 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_rac58 TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_rat TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_mte TINYINT(1) NOT NULL DEFAULT 0,
-    bds30_tti TINYINT(1) NOT NULL DEFAULT 0,
+    di48_230_com TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_stat TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_si TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_mssc TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_arc TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_aic TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_b1a TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_b1b TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara41 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara42 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara43 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara44 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara45 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara46 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_ara47 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_rac55 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_rac56 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_rac57 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_rac58 TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_rat TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_mte TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_tti TINYINT(1) UNSIGNED DEFAULT NULL,
     bds30_tid VARCHAR(6) DEFAULT NULL,
     bds30_tida SMALLINT(5) UNSIGNED DEFAULT NULL,
-    bds30_tidr TINYINT(3) UNSIGNED DEFAULT NULL,
-    bds30_tidb TINYINT(3) UNSIGNED DEFAULT NULL,
+    bds30_tidr TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds30_tidb TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds40_mcp_selec_alt SMALLINT(5) UNSIGNED DEFAULT NULL,
+    bds40_fms_selec_alt SMALLINT(5) UNSIGNED DEFAULT NULL,
+    bds40_baro_pressure DECIMAL(7,4) DEFAULT NULL,
+    bds40_vnav_mode TINYINT(1) DEFAULT NULL,
+    bds40_alt_hold_mode TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds40_approach_mode TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds40_target_alt_source TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds00 VARCHAR(16) DEFAULT NULL,
     bds10 VARCHAR(16) DEFAULT NULL,
     bds17 VARCHAR(16) DEFAULT NULL,
     bds30 VARCHAR(16) DEFAULT NULL,
@@ -96,7 +104,7 @@ CREATE TABLE IF NOT EXISTS ras (
     bds50 VARCHAR(16) DEFAULT NULL,
     bds60 VARCHAR(16) DEFAULT NULL,
     insert_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (sac,sic,region,tod),
+    PRIMARY KEY (sac,sic,tod),
     KEY tod_idx (tod),
     KEY lat_idx (lat),
     KEY lon_idx (lon),
@@ -105,6 +113,25 @@ CREATE TABLE IF NOT EXISTS ras (
     KEY z_idx (z)
     )
 );
+
+const char *init_table_caps = QUOTE(
+CREATE TABLE IF NOT EXISTS caps (
+    modes VARCHAR(6) DEFAULT NULL,
+    di48_230_com TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_si TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_mssc TINYINT(1)UNSIGNED DEFAULT NULL,
+    di48_230_arc TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_aic TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_b1a TINYINT(1) UNSIGNED DEFAULT NULL,
+    di48_230_b1b TINYINT(1) UNSIGNED DEFAULT NULL,
+    bds10 VARCHAR(16) DEFAULT NULL,
+    bds17 VARCHAR(16) DEFAULT NULL,
+    insert_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (modes)
+    )
+);
+
+
 /*
 const char *init_table_bds30_create_idx = QUOTE(
     CREATE UNIQUE INDEX ras_idx ON ras (sac, sic, tod, bds30)
@@ -137,7 +164,7 @@ const char *init_table_availability3 = QUOTE(
 //    seconds DECIMAL(9,4) NOT NULL DEFAULT '0.0000',
 //    seconds_midnight INT UNSIGNED NOT NULL DEFAULT '0',
 
-char stmt[2048]; // = NULL;
+char stmt[4096]; // = NULL;
 
 // date --utc --date "2012-03-02 00:00:00" +%s
 // date -d @1193144433
@@ -175,6 +202,13 @@ int error_count = 0;
 int do_delays = 0;
 int do_bds30 = 0;
 int do_batch = 0;
+int do_caps = 0;
+
+char *MYSQL_host = NULL;
+char *MYSQL_port = NULL;
+char *MYSQL_user = NULL;
+char *MYSQL_pass = NULL;
+char *MYSQL_db = NULL;
 
 struct Queue {
     rb_red_blk_node **node;
@@ -280,6 +314,14 @@ MYSQL_RES *mysql_res;
 MYSQL_ROW mysql_row;
 
 void setup_mysql() {
+    int port = 3306;
+    if (!MYSQL_host) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-host)\n"); exit(EXIT_FAILURE); }
+    if (!MYSQL_user) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-user)\n"); exit(EXIT_FAILURE); }
+    if (!MYSQL_pass) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-pass)\n"); exit(EXIT_FAILURE); }
+    if (!MYSQL_db) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-db)\n"); exit(EXIT_FAILURE); }
+    if (MYSQL_port) {
+        port = atoi(MYSQL_port);
+    }
     if ( mysql_library_init(0, NULL, NULL) != 0 ) {
         log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_library_init): %s\n", mysql_error(mysql_con));
         exit(EXIT_FAILURE);
@@ -289,12 +331,19 @@ void setup_mysql() {
         exit(EXIT_FAILURE);
     }
     if ( mysql_real_connect(mysql_con,
-        NULL, "root", NULL, "cocir", 0, NULL,
+        MYSQL_host, MYSQL_user, MYSQL_pass, MYSQL_db, port, NULL,
         //"192.168.0.34", "reader_rrd", "reader_rrd", "cocir", 0, NULL,
         0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
         log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_real_connect): %s\n", mysql_error(mysql_con));
         exit(EXIT_FAILURE);
     }
+    if ( do_caps ) {
+        if ( mysql_query(mysql_con, init_table_caps) != 0 ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_caps): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+    }    
+    
     if ( do_bds30 ) {
         if ( mysql_query(mysql_con, init_table_bds30) != 0 ) {
             log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30): %s\n", mysql_error(mysql_con));
@@ -606,15 +655,26 @@ void radar_delay_free(void) {
 
 void usage(char *argv0) {
     log_printf(LOG_ERROR, "reader_rrd3_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-    log_printf(LOG_ERROR, "usage: %s [-t midnight_timestamp] -s asterix_gps_file -y|-3 [-o] [-l] -r region_name [-d rrd_directory]\n\n"
-        "\t-t seconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
-        "\t-s asterix input source file\n"
-        "\t-o output to stdout instead of using /usr/local/bin/rrd_update3.sh\n"
-        "\t-y calculate and store plot delays\n"
-        "\t-3 extract and store bds3.0\n"
-        "\t-l put last decoded timestamp (default not)\n"
-        "\t-r region name from the following list [baleares,canarias,centro,este,sur]\n"
-        "\t-d rrd directory, to create the rrd database\n\n"
+    log_printf(LOG_ERROR, "usage: %s -s|--source asterix_gps_file\n"
+        "\t((--do_delays [--do-last]) (--do_bds30 --do_caps) [--stdout])\n"
+        "\t[-t|--timestamp timestamp] [-r|--region-name region_name] [-d|--rrd_directory path]\n\n"
+        "Parameters:\n"
+        "\t-t|--timestamp\tseconds from 1-1-1970 to 00:00:00 of today, default (%lu)\n"
+        "\t-s|--source\tasterix input source file\n"
+        "\t-r|--region-name from the following list [baleares,canarias,centro,este,sur]\n"
+        "\t-d|--rrd-directory where to create the rrd database\n"
+        "Work Mode:\n"
+        "\t--do_delays\tcalculate and store plot delays\n"
+        "\t--do_bds30\textract and store bds3.0\n"
+        "\t--do_caps\textract and store trasponder capabilities\n"
+        "\t--do_batch\texecute rrd_update3.sh from path with delays as params *TO BE DEPRECATED*\n"
+        "\t--do_last\tput last decoded timestamp (default not)\n"
+        "\t--stdout\toutput to stdout\n"
+        "Mysql:\n"
+        "\t--mysql-host\n"
+        "\t--mysql-user\n"
+        "\t--mysql-pass\n"
+        "\t--mysql-port\n\n"
         , argv0, midnight_t);
     return;
 }
@@ -636,21 +696,6 @@ int main(int argc, char *argv[]) {
     unsigned long count2_udp_received = 0;
     long timestamp = -1;
 
-    int opt = 0; // getopt
-    int long_index = 0; // getopt
-    static struct option long_options[] = {
-        {"timestamp",	  required_argument, 0,  't' },
-        {"source_file",	  required_argument, 0,  'f' },
-        {"ouput", 	  no_argument,	     0,  'o' },
-        {"update_last",   no_argument,	     0,  'l' },
-        {"region_name",	  required_argument, 0,  'r' },
-        {"rrd_directory", required_argument, 0,  'd' },
-        {"do_bds30"     , no_argument,       0,  '3' },
-        {"do_batch"     , no_argument,       0,  'b' },
-        {"do_delays"    , no_argument,       0,  'y' },
-        {0,		  0,		     0,  0   }
-    };
-
     mem_open(fail);
     if (log_open(NULL, /*LOG_VERBOSE*/ LOG_NORMAL, /*LOG_TIMESTAMP |*/
 	LOG_HAVE_COLORS | LOG_PRINT_FUNCTION |
@@ -663,9 +708,41 @@ int main(int argc, char *argv[]) {
 
     setup_time(-1);
 
-    while ((opt = getopt_long(argc, argv,"t:s:ol3ybr:d:",
-	long_options, &long_index )) != -1) {
-        switch (opt) {
+    while (1) {
+        int opt = 0; // getopt
+        int long_index = 0; // getopt
+        static struct option long_options[] = {
+            {"stdout"       , no_argument,	 &stdout_output,    1 },
+            {"do_last"      , no_argument,       &update_last,      1 },
+            {"do_bds30"     , no_argument,       &do_bds30,         1 },
+            {"do_batch"     , no_argument,       &do_batch,         1 },
+            {"do_delays"    , no_argument,       &do_delays,        1 },
+            {"do_caps"      , no_argument,       &do_caps,          1 },
+            {"timestamp"    , required_argument, 0,  't' },
+            {"source"       , required_argument, 0,  's' },
+            {"region_name"  , required_argument, 0,  'r' },
+            {"rrd_directory", required_argument, 0,  'd' },
+            {"mysql-db"     , required_argument, 0,  '5' },
+            {"mysql-host"   , required_argument, 0,  '6' },
+            {"mysql-user"   , required_argument, 0,  '7' },
+            {"mysql-pass"   , required_argument, 0,  '8' },
+            {"mysql-port"   , required_argument, 0,  '9' },
+            {0, 0, 0, 0}
+        };
+    
+        opt = getopt_long(argc, argv,"t:s:r:d:", long_options, &long_index );
+
+        if ( opt == -1 )
+            break;
+        switch ( opt ) {
+            case 0 :
+                // If this option set a flag, do nothing else now.
+                //if (long_options[long_index].flag != 0) break;
+                //printf ("option %s", long_options[long_index].name);
+                //if (optarg)
+                //    printf (" with arg %s", optarg);
+                //printf ("\n");
+                break;
 	    case 't' :
 		errno = 0;
 		timestamp = strtol(optarg, NULL, 10);
@@ -675,35 +752,34 @@ int main(int argc, char *argv[]) {
 		}
 		break;
 	    case 's' :
-		source_file = optarg;
-		break;
+		source_file = optarg; break;
 	    case 'r' :
-		region_name = optarg;
-		break;
-            case 'o' :
-                stdout_output = 1;
-		break;
-	    case 'l' :
-		update_last = 1;
-		break;
-	    case 'y' :
-		do_delays = 1;
-		break;
-	    case '3' :
-		do_bds30 = 1;
-		break;
-	    case 'b' :
-		do_batch = 1;
-		break;
+		region_name = optarg; break;
 	    case 'd' :
-		rrd_directory = optarg;
-		break;
+		rrd_directory = optarg; do_batch = 1; break;
+            case '5' :
+                MYSQL_db = optarg; break;
+	    case '6' :
+	        MYSQL_host = optarg;//  printf("MYSQL_host(%s)\n", MYSQL_host);
+	        break;
+	    case '7' :
+	        MYSQL_user = optarg; // printf("MYSQL_user(%s)\n", MYSQL_user);
+	        break;
+	    case '8' :
+	        MYSQL_pass = optarg; // printf("MYSQL_pass(%s)\n", MYSQL_pass);
+	        break;
+	    case '9' :
+	        MYSQL_port = optarg; // printf("MYSQL_port(%s)\n", MYSQL_port);
+	        break;
 	    default:
+	        //printf("failing through default(%d)\n", opt);
                 usage(argv[0]);
                 exit(EXIT_SUCCESS);
 	}
     }
 
+    //exit(EXIT_SUCCESS);
+    
     if (region_name == NULL || source_file == NULL || ( do_bds30 == 0 && do_delays == 0 ) ) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
         usage(argv[0]);
 	exit(EXIT_SUCCESS);
@@ -867,7 +943,7 @@ int main(int argc, char *argv[]) {
             count2_udp_received, count2_plot_processed, count2_plot_ignored);
     }
 
-    if (do_bds30 && !stdout_output) {
+    if ( ( do_delays || do_bds30 || do_caps ) && !stdout_output) {
         close_mysql();
     }
 
@@ -884,6 +960,14 @@ int main(int argc, char *argv[]) {
 
     radar_delay_free();
 
+    if (rrd_directory) free(rrd_directory);
+    /*
+    if (MYSQL_host) free(MYSQL_host);
+    if (MYSQL_user) free(MYSQL_user);
+    if (MYSQL_pass) free(MYSQL_pass);
+    if (MYSQL_port) free(MYSQL_port);
+    if (MYSQL_db) free(MYSQL_db);
+    */
     return 0;
 }
 
@@ -1498,15 +1582,18 @@ void update(int sac, int sic, int cat, int i, long timestamp, float cuenta, floa
         }
     }
 
-    if ( do_batch) {
+    if ( do_batch ) {
+
+        create_database(sac, sic, cat, timestamp);
+
         moda = (moda < -7.994) || (moda > 7.996) ? 0 : moda;
         max = (max == -10000) ? 0 : max;
         min = (min == +10000) ? 0 : min;
 
-	snprintf(stmt, 2047, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f 2> /dev/null", sac, sic, cat,
+	snprintf(stmt, 2047, "rrd_update3.sh %03d_%03d_%03d %s %ld %3.0f %f %f %f %f %f",/* 2> /dev/null",*/ sac, sic, cat,
 	    (region_name != NULL ? region_name : ""), timestamp, cuenta, max, min, media, stdev, p99);
 	if ( (ret = system(stmt)) != 0 ) {
-            log_printf(LOG_ERROR, "error(%d) ejecutando cmd(%s)\n", ret, stmt);
+            log_printf(LOG_ERROR, "error(%d) ejecutando cmd(%s)\n", ret%255, stmt);
         }
     }
 
