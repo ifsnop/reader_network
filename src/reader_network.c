@@ -555,7 +555,7 @@ void send_output_file() {
     struct stat file_info;
     curl_off_t fsize;
     char noproxy_host[1024];
-    int slash_pos = 6, i = 0;
+    int slash_pos = 6, i = 0, j = 0;
 
     memset(file, 0, 1024);
 
@@ -619,14 +619,15 @@ void send_output_file() {
 	    curl_easy_setopt(ch, CURLOPT_ERRORBUFFER, buff_2);
 
 	    /* Now run off and do what you've been told! */
-	    res = curl_easy_perform(ch);
 
-	    if (res != CURLE_OK) {
-                log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
+            for(j = 0; j<5; j++) {
+                log_printf(LOG_VERBOSE, "sending ftp file, curl try number(%d)\n", j);
                 res = curl_easy_perform(ch);
-                if (res != CURLE_OK) {
-		    log_printf(LOG_ERROR, "ERROR curl(3): %s\nERROR curl(4): %s\n", curl_easy_strerror(res), buff_2);
-		}
+	        if (res == CURLE_OK) {
+	            break;
+	        }
+                log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
+                sleep(1);
             }
 
 	    /* always cleanup */
