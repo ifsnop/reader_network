@@ -924,8 +924,9 @@ int main(int argc, char *argv[]) {
 		    count2_plot_processed++;
 		    ast_procesarCAT20(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
 		} else if (ast_ptr_raw[ast_pos] == '\x15') {
-		    count2_plot_processed++;
+		    //count2_plot_processed++;
 		    //ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
+		    count2_plot_ignored++;
 		} else if (ast_ptr_raw[ast_pos] == '\x22') {
 		    count2_plot_processed++;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
