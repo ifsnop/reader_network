@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2015 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2017 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -197,6 +197,7 @@ int fd_in=-1, fd_out_ast=-1,fd_out_gps=-1;
 long source_file_gps_version=3;
 rb_red_blk_tree* tree = NULL;
 int stdout_output = 0;
+int mysql_output = 0;
 int update_last = 0;
 int error_count = 0;
 int do_delays = 0;
@@ -315,67 +316,87 @@ MYSQL_ROW mysql_row;
 
 void setup_mysql() {
     int port = 3306;
-    if (!MYSQL_host) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-host)\n"); exit(EXIT_FAILURE); }
-    if (!MYSQL_user) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-user)\n"); exit(EXIT_FAILURE); }
-    if (!MYSQL_pass) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-pass)\n"); exit(EXIT_FAILURE); }
-    if (!MYSQL_db) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-db)\n"); exit(EXIT_FAILURE); }
-    if (MYSQL_port) {
-        port = atoi(MYSQL_port);
-    }
-    if ( mysql_library_init(0, NULL, NULL) != 0 ) {
-        log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_library_init): %s\n", mysql_error(mysql_con));
-        exit(EXIT_FAILURE);
-    }
-    if ( (mysql_con = mysql_init(NULL)) == NULL ) {
-        log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_init): %s\n", mysql_error(mysql_con));
-        exit(EXIT_FAILURE);
-    }
-    if ( mysql_real_connect(mysql_con,
-        MYSQL_host, MYSQL_user, MYSQL_pass, MYSQL_db, port, NULL,
-        //"192.168.0.34", "reader_rrd", "reader_rrd", "cocir", 0, NULL,
-        0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
-        log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_real_connect): %s\n", mysql_error(mysql_con));
-        exit(EXIT_FAILURE);
-    }
-    if ( do_caps ) {
-        if ( mysql_query(mysql_con, init_table_caps) != 0 ) {
-            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_caps): %s\n", mysql_error(mysql_con));
+    
+    if ( mysql_output == 1 ) {
+
+        if (!MYSQL_host) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-host)\n"); exit(EXIT_FAILURE); }
+        if (!MYSQL_user) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-user)\n"); exit(EXIT_FAILURE); }
+        if (!MYSQL_pass) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-pass)\n"); exit(EXIT_FAILURE); }
+        if (!MYSQL_db) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-db)\n"); exit(EXIT_FAILURE); }
+        if (MYSQL_port) {
+            port = atoi(MYSQL_port);
+        }
+        if ( mysql_library_init(0, NULL, NULL) != 0 ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_library_init): %s\n", mysql_error(mysql_con));
             exit(EXIT_FAILURE);
+        }
+        if ( (mysql_con = mysql_init(NULL)) == NULL ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_init): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+        if ( mysql_real_connect(mysql_con,
+            MYSQL_host, MYSQL_user, MYSQL_pass, MYSQL_db, port, NULL,
+            //"192.168.0.34", "reader_rrd", "reader_rrd", "cocir", 0, NULL,
+            0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
+            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_real_connect): %s\n", mysql_error(mysql_con));
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if ( do_caps ) {
+        if ( stdout_output == 1 ) {
+            log_printf(LOG_NORMAL, "%s\n", init_table_caps);
+        }
+        if ( mysql_output == 1) {
+            if ( mysql_query(mysql_con, init_table_caps) != 0 ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_caps): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
         }
     }    
     
     if ( do_bds30 ) {
-        if ( mysql_query(mysql_con, init_table_bds30) != 0 ) {
-            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30): %s\n", mysql_error(mysql_con));
-            exit(EXIT_FAILURE);
+        if ( stdout_output == 1 ) {
+            log_printf(LOG_NORMAL, "%s\n", init_table_bds30);
         }
-/*
-        if ( mysql_query(mysql_con, init_table_bds30_check_idx) != 0 ) {
-            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30_check_idx): %s\n", mysql_error(mysql_con));
-            exit(EXIT_FAILURE);
-        }
-        if ( (mysql_res = mysql_store_result(mysql_con)) == NULL ) {
-            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_store_result): %s\n", mysql_error(mysql_con));
-            exit(EXIT_FAILURE);
-        }
-        if ( (mysql_row = mysql_fetch_row(mysql_res)) == NULL ) {
-            log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_fetch_row): %s\n", mysql_error(mysql_con));
-            exit(EXIT_FAILURE);
-        }
-        int index_count = atoi(mysql_row[0]);
-        if (index_count == 0) {
-            if ( mysql_query(mysql_con, init_table_bds30_create_idx) != 0 ) {
-                log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30_create_idx): %s\n", mysql_error(mysql_con));
+        if ( mysql_output == 1) {
+            if ( mysql_query(mysql_con, init_table_bds30) != 0 ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30): %s\n", mysql_error(mysql_con));
                 exit(EXIT_FAILURE);
             }
-        }
-        mysql_free_result(mysql_res);
+/*
+            if ( mysql_query(mysql_con, init_table_bds30_check_idx) != 0 ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30_check_idx): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
+            if ( (mysql_res = mysql_store_result(mysql_con)) == NULL ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_store_result): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
+            if ( (mysql_row = mysql_fetch_row(mysql_res)) == NULL ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_fetch_row): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
+            int index_count = atoi(mysql_row[0]);
+            if (index_count == 0) {
+                if ( mysql_query(mysql_con, init_table_bds30_create_idx) != 0 ) {
+                    log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30_create_idx): %s\n", mysql_error(mysql_con));
+                    exit(EXIT_FAILURE);
+                }
+            }
+            mysql_free_result(mysql_res);
 */
+        }
     }
     if ( do_delays ) {
-        if ( mysql_query(mysql_con, init_table_availability3) != 0 ) {
-            log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_availability3): %s\n", mysql_error(mysql_con));
-            exit(EXIT_FAILURE);
+        if ( stdout_output == 1 ) {
+            log_printf(LOG_NORMAL, "%s\n", init_table_availability3);
+        }
+        if ( mysql_output == 1) {
+            if ( mysql_query(mysql_con, init_table_availability3) != 0 ) {
+                log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_availability3): %s\n", mysql_error(mysql_con));
+                exit(EXIT_FAILURE);
+            }
         }
     }
     return;
@@ -383,10 +404,10 @@ void setup_mysql() {
 
 void close_mysql() {
     //mysql_thread_end();
-
-    mysql_close(mysql_con);
-    mysql_library_end();
-
+    if ( mysql_output == 0 ) {
+        mysql_close(mysql_con);
+        mysql_library_end();
+    }
     return;
 }
 
@@ -664,13 +685,14 @@ void usage(char *argv0) {
         "\t-r|--region-name from the following list [baleares,canarias,centro,este,sur]\n"
         "\t-d|--rrd-directory where to create the rrd database\n"
         "Work Mode:\n"
-        "\t--do_delays\tcalculate and store plot delays\n"
-        "\t--do_bds30\textract and store bds3.0\n"
-        "\t--do_caps\textract and store trasponder capabilities\n"
-        "\t--do_batch\texecute rrd_update3.sh from path with delays as params *TO BE DEPRECATED*\n"
-        "\t--do_last\tput last decoded timestamp (default not)\n"
+        "\t--do-delays\tcalculate and store plot delays\n"
+        "\t--do-bds30\textract and store bds3.0\n"
+        "\t--do-caps\textract and store trasponder capabilities\n"
+        "\t--do-batch\texecute rrd_update3.sh from path with delays as params *TO BE DEPRECATED*\n"
+        "\t--do-last\tput last decoded timestamp (default not)\n"
         "\t--stdout\toutput to stdout\n"
         "Mysql:\n"
+        "\t--mysql-output\tenable mysql storage\n"
         "\t--mysql-host\n"
         "\t--mysql-user\n"
         "\t--mysql-pass\n"
@@ -713,15 +735,16 @@ int main(int argc, char *argv[]) {
         int long_index = 0; // getopt
         static struct option long_options[] = {
             {"stdout"       , no_argument,	 &stdout_output,    1 },
-            {"do_last"      , no_argument,       &update_last,      1 },
-            {"do_bds30"     , no_argument,       &do_bds30,         1 },
-            {"do_batch"     , no_argument,       &do_batch,         1 },
-            {"do_delays"    , no_argument,       &do_delays,        1 },
-            {"do_caps"      , no_argument,       &do_caps,          1 },
+            {"do-last"      , no_argument,       &update_last,      1 },
+            {"do-bds30"     , no_argument,       &do_bds30,         1 },
+            {"do-batch"     , no_argument,       &do_batch,         1 },
+            {"do-delays"    , no_argument,       &do_delays,        1 },
+            {"do-caps"      , no_argument,       &do_caps,          1 },
             {"timestamp"    , required_argument, 0,  't' },
             {"source"       , required_argument, 0,  's' },
-            {"region_name"  , required_argument, 0,  'r' },
-            {"rrd_directory", required_argument, 0,  'd' },
+            {"region-name"  , required_argument, 0,  'r' },
+            {"rrd-directory", required_argument, 0,  'd' },
+            {"mysql-output" , no_argument,       &mysql_output,     1 },
             {"mysql-db"     , required_argument, 0,  '5' },
             {"mysql-host"   , required_argument, 0,  '6' },
             {"mysql-user"   , required_argument, 0,  '7' },
@@ -781,6 +804,7 @@ int main(int argc, char *argv[]) {
     //exit(EXIT_SUCCESS);
     
     if (region_name == NULL || source_file == NULL || ( do_bds30 == 0 && do_delays == 0 ) ) { // || timestamp == 0 || rrd_directory == NULL || region_name == NULL) {
+        log_printf(LOG_ERROR, "something is missing from command line\n");
         usage(argv[0]);
 	exit(EXIT_SUCCESS);
     }
@@ -803,8 +827,7 @@ int main(int argc, char *argv[]) {
     setup_time(timestamp);
     setup_crc32_table();
 
-    if (!stdout_output)
-        setup_mysql();
+    setup_mysql();
 
     if (mode_scrm) {
 	tree = RBTreeCreate(UIntComp,AddQueue,DeleteQueue);
@@ -830,7 +853,6 @@ int main(int argc, char *argv[]) {
 	//exit(EXIT_FAILURE);
     }
 */
-
 //    if (!strncasecmp(source, "file", 4)) {
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
@@ -903,7 +925,7 @@ int main(int argc, char *argv[]) {
 		    ast_procesarCAT20(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
 		} else if (ast_ptr_raw[ast_pos] == '\x15') {
 		    count2_plot_processed++;
-		    ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
+		    //ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
 		} else if (ast_ptr_raw[ast_pos] == '\x22') {
 		    count2_plot_processed++;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, false);
@@ -943,7 +965,7 @@ int main(int argc, char *argv[]) {
             count2_udp_received, count2_plot_processed, count2_plot_ignored);
     }
 
-    if ( ( do_delays || do_bds30 || do_caps ) && !stdout_output) {
+    if ( do_delays || do_bds30 || do_caps ) {
         close_mysql();
     }
 
@@ -960,14 +982,6 @@ int main(int argc, char *argv[]) {
 
     radar_delay_free();
 
-    if (rrd_directory) free(rrd_directory);
-    /*
-    if (MYSQL_host) free(MYSQL_host);
-    if (MYSQL_user) free(MYSQL_user);
-    if (MYSQL_pass) free(MYSQL_pass);
-    if (MYSQL_port) free(MYSQL_port);
-    if (MYSQL_db) free(MYSQL_db);
-    */
     return 0;
 }
 
@@ -1000,12 +1014,12 @@ void update_calculations(struct datablock_plot *dbp) {
             //mysql_free_result(mysql_res);
         }
     }
-    //log_printf(LOG_ERROR, "3\n");
+    //log_printf(LOG_ERROR, "3 (%d)\n", do_delays);
 
     if (!do_delays)
         return;
 
-    //log_printf(LOG_VERBOSE, "hola0 %3.3f %d %d %c\n", step,dbp.sac, dbp.sic, dbp.cat);
+    //log_printf(LOG_ERROR, "hola0 %3.3f %d %d %c\n", step,dbp->sac, dbp->sic, dbp->cat);
 
     if (dbp->available & IS_TOD) {
 	diff = dbp->tod_stamp - dbp->tod;
@@ -1018,7 +1032,7 @@ void update_calculations(struct datablock_plot *dbp) {
 	if (step == FIRST_STEP) {
 	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
 	}
-	//log_printf(LOG_VERBOSE, "sac:%d sic:%d tod:%3.3f tod_stamp:%3.3f diff:%3.3f\n", dbp.sac, dbp.sic, dbp.tod, dbp.tod_stamp, diff);
+	//log_printf(LOG_ERROR, "sac:%d sic:%d tod:%3.3f tod_stamp:%3.3f diff:%3.3f\n", dbp->sac, dbp->sic, dbp->tod, dbp->tod_stamp, diff);
 	//printf("sac:%d sic:%d tod:%s tod_stamp:%s diff:%3.3f\n", dbp.sac, dbp.sic, parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff);
 	//log_printf(LOG_VERBOSE, "%3.7f\n", d.quot*UPDATE_TIME_RRD + UPDATE_TIME_RRD);
 	//log_printf(LOG_VERBOSE, "d.quot(%d) d.rem(%d) tod_stamp(%3.3f)=>(%s)+midnight_t(%ld) step(%3.6f) UPDATE_TIME_RRD(%3.3f)\n",d.quot, d.rem, dbp.tod_stamp, parse_hora(dbp.tod_stamp), (long)midnight_t, step, UPDATE_TIME_RRD);
@@ -1026,8 +1040,6 @@ void update_calculations(struct datablock_plot *dbp) {
         if (fabs(dbp->tod_stamp  - last_tod_stamp) > 86000)
             midnight_t += 86400; // new day
         last_tod_stamp = dbp->tod_stamp;
-
-        // generate inserts of bds30 if requested
 
     }
 
@@ -1055,7 +1067,7 @@ void update_calculations(struct datablock_plot *dbp) {
 	double p99_cat34=0.0, p99_cat48=0.0;
 
         cuenta = 0;
-        //log_printf(LOG_NORMAL, "0>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
+        // log_printf(LOG_NORMAL, "0>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
 
 	if (!forced_exit) {
 	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
@@ -1560,7 +1572,7 @@ void update(int sac, int sic, int cat, int i, long timestamp, float cuenta, floa
     int ret = 0;
     ldiv_t q;
 
-    if ( cat != 1 && cat != 48 && cat !=19 && cat != 20)
+    if ( cat != 1 && cat != 48 && cat !=10 && cat !=19 && cat != 20)
         return;
 
     q = ldiv(timestamp, UPDATE_TIME_RRD);

@@ -103,9 +103,10 @@ for destarch in $destarchs; do
 	src/red_black_tree_misc.c src/red_black_tree_stack.c \
 	src/md5.c"
 
+    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts -I/usr/include/mysql -DBIG_JOINS=1 `mysql_config --libs | cut -d" " -f 1` -lmysqlclient
     gcc $gccopts -o bin/reader_network${destarch}${arch} $rncfiles src/reader_network.c $rnopts
     #strip bin/reader_network${destarch} 2> /dev/null
-    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts -I/usr/include/mysql -DBIG_JOINS=1 `mysql_config --libs | cut -d" " -f 1` -lmysqlclient
+
 #-L/usr/lib/x86_64-linux-gnu
 #`mysql_config --libs | cut -d ' ' -f1`
     gcc $gccopts -o bin/client_time${destarch}${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts

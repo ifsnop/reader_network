@@ -23,7 +23,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 
 #define VERSION "0.70"
-#define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2016 Diego Torres\n\n" \
+#define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2017 Diego Torres\n\n" \
     "This program comes with ABSOLUTELY NO WARRANTY.\n" \
     "This is free software, and you are welcome to redistribute it\n" \
     "under certain conditions; see COPYING file for details.\n\n"

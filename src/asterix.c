@@ -765,7 +765,9 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-		update_calculations(&dbp);
+	        if ( (dbp.type & TYPE_C10_TARGET_REPORT) == TYPE_C10_TARGET_REPORT ) {
+		    update_calculations(&dbp);
+		}
 	    }
 	}
 	
@@ -962,7 +964,7 @@ int index = 0;
 int ast_procesarCAT21(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar) {
 int size_current = 0, j = 0;
 int index = 0;
-
+    // v0.23
     do {
 	int sizeFSPEC;
 	struct datablock_plot dbp;

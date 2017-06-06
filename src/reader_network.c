@@ -608,6 +608,13 @@ void send_output_file() {
 	    /* disable PASSIVE transfers http://curl.haxx.se/libcurl/c/CURLOPT_FTPPORT.html */
 	    curl_easy_setopt(ch, CURLOPT_FTPPORT, buff_ftpactive);
 
+            /* only one CWD https://curl.haxx.se/libcurl/c/CURLOPT_FTP_FILEMETHOD.html */
+	    curl_easy_setopt(ch, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_SINGLECWD);
+
+	    /* https://curl.haxx.se/libcurl/c/CURLOPT_FTP_USE_EPRT.html */
+	    /* If the value is 1, it tells curl to use the EPRT command when doing active FTP downloads (which is enabled by CURLOPT_FTPPORT). */
+	    curl_easy_setopt(ch, CURLOPT_FTP_USE_EPRT, 0L);
+
 	    /* now specify which file to upload */
 	    curl_easy_setopt(ch, CURLOPT_READDATA, fh);
 
@@ -620,14 +627,14 @@ void send_output_file() {
 
 	    /* Now run off and do what you've been told! */
 
-            for(j = 0; j<5; j++) {
-                log_printf(LOG_VERBOSE, "sending ftp file, curl try number(%d)\n", j);
+            for(j = 0; j<10; j++) {
+                log_printf(LOG_VERBOSE, "sending ftp file, curl try number(%d)\n", j+1);
                 res = curl_easy_perform(ch);
 	        if (res == CURLE_OK) {
 	            break;
 	        }
                 log_printf(LOG_ERROR, "ERROR curl(1): %s\nERROR curl(2): %s\n", curl_easy_strerror(res), buff_2);
-                sleep(1);
+                sleep(2);
             }
 
 	    /* always cleanup */

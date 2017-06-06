@@ -1,5 +1,9 @@
 0.70
 - SOPORTE reader_network: retry ftp upload once
+- BUG: disable CURLOPT_FTP_USE_EPRT, so it works with new
+  REDAN proxy/nat version
+- BUG: disabled cat21 decoding, only support for v0.23, and
+  now we are having v2.1_gccx and v0.26_lemd
 
 0.69
 - SOPORTE: define mysql host, port, user, passwd in commandline
