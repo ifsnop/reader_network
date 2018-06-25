@@ -1,3 +1,12 @@
+0.71
+- SOPORTE: para CAT10, se envían a cálculo de demoras los
+  DETECTION y los SUC. Antes solo los DETECTION, pero durante
+  mucho tiempo en aeropuertos pequeños no hay blancos.
+- BUG: log_flush() después de log_printf en updatecalculations
+  para ver el progreso cuando se usa --stdout con --mysql-xxxx
+- BUG: áñade 10 microsegs antes de cada sendto para que la pila
+  udp no tire los paquetes por overflow al enviar de fichero
+
 0.70
 - SOPORTE reader_network: retry ftp upload once
 - BUG: disable CURLOPT_FTP_USE_EPRT, so it works with new

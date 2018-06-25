@@ -319,22 +319,22 @@ void setup_mysql() {
     
     if ( mysql_output == 1 ) {
 
-        if (!MYSQL_host) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-host)\n"); exit(EXIT_FAILURE); }
-        if (!MYSQL_user) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-user)\n"); exit(EXIT_FAILURE); }
-        if (!MYSQL_pass) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-pass)\n"); exit(EXIT_FAILURE); }
-        if (!MYSQL_db) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-db)\n"); exit(EXIT_FAILURE); }
+        if (!stdout_output && !MYSQL_host) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-host)\n"); exit(EXIT_FAILURE); }
+        if (!stdout_output && !MYSQL_user) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-user)\n"); exit(EXIT_FAILURE); }
+        if (!stdout_output && !MYSQL_pass) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-pass)\n"); exit(EXIT_FAILURE); }
+        if (!stdout_output && !MYSQL_db) { log_printf(LOG_ERROR, "ERROR setup_mysql (undefined --mysql-db)\n"); exit(EXIT_FAILURE); }
         if (MYSQL_port) {
             port = atoi(MYSQL_port);
         }
-        if ( mysql_library_init(0, NULL, NULL) != 0 ) {
+        if (!stdout_output &&  mysql_library_init(0, NULL, NULL) != 0 ) {
             log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_library_init): %s\n", mysql_error(mysql_con));
             exit(EXIT_FAILURE);
         }
-        if ( (mysql_con = mysql_init(NULL)) == NULL ) {
+        if (!stdout_output &&  (mysql_con = mysql_init(NULL)) == NULL ) {
             log_printf(LOG_ERROR, "ERROR setup_mysql (mysql_init): %s\n", mysql_error(mysql_con));
             exit(EXIT_FAILURE);
         }
-        if ( mysql_real_connect(mysql_con,
+        if (!stdout_output &&  mysql_real_connect(mysql_con,
             MYSQL_host, MYSQL_user, MYSQL_pass, MYSQL_db, port, NULL,
             //"192.168.0.34", "reader_rrd", "reader_rrd", "cocir", 0, NULL,
             0 /*CLIENT_MULTI_STATEMENTS*/) == NULL ) {
@@ -347,7 +347,7 @@ void setup_mysql() {
         if ( stdout_output == 1 ) {
             log_printf(LOG_NORMAL, "%s\n", init_table_caps);
         }
-        if ( mysql_output == 1) {
+        if (!stdout_output &&  mysql_output == 1) {
             if ( mysql_query(mysql_con, init_table_caps) != 0 ) {
                 log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_caps): %s\n", mysql_error(mysql_con));
                 exit(EXIT_FAILURE);
@@ -359,7 +359,7 @@ void setup_mysql() {
         if ( stdout_output == 1 ) {
             log_printf(LOG_NORMAL, "%s\n", init_table_bds30);
         }
-        if ( mysql_output == 1) {
+        if (!stdout_output &&  mysql_output == 1) {
             if ( mysql_query(mysql_con, init_table_bds30) != 0 ) {
                 log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_bds30): %s\n", mysql_error(mysql_con));
                 exit(EXIT_FAILURE);
@@ -392,7 +392,7 @@ void setup_mysql() {
         if ( stdout_output == 1 ) {
             log_printf(LOG_NORMAL, "%s\n", init_table_availability3);
         }
-        if ( mysql_output == 1) {
+        if (!stdout_output &&  mysql_output == 1) {
             if ( mysql_query(mysql_con, init_table_availability3) != 0 ) {
                 log_printf(LOG_ERROR, "ERROR setup_mysql (init_table_availability3): %s\n", mysql_error(mysql_con));
                 exit(EXIT_FAILURE);
@@ -404,7 +404,7 @@ void setup_mysql() {
 
 void close_mysql() {
     //mysql_thread_end();
-    if ( mysql_output == 0 ) {
+    if (!stdout_output &&  mysql_output == 0 ) {
         mysql_close(mysql_con);
         mysql_library_end();
     }
@@ -1068,7 +1068,7 @@ void update_calculations(struct datablock_plot *dbp) {
 	double p99_cat34=0.0, p99_cat48=0.0;
 
         cuenta = 0;
-        // log_printf(LOG_NORMAL, "0>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp.tod), parse_hora(dbp.tod_stamp), diff, dbp.tod_stamp + midnight_t, step);
+        //log_printf(LOG_NORMAL, "0>tod:%s tod_stamp:%s diff:%3.3f tod_stamp+midnight(%3.3f) > step(%3.3f)\n", parse_hora(dbp->tod), parse_hora(dbp->tod_stamp), diff, dbp->tod_stamp + midnight_t, step);
 
 	if (!forced_exit) {
 	    step = (d.quot * UPDATE_TIME_RRD + UPDATE_TIME_RRD) - 1.0/2048.0 + midnight_t;
@@ -1590,7 +1590,7 @@ void update(int sac, int sic, int cat, int i, long timestamp, float cuenta, floa
         log_printf(LOG_NORMAL, "%s", stmt);
     } else {
         if (mysql_query(mysql_con, stmt) != 0) {
-            log_printf(LOG_ERROR, "ERROR decode_bds30 (mysql_query): %s\n", mysql_error(mysql_con));
+            log_printf(LOG_ERROR, "ERROR update database (mysql_query >%s<): %s\n", stmt, mysql_error(mysql_con));
             exit(EXIT_FAILURE);
         }
     }
