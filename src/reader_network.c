@@ -1017,8 +1017,9 @@ unsigned long count2_plot_filtered = 0;
 		    count2_plot_processed++;
 		    ast_procesarCAT20(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
 		} else if (ast_ptr_raw[ast_pos] == '\x15') {
-		    count2_plot_processed++;
-		    ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		    // count2_plot_processed++;
+		    // ast_procesarCAT21(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);
+		    count2_plot_ignored++;
 		} else if (ast_ptr_raw[ast_pos] == '\x22') {
 		    count2_plot_processed++;
 		    ast_procesarCAT34(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost);

@@ -775,9 +775,9 @@ int index = 0;
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
 	    } else {
-	        if ( ( ((dbp.type & TYPE_C10_TARGET_REPORT) == TYPE_C10_TARGET_REPORT) ||
-	               ((dbp.type & TYPE_C10_TARGET_REPORT) == TYPE_C10_START_UPDATE_CYCLE) ) &&
-	            (dbp.plot_type != NO_DETECTION) ) {
+	        if ( 
+	        (((dbp.type & TYPE_C10_TARGET_REPORT) == TYPE_C10_TARGET_REPORT) && (dbp.plot_type != NO_DETECTION)) ||
+	        ((dbp.type & TYPE_C10_START_UPDATE_CYCLE) == TYPE_C10_START_UPDATE_CYCLE) ) {
 		    update_calculations(&dbp);
 		}
 	    }
