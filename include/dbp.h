@@ -27,6 +27,7 @@ struct datablock_plot {
     unsigned char sic;			//	CAT01 CAT02 CAT08 CAT10
     int cat; 				// 	 // categoria original de la info
     int type; 				//	CAT01 CAT02 CAT08  CAT10 CAT34 CAT48 // psr-ssr-cmb-track/pasonorte.../sop-eop.../
+    int source;                         //      CAT10 (channel 1 or channel 2)
     union {
         float rho;			//	CAT01 CAT48
         float x;                        //      CAT20

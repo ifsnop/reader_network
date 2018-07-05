@@ -1,3 +1,6 @@
+0.72
+- SOPORTE: para CAT10, client soporta el canal operativo.
+
 0.71
 - SOPORTE: para CAT10, se envían a cálculo de demoras los
   DETECTION y los SUC. Antes solo los DETECTION, pero durante
@@ -5,7 +8,7 @@
 - BUG: log_flush() después de log_printf en updatecalculations
   para ver el progreso cuando se usa --stdout con --mysql-xxxx
 - BUG: áñade 10 microsegs antes de cada sendto para que la pila
-  udp no tire los paquetes por overflow al enviar de fichero
+  udp no tire los paquetes por overflow al enviar de fichero.
 
 0.70
 - SOPORTE reader_network: retry ftp upload once

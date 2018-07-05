@@ -52,6 +52,9 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define TYPE_C48_CMBSROL 64
 #define TYPE_C48_FIXED_TRANSPONDER 128
 
+#define SOURCE_CHANNEL1 0
+#define SOURCE_CHANNEL2 1
+
 #define IS_ERROR 0
 #define IS_SACSIC 1
 #define IS_TYPE 2

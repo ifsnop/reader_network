@@ -710,6 +710,7 @@ int index = 0;
 		case 7: dbp.plot_type = TYPE_C10_PLOT_OTHER; break;
 		default: dbp.plot_type = NO_DETECTION;
 	    }
+	    if ( (ptr_raw[j] & 8) == 8 ) { dbp.source = SOURCE_CHANNEL2; } else { dbp.source = SOURCE_CHANNEL1; }
 	    while (ptr_raw[j] & 1) { j++; size_current++; }; j++;size_current++;
 	}
 	if ( ptr_raw[0] & 16 ) { //I010/140

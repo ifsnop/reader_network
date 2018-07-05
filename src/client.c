@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
 		}
 	    }
 
-	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s%s%s%s%s%s%s%s%s] [AZI %03.3f] [DST %03.3f] [%s] [%s] (%3.4f)\n", dbp.id,
+	    log_printf(LOG_VERBOSE, "%ld [%s/%s] [%s%s%s%s] [%s%s%s%s%s%s%s%s%s%s] [AZI %03.3f] [DST %03.3f] [%s] [%s] (%3.4f)\n", dbp.id,
 		sac_s, sic_l,
 		(dbp.type == TYPE_C10_TARGET_REPORT) ? "PLOT" : "",
 		(dbp.type == TYPE_C10_START_UPDATE_CYCLE) ? "SUC" : "",
@@ -202,6 +202,7 @@ int main(int argc, char *argv[]) {
 		(dbp.plot_type == TYPE_C10_PLOT_HF_MULTI) ? "HFM" : "",
 		(dbp.plot_type == TYPE_C10_PLOT_NOT_DEFINED) ? "und" : "",
 		(dbp.plot_type == TYPE_C10_PLOT_OTHER) ? "OTHER" : "",
+		(dbp.type == TYPE_C10_TARGET_REPORT) ? ((dbp.source == SOURCE_CHANNEL1) ? " CH1" : " CH2") : "",
 		(dbp.available & IS_MEASURED_POLAR) ? dbp.theta : 0.0,
 		(dbp.available & IS_MEASURED_POLAR) ? dbp.rho : 0.0,
 		hora1, hora2,
