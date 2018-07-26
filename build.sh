@@ -114,6 +114,7 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts
     gcc $gccopts -o bin/filtersacsic${destarch}${arch} src/utils/filtersacsic.c $rnopts
     gcc $gccopts -o bin/filtercat${destarch}${arch} src/utils/filtercat.c $rnopts
+    gcc $gccopts -o bin/filtercatout${destarch}${arch} src/utils/filtercatout.c $rnopts
     gcc $gccopts -o bin/joingps${destarch}${arch} src/utils/joingps.c $rnopts
     gcc $gccopts -o bin/memresps${destarch}${arch} src/memresp/memresps.c $rnopts
 

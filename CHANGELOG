@@ -1,5 +1,7 @@
 0.72
 - SOPORTE: para CAT10, client soporta el canal operativo.
+- SOPORTE: añadida utilidad para eliminar categorías asterix
+  de archivos GPS.
 
 0.71
 - SOPORTE: para CAT10, se envían a cálculo de demoras los
