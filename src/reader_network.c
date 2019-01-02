@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -997,8 +997,8 @@ unsigned long count2_plot_filtered = 0;
             fs.filter_type = dest_filter_flags;
 
             if ( dest_localhost || dest_filter_flags ) {
-                log_printf(LOG_NORMAL, "\n==================================================================\n");
-		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
+                //log_printf(LOG_NORMAL, "\n==================================================================\n");
+		//ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
 
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
@@ -1325,8 +1325,8 @@ unsigned long count2_plot_filtered = 0;
 				}
 				is_processed = true;
 
-				log_printf(LOG_VERBOSE,"-----udp(%d) ast_size_datablock(%d)\n", udp_size, ast_size_datablock);
-				ast_output_datablock(ast_ptr_raw, udp_size, 0, 0);
+				//log_printf(LOG_VERBOSE,"-----udp(%d) ast_size_datablock(%d)\n", udp_size, ast_size_datablock);
+				//ast_output_datablock(ast_ptr_raw, udp_size, 0, 0);
 				
 				do {
 				    unsigned int crc = 0;
@@ -1336,6 +1336,7 @@ unsigned long count2_plot_filtered = 0;
 				    if (mode_scrm || dest_screen_crc) {
 					crc = crc32(ast_ptr_raw_tmp, ast_size_datablock);
 					if (dest_screen_crc) {
+					    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 					    log_printf(LOG_VERBOSE, "%3.4f [%08X]\n", current_time_today, crc);
 					}
 				    }
@@ -1360,7 +1361,7 @@ unsigned long count2_plot_filtered = 0;
 					// RBTreePrint(tree);
 				    }
 
-				    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
+				    //ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 				    if (dest_localhost && record) {
 					if (ast_ptr_raw_tmp[0] == '\x01')
 					    ast_procesarCAT01(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
@@ -1431,8 +1432,7 @@ unsigned long count2_plot_filtered = 0;
 					salir=1;
 				    }
 				} while (salir==0);
-				log_printf(LOG_NORMAL, "\n==================================================================\n");
-
+				//log_printf(LOG_NORMAL, "\n==================================================================\n");
 //                                j=radar_count/5; // no seguir buscando, ya ha sido procesado
 //			    } else {
 //			        log_printf(LOG_VERBOSE, "%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);

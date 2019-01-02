@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2015 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -412,7 +412,7 @@ int index = 0;
 	struct datablock_plot dbp;
 
 	memset(&dbp, 0, sizeof(struct datablock_plot));
-	log_printf(LOG_NORMAL, "a)CAT01] fspec %02X\n", ptr_raw[0]);
+	// log_printf(LOG_NORMAL, "a)CAT01] fspec %02X\n", ptr_raw[0]);
 
 	sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
 	dbp.cat = CAT_01;
@@ -442,13 +442,13 @@ int index = 0;
 	}
 	if ( ptr_raw[0] & 64 ) { //I001/010
 	    if ( ptr_raw[j] & 128 ) { // track
-		log_printf(LOG_NORMAL, "b)CAT01] type %02X TRACK\n", ptr_raw[j]);
+		// log_printf(LOG_NORMAL, "b)CAT01] type %02X TRACK\n", ptr_raw[j]);
 	        dbp.available |= IS_TRACK;
 		size_current = size_datablock - 3; //exit without further decompression
 
 	    } else { // plot
 		dbp.available |= IS_TYPE;
-		log_printf(LOG_NORMAL, "c)CAT01] type %02X\n", ptr_raw[j]);
+		// log_printf(LOG_NORMAL, "c)CAT01] type %02X\n", ptr_raw[j]);
 
 		if ( (!(ptr_raw[j] & 32)) && (!(ptr_raw[j] & 16)) ) {
 		    dbp.type = NO_DETECTION;
@@ -525,7 +525,7 @@ int index = 0;
 	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
 //	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
 	if ( dbp.available & IS_TYPE ) {
-	    log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
+	    // log_printf(LOG_NORMAL, "dbp tod_stamp(%3.3f) tod(%3.3f) diff(%3.3f)\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
 /*	    if ((dbp.tod_stamp - dbp.tod < 0) || ((dbp.tod_stamp - dbp.tod > 5)) ) {
 		log_printf(LOG_NORMAL, "%3.3f %3.3f %3.3f\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);	
 		exit(EXIT_FAILURE);
@@ -562,20 +562,17 @@ int ast_procesarCAT02(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
         dbp.id = id;
         dbp.index = 0;
         sizeFSPEC = ast_get_size_FSPEC(ptr_raw, size_datablock);
-
-        log_printf(LOG_ERROR, "a)CAT02] (%d) %02X %02X\n", sizeFSPEC, ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC+1] );
+        // log_printf(LOG_ERROR, "a)CAT02] (%d) %02X %02X\n", sizeFSPEC, ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC+1] );
 
         if ( (ptr_raw[0] & 128) && // sac/sic
     	    (ptr_raw[0] & 64) &&  // msg type
             (ptr_raw[0] & 16) ) { // timeofday
-    
-             log_printf(LOG_ERROR, "b)CAT02] (%d) %02X %02X \n", sizeFSPEC, ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC+1] );
+
+            // log_printf(LOG_ERROR, "b)CAT02] (%d) %02X %02X \n", sizeFSPEC, ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC+1] );
             if (ptr_raw[0] & 32) pos++;
 	
 	    pos += sizeFSPEC + 3; //FSPEC SACSIC MSGTYPE
-	
-            log_printf(LOG_ERROR, "c)CAT02] (%d) %02X %02X \n", sizeFSPEC, ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC+1] );
-	
+            // log_printf(LOG_ERROR, "c)CAT02] (%d) %02X %02X \n", sizeFSPEC, ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC+1] );
 	    ttod_put_full(ptr_raw[sizeFSPEC], ptr_raw[sizeFSPEC + 1], ptr_raw + pos);
 
     	    dbp.cat = CAT_02;
@@ -583,18 +580,18 @@ int ast_procesarCAT02(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 	    dbp.available = IS_TOD | IS_TYPE | IS_SACSIC;
 	    dbp.tod = ((float)(ptr_raw[pos]*256*256 + ptr_raw[pos+1]*256 + ptr_raw[pos+2]))/128.0;
 	    if (dbp.sac == 104 && dbp.sic==1) {
-	        log_printf(LOG_ERROR, "d)CAT02] datablock follows:\n");
-	        ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
+	        // log_printf(LOG_ERROR, "d)CAT02] datablock follows:\n");
+	        // ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
 	    }
 	    switch(ptr_raw[sizeFSPEC+2]) {
-	        case 1: dbp.type = TYPE_C2_NORTH_MARKER;			break;
-    	        case 2: dbp.type = TYPE_C2_SECTOR_CROSSING;			break;
-    	        case 3: dbp.type = TYPE_C2_SOUTH_MARKER;			break;
+	        case 1: dbp.type = TYPE_C2_NORTH_MARKER;		break;
+    	        case 2: dbp.type = TYPE_C2_SECTOR_CROSSING;		break;
+    	        case 3: dbp.type = TYPE_C2_SOUTH_MARKER;		break;
 	        case 8: dbp.type = TYPE_C2_START_BLIND_ZONE_FILTERING;	break;
 	        case 9: dbp.type = TYPE_C2_STOP_BLIND_ZONE_FILTERING;	break;
-	        default: dbp.type = NO_DETECTION;				break;
+	        default: dbp.type = NO_DETECTION;			break;
 	    }
-	    log_printf(LOG_ERROR, "e)CAT02] dbp.type(%d) db.tod(%3.3f) dbp.available(%d)\n", dbp.type, dbp.tod, dbp.available);
+	    // log_printf(LOG_ERROR, "e)CAT02] dbp.type(%d) db.tod(%3.3f) dbp.available(%d)\n", dbp.type, dbp.tod, dbp.available);
 	    if (enviar) {
 	        usleep(10);
                 if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT002
