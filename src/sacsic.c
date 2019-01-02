@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2016 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2018 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -171,6 +171,7 @@ char *tmp;
 			    case 195:{ strncpy(tmp, "PDC", TEXT_LENGTH_SHORT); break; }
 			    case 196:{ strncpy(tmp, "LPM", TEXT_LENGTH_SHORT); break; }
 			    case 197:{ strncpy(tmp, "TBN", TEXT_LENGTH_SHORT); break; }
+			    case 198:{ strncpy(tmp, "LAN", TEXT_LENGTH_SHORT); break; }
 			    case 199:{ strncpy(tmp, "FPV", TEXT_LENGTH_SHORT); break; }
 			    case 201:{ strncpy(tmp, "AST", TEXT_LENGTH_SHORT); break; }
 			    default: sprintf(tmp, "U%03d", sic[0]);
@@ -220,6 +221,7 @@ char *tmp;
 			    case 195:{ strncpy(tmp, "Peñas del Chache", TEXT_LENGTH_LONG); break; }
 			    case 196:{ strncpy(tmp, "La Palma", TEXT_LENGTH_LONG); break; }
 			    case 197:{ strncpy(tmp, "Taborno", TEXT_LENGTH_LONG); break; }
+			    case 198:{ strncpy(tmp, "Lanzarote", TEXT_LENGTH_LONG); break; }
 			    case 199:{ strncpy(tmp, "Fuerteventura PV", TEXT_LENGTH_LONG); break; }
 			    case 201:{ strncpy(tmp, "Asturias WAM", TEXT_LENGTH_LONG); break; }
 			    default: sprintf(tmp, "U%03d", sic[0]);

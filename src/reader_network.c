@@ -997,6 +997,8 @@ unsigned long count2_plot_filtered = 0;
             fs.filter_type = dest_filter_flags;
 
             if ( dest_localhost || dest_filter_flags ) {
+                log_printf(LOG_NORMAL, "\n==================================================================\n");
+		ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
 
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
@@ -1323,8 +1325,8 @@ unsigned long count2_plot_filtered = 0;
 				}
 				is_processed = true;
 
-//				log_printf(LOG_VERBOSE,"-----udp(%d) ast(%d)\n", udp_size, ast_size_datablock);
-//				ast_output_datablock(ast_ptr_raw, udp_size, count_plot_processed, 0);
+				log_printf(LOG_VERBOSE,"-----udp(%d) ast_size_datablock(%d)\n", udp_size, ast_size_datablock);
+				ast_output_datablock(ast_ptr_raw, udp_size, 0, 0);
 				
 				do {
 				    unsigned int crc = 0;
@@ -1358,31 +1360,31 @@ unsigned long count2_plot_filtered = 0;
 					// RBTreePrint(tree);
 				    }
 
-				    //log_printf(LOG_NORMAL, "\n==================================================================\n");
-				    //ast_output_datablock(ast_ptr_raw, ast_size_datablock, count2_plot_processed, 0);
-				    //ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
+				    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
 				    if (dest_localhost && record) {
-					if (ast_ptr_raw[0] == '\x01')
+					if (ast_ptr_raw_tmp[0] == '\x01')
 					    ast_procesarCAT01(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x02')
+					if (ast_ptr_raw_tmp[0] == '\x02')
 					    ast_procesarCAT02(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x08')
+					if (ast_ptr_raw_tmp[0] == '\x08')
 					    ast_procesarCAT08(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
+                                        // excepción, el antiguo SMR de Terma concatenaba cat-size-datarecord+datarecord+datarecord
+                                        // el resto del mundo hace cat-size-datarecords+cat-size-datarecord....
 					if (ast_ptr_raw[0] == '\x0a')
 					    ast_procesarCAT10(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x013')
+					if (ast_ptr_raw_tmp[0] == '\x013')
 					    ast_procesarCAT19(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x014')
+					if (ast_ptr_raw_tmp[0] == '\x014')
 					    ast_procesarCAT20(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x15')
+					if (ast_ptr_raw_tmp[0] == '\x15')
 					    ast_procesarCAT21(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x22')
+					if (ast_ptr_raw_tmp[0] == '\x22')
 					    ast_procesarCAT34(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
-					if (ast_ptr_raw[0] == '\x30')
+					if (ast_ptr_raw_tmp[0] == '\x30')
 					    //ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true); //, FILTER_GROUND);
                                             //ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, dest_filter_flags, ast_ptr_raw_new, ast_size_datablock_new);
                                             ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, NULL);
-					if (ast_ptr_raw[0] == '\x3e')
+					if (ast_ptr_raw_tmp[0] == '\x3e')
 					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 				    }
 				    if (dest_file != NULL && record) {
@@ -1422,12 +1424,15 @@ unsigned long count2_plot_filtered = 0;
 					}
 				    }
 				    ast_ptr_raw_tmp += ast_size_datablock;
+				    // realmente, si ast_size_datablock < udp_size
 				    if (ast_ptr_raw_tmp < (ast_ptr_raw+udp_size)) {
 					ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ast_ptr_raw_tmp[2];
 				    } else {
 					salir=1;
 				    }
 				} while (salir==0);
+				log_printf(LOG_NORMAL, "\n==================================================================\n");
+
 //                                j=radar_count/5; // no seguir buscando, ya ha sido procesado
 //			    } else {
 //			        log_printf(LOG_VERBOSE, "%02d) rcv(%s) cfg(%s) counter(%ld)\n",j, inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3], count2_udp_received);

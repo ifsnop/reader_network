@@ -1,7 +1,14 @@
+0.73
+- BUG: cuando en un paquete udp había más de un mensaje
+  encapsulado y eran de distintas categorías, el segundo
+  se tiraba. Esto afectaba especialmente a Montejunto, Foia,
+  etc, porque encapsulaban un cat02+cat01...
+
 0.72
 - SOPORTE: para CAT10, client soporta el canal operativo.
 - SOPORTE: añadida utilidad para eliminar categorías asterix
   de archivos GPS.
+- SOPORTE: Añadido el sic de Lanzarote (198)
 
 0.71
 - SOPORTE: para CAT10, se envían a cálculo de demoras los
