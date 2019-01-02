@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -201,8 +201,10 @@ int main(int argc, char *argv[]) {
 	if (current_date.tv_sec >= (old_date.tv_sec + LAP_TIME)) {
 	    close(fd_out);
 	    // compressing old memresp recording in background
-	    sprintf(ptr_bzip, "/bin/sh -c '/bin/bzip2 %s' &", ptr_filename); 
-	    system(ptr_bzip);
+	    sprintf(ptr_bzip, "/bin/sh -c '/bin/bzip2 %s' &", ptr_filename);
+	    if ( (ret = system(ptr_bzip)) < 0 ) {
+                printf("error bzip2: %s\n", ptr_bzip); exit(EXIT_FAILURE);
+	    }
 	    t2 = gmtime(&current_date.tv_sec);
             sprintf(ptr_destdir, "%s/%02d/", argv[1], t2->tm_mday);
             sprintf(ptr_mkdir, "/bin/mkdir -p %s", ptr_destdir);
@@ -223,13 +225,16 @@ int main(int argc, char *argv[]) {
 		socklen_t addrlen = sizeof(struct sockaddr_in);
 	    	memset(&cast_group, 0, sizeof(cast_group));
 	        if ((udp_size = recvfrom(s_in, ptr_in, 65535, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
-		    printf("error recvfrom:%s\n", strerror(errno)); //exit(EXIT_FAILURE);
+		    printf("error recvfrom: %s\n", strerror(errno)); //exit(EXIT_FAILURE);
                     close(s_in);
                     subscribe();
         	}
 		if (( udp_size > 0) && (!strcasecmp(inet_ntoa(cast_group.sin_addr), "214.25.250.1"))) {
 		    // write to file
-		    write(fd_out, ptr_in, udp_size);
+                    ret = write(fd_out, ptr_in, udp_size);
+                    if ( ret < 0 ) {
+                        printf("error write: %s\n", strerror(errno)); exit(EXIT_FAILURE);
+                    }
 		} else {
 		    // no sabemos de donde viene!
 		}
@@ -246,9 +251,9 @@ int main(int argc, char *argv[]) {
 //    printf("salido\n");
     
     ret = sendto(s_out, dump_stop, 12, 0, (struct sockaddr*)&addr1, sizeof(addr1));
-    if (ret<12) { printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE); }
+    if (ret<12) { printf("error sendto(%d): %s\n", ret, strerror(errno)); exit(EXIT_FAILURE); }
     ret = sendto(s_out, dump_stop, 12, 0, (struct sockaddr*)&addr2, sizeof(addr2));
-    if (ret<12) { printf("error sendto(%d):%s\n", ret, strerror(errno)); exit(EXIT_FAILURE); }
+    if (ret<12) { printf("error sendto(%d): %s\n", ret, strerror(errno)); exit(EXIT_FAILURE); }
 
     close(fd_out);
     close(s_in);

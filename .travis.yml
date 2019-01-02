@@ -12,8 +12,8 @@ script:
     - ./build.sh
     - valgrind --leak-check=full --show-reachable=yes bin/reader_network64 bin/conf/066test_filter.conf
     - valgrind --leak-check=full --show-reachable=yes bin/reader_network64 bin/conf/068test_bds30.conf
-    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364 -s bin/datos/068test_rrd3.gps -3 -y -o -r centro
-    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364 -s bin/datos/068test_bds30.gps -3 -y -o -r centro
+    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364 -s bin/datos/068test_rrd3.gps --do-delays --do-bds30 --do-caps --stdout -r centro
+    - valgrind --leak-check=full --show-reachable=yes bin/reader_rrd364 -s bin/datos/068test_bds30.gps --do-delays --do-bds30 --do-caps --stdout -r centro
     - valgrind --leak-check=full --show-reachable=yes bin/cleanast64 bin/datos/local.gps bin/datos/local.ast 2200 0 10
 
 env:
