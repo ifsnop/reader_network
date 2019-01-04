@@ -522,7 +522,7 @@ int index = 0;
 		}
 	    }
 	}
-	ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
+	// ast_output_datablock(ptr_raw, j , dbp.id, dbp.index);
 //	if ( (dbp.available & IS_TYPE) && (dbp.available & IS_TOD) ) {
 	if ( dbp.available & IS_TYPE ) {
 	    // log_printf(LOG_NORMAL, "dbp tod_stamp(%3.3f) tod(%3.3f) diff(%3.3f)\n", dbp.tod_stamp, dbp.tod, dbp.tod_stamp - dbp.tod);
@@ -579,10 +579,10 @@ int ast_procesarCAT02(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 	    dbp.sac = ptr_raw[sizeFSPEC]; dbp.sic = ptr_raw[sizeFSPEC+1];
 	    dbp.available = IS_TOD | IS_TYPE | IS_SACSIC;
 	    dbp.tod = ((float)(ptr_raw[pos]*256*256 + ptr_raw[pos+1]*256 + ptr_raw[pos+2]))/128.0;
-	    if (dbp.sac == 104 && dbp.sic==1) {
+	    //if (dbp.sac == 104 && dbp.sic==1) {
 	        // log_printf(LOG_ERROR, "d)CAT02] datablock follows:\n");
 	        // ast_output_datablock(ptr_raw, size_datablock - 3, dbp.id, dbp.index);
-	    }
+	    //}
 	    switch(ptr_raw[sizeFSPEC+2]) {
 	        case 1: dbp.type = TYPE_C2_NORTH_MARKER;		break;
     	        case 2: dbp.type = TYPE_C2_SECTOR_CROSSING;		break;
