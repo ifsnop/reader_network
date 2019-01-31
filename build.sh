@@ -117,6 +117,7 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/filtercatout${destarch}${arch} src/utils/filtercatout.c $rnopts
     gcc $gccopts -o bin/joingps${destarch}${arch} src/utils/joingps.c $rnopts
     gcc $gccopts -o bin/memresps${destarch}${arch} src/memresp/memresps.c $rnopts
+    gcc $gccopts -o bin/gps2era${destarch}${arch} src/utils/gps2era.c $rnopts
 
 done
 

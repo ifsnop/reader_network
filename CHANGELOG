@@ -1,3 +1,7 @@
+0.74
+- SOPORTE: añadido un conversor entre GPS y versión asterix
+  de ERA.
+
 0.73
 - BUG: cuando en un paquete udp había más de un mensaje
   encapsulado y eran de distintas categorías, el segundo
