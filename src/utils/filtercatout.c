@@ -79,8 +79,7 @@ int main(int argc, char *argv[]) {
     while( i<filesize ) {
         int oldi = i;
         int match = 0;
-
-	//int j;
+        // int j = 0;
 
 	i += prebytes;
 	lendb = (ptr[i+1]<<8) + ptr[i+2] + postbytes;
@@ -90,8 +89,8 @@ int main(int argc, char *argv[]) {
             match=1;
         }
 
-	//printf("cat(%02X) len(%d) pre(%d) post(%d)\n", ptr[i], lendb - prebytes - postbytes, prebytes,postbytes);
-	//for(j=0;j<lendb+prebytes+postbytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("==\n\n");
+	// printf("cat(%02X) len(%d) pre(%d) post(%d)\n", ptr[i], lendb - prebytes - postbytes, prebytes,postbytes);
+	// for(j=0;j<lendb+prebytes+postbytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("==\n\n");
 
         if (match) {
             if (write(fdout, ptr + oldi, lendb) != lendb) {

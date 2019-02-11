@@ -1,3 +1,9 @@
+0.75
+- BUG: el tamano del paquete se tiene en cuenta en el
+  calculo del CRC, deberia disminuir los falsos positivos.
+- SOPORTE: uso clock_gettime instead of gettimeofday.
+- ADD: añadida filtersicsacout
+
 0.74
 - SOPORTE: añadido un conversor entre GPS y versión asterix
   de ERA.

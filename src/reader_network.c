@@ -399,6 +399,7 @@ char *dest_file_format_string = NULL;
 void setup_output_file(void) {
 char *gpsheader = NULL, *dest_file_region_parsed = NULL;
 struct timeval t;
+struct timespec ts;
 struct tm *t2 = NULL;
 
     gpsheader = (char *) mem_alloc(2200);
@@ -428,6 +429,9 @@ struct tm *t2 = NULL;
 	if (dest_file_timestamp) {
 	    if (gettimeofday(&t, NULL) !=0 ) {
 		log_printf(LOG_ERROR, "ERROR gettimeofday: %s\n", strerror(errno)); exit(EXIT_FAILURE);
+	    }
+	    if (clock_gettime(CLOCK_REALTIME, &ts) !=0 ) {
+		log_printf(LOG_ERROR, "ERROR clock_gettime: %s\n", strerror(errno)); exit(EXIT_FAILURE);
 	    }
 	    if ((t2 = gmtime(&t.tv_sec))==NULL) {
 		log_printf(LOG_ERROR, "ERROR gmtime: %s\n", strerror(errno)); exit(EXIT_FAILURE);
@@ -779,14 +783,27 @@ void setup_input_network(void) {
 }
 
 void setup_time(void) {
-struct timeval t;
+struct timeval tv;
 struct tm *t2;
+struct timespec ts;
+double tv_float = 0, ts_float = 0;
+char precision[255];
 
-    if (gettimeofday(&t, NULL)==-1) {
+    if (gettimeofday(&tv, NULL)==-1) {
 	log_printf(LOG_ERROR, "ERROR gettimeofday (setup_time): %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
     }
-    if ((t2 = gmtime(&t.tv_sec)) == NULL) {
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+	log_printf(LOG_ERROR, "ERROR clock_gettime (setup_time): %s\n", strerror(errno));
+	exit(EXIT_FAILURE);
+    }
+
+    tv_float = tv.tv_sec + (tv.tv_usec/1000000.0);
+    ts_float = ts.tv_sec + (ts.tv_nsec/1000000000.0);
+    snprintf(precision, 254, "synchronization granularity of %dμs\n", (int)floor(fabs(tv_float-ts_float)*1000000.0));
+    log_printf(LOG_VERBOSE, "%s", precision);
+
+    if ((t2 = gmtime(&tv.tv_sec)) == NULL) {
 	log_printf(LOG_ERROR, "ERROR gmtime (setup_time): %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
     }
@@ -1048,12 +1065,12 @@ unsigned long count2_plot_filtered = 0;
                     count2_plot_filtered++;
                     //ast_output_datablock(fs.ptr_raw, fs.size_datablock, count2_plot_processed, 0);
                     if ( fd_out_gps != -1 ) {
-                        if ( write(fd_out_gps, fs.ptr_raw, fs.size_datablock) == -1 ) {
+                        if ( write(fd_out_gps, fs.ptr_raw, fs.size_datablock) != fs.size_datablock ) {
                             log_printf(LOG_ERROR, "ERROR writev1->fd_out_gps (fs): %s\n", strerror(errno));
                         }
                         // si el origen es gps, hay que escribir también el offset.
                         if ( offset != 0 ) {
-                            if ( write(fd_out_gps, ast_ptr_raw + ast_pos + ast_size_datablock, offset) == -1 ) {
+                            if ( write(fd_out_gps, ast_ptr_raw + ast_pos + ast_size_datablock, offset) != offset ) {
                                 log_printf(LOG_ERROR, "ERROR writev1->fd_out_gps (gps): %s\n", strerror(errno));
                             }
                         }
@@ -1061,7 +1078,7 @@ unsigned long count2_plot_filtered = 0;
                     }
                     if ( fd_out_ast != -1 ) {
                         // no hay offset que escribir, el origen es asterix, el destino debe ser asterix
-                        if ( write(fd_out_ast, fs.ptr_raw, fs.size_datablock) == -1 ) {
+                        if ( write(fd_out_ast, fs.ptr_raw, fs.size_datablock) != fs.size_datablock ) {
                             log_printf(LOG_ERROR, "ERROR write (fs): %s\n", strerror(errno));
                         }
                     }
@@ -1069,12 +1086,12 @@ unsigned long count2_plot_filtered = 0;
                 } else {
                     //ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock + offset, count2_plot_processed, 0);
                     if ( fd_out_gps != -1 ) {
-                        if ( write(fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset) == -1 ) {
+                        if ( write(fd_out_gps, ast_ptr_raw + ast_pos, ast_size_datablock + offset) != (ast_size_datablock + offset) ) {
                             log_printf(LOG_ERROR, "ERROR writev2->fd_out_gps (ast_ptr_raw): %s\n", strerror(errno));
                         }
                     }
                     if ( fd_out_ast != -1 ) {
-                        if ( write(fd_out_ast, ast_ptr_raw + ast_pos, ast_size_datablock) == -1 ) {
+                        if ( write(fd_out_ast, ast_ptr_raw + ast_pos, ast_size_datablock) != ast_size_datablock ) {
                             log_printf(LOG_ERROR, "ERROR writev2->fd_out_ast (ast_ptr_raw): %s\n", strerror(errno));
                         }
                     }
@@ -1335,10 +1352,8 @@ unsigned long count2_plot_filtered = 0;
 
 				    if (mode_scrm || dest_screen_crc) {
 					crc = crc32(ast_ptr_raw_tmp, ast_size_datablock);
-					if (dest_screen_crc) {
-					    ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
-					    log_printf(LOG_VERBOSE, "%3.4f [%08X]\n", current_time_today, crc);
-					}
+					// para incluir el tamaño en el cálculo del crc
+					crc = crc32_update(crc, (const unsigned char *)&ast_size_datablock,sizeof(ast_size_datablock)) ^ 0xffffffff;
 				    }
 
 				    if (mode_scrm) {
@@ -1353,10 +1368,24 @@ unsigned long count2_plot_filtered = 0;
 						RBDelete(tree, node_old);
 					    }
 					    RBTreeInsert(tree, crc, current_timestamp);
+                                            if (dest_screen_crc) {
+                                                int jj=0;
+                                                printf("+ %08X ", crc);
+					        for(jj=0; jj<udp_size; jj++)
+					            printf("%02X", ast_ptr_raw[jj]);
+					        printf(" (%3.4f)\n", current_time_today);
+					    }
 					} else {
 					    node->access++;
 					    record = false; // so dupes are ignored
 					    count2_plot_duped++;
+					    if (dest_screen_crc) {
+                                                int jj=0;
+                                                printf("- %08X ", crc);
+                                                for(jj=0; jj<udp_size; jj++)
+                                                    printf("%02X", ast_ptr_raw[jj]);
+                                                printf(" (%3.4f)\n", current_time_today);
+					    }
 					}
 					// RBTreePrint(tree);
 				    }
@@ -1390,7 +1419,7 @@ unsigned long count2_plot_filtered = 0;
 				    }
 				    if (dest_file != NULL && record) {
 					if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
-					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == -1) {
+					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == ast_size_datablock ) {
 						log_printf(LOG_ERROR, "ERROR write_ast: %s (%d)\n", strerror(errno), fd_out_ast);
 					    }
 					}
@@ -1536,4 +1565,3 @@ unsigned long count2_plot_filtered = 0;
 
     return 0;
 }
-
