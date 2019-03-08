@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -31,21 +31,19 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include "defines.h"
 
 int main(int argc, char *argv[]) {
-    int prebytes=0, postbytes=0, headerbytes=0;
+    int postbytes=10, headerbytes=2200; // formato gps v1 (2200 0 10)
     int fdin, fdout;
     int i=0;
+    unsigned long time = 0;
     unsigned int lendb, filesize;
     unsigned char *ptr;
-
-    if(argc!=6) {
-        printf("cleanast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-        printf("cleanast_%s in_filename.gps out_filename.ast headerbytes prebytes postbytes\n\n", ARCH);
+    unsigned char dst_ptr[65536]; // db destino, para guardar header de era antes de escribir en fichero
+    
+    if(argc!=4) {
+        printf("gps2era_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
+        printf("filtersacsic_%s in_filename.gps out_filename.era.ast unix_time_to_00:00\n\n", ARCH);
         exit(EXIT_SUCCESS);
     }
-
-    headerbytes = atoi(argv[3]);
-    prebytes = atoi(argv[4]);
-    postbytes = atoi(argv[5]);
 
     if ( (fdin = open(argv[1], O_RDONLY)) == -1 ) {
 	printf("error input file\n"); exit(1);
@@ -68,21 +66,39 @@ int main(int argc, char *argv[]) {
 	printf("error read\n");	exit(1);
     }
 
-    i+=headerbytes;
+    time = atol(argv[3]);
+
+    i += headerbytes;
     while( i<filesize ) {
-	int j;
-	i += prebytes;
+        float current_gps_time = 0;
+        unsigned long unixtime = 0;
+
 	lendb = (ptr[i+1]<<8) + ptr[i+2];
-	/*
-	printf("%02X %02X len(%d) pre(%d) post(%d)\n", ptr[i+1], ptr[i+2], lendb, prebytes,postbytes);
-	printf("PRE:["); for(j=0;j<prebytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("]\n");
-	printf("DAT:["); for(j=0;j<lendb;j++) printf("%02X ", ptr[i+j]); printf("]\n");
-        printf("POS:["); for(j=0;j<postbytes;j++) printf("%02X ", ptr[i+j+lendb]); printf("]\n");
-        */
-        if (write(fdout, ptr + i, lendb) != lendb) {
-	    printf("error write\n"); exit(1);
-	}
-	i += postbytes + lendb;
+
+        current_gps_time = ((ptr[i + lendb + 6]<<16 ) +
+            (ptr[i + lendb + 7] << 8) +
+            (ptr[i + lendb + 8]) ) / 128.0;
+        dst_ptr[0] = 0x38; // ERA TYPE
+        dst_ptr[1] = 0; // ERA SUBTYPE, ALWAYS 0
+        dst_ptr[2] = (unsigned char) ((lendb + 4) & 0xFF); // length of datablock + 4
+        dst_ptr[3] = (unsigned char) ((lendb + 4) >> 8);
+        unixtime = (unsigned long) current_gps_time + time;
+        dst_ptr[4] = (unsigned char) ((unixtime>>0) & 0xFF);
+        dst_ptr[5] = (unsigned char) ((unixtime>>8) & 0xFF);
+        dst_ptr[6] = (unsigned char) ((unixtime>>16) & 0xFF);
+        dst_ptr[7] = (unsigned char) ((unixtime>>24) & 0xFF);
+        memcpy(dst_ptr + 8, ptr + i, lendb);
+	//{
+	// int j;
+	// printf("%ld %3.3f\n", unixtime, current_gps_time);
+	// printf("cat(%02X) len(%d) pre(%d) post(%d)\n", ptr[i], lendb - prebytes - postbytes, prebytes,postbytes);
+	// for(j=0; j < lendb + postbytes; j++) printf("%02X ", ptr[i+j]); printf("\n");
+	// for(j=0; j < 8 + lendb; j++) printf("%02X ", dst_ptr[j]); printf("\n====\n");
+        //}
+        if (write(fdout, dst_ptr, lendb + 8) != (lendb+8)) {
+            printf("error write\n"); exit(1);
+        }
+	i += lendb + postbytes;
     }
 
     free(ptr);

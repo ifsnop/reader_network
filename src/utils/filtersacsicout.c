@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -32,20 +32,23 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 int main(int argc, char *argv[]) {
     int prebytes=0, postbytes=0, headerbytes=0;
-    int fdin, fdout;
+    int fdin, fdout, isac, isic;
     int i=0;
+    unsigned char sac = '\0', sic = '\0';
     unsigned int lendb, filesize;
     unsigned char *ptr;
 
-    if(argc!=6) {
-        printf("cleanast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-        printf("cleanast_%s in_filename.gps out_filename.ast headerbytes prebytes postbytes\n\n", ARCH);
+    if(argc!=8) {
+        printf("filtersacsic_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
+        printf("filtersacsic_%s in_filename.gps out_filename.gps headerbytes prebytes postbytes sac sic\n\n", ARCH);
         exit(EXIT_SUCCESS);
     }
 
     headerbytes = atoi(argv[3]);
     prebytes = atoi(argv[4]);
     postbytes = atoi(argv[5]);
+    isac = atoi(argv[6]); isic = atoi(argv[7]);
+    sac = (isac % 255); sic = (isic % 255);
 
     if ( (fdin = open(argv[1], O_RDONLY)) == -1 ) {
 	printf("error input file\n"); exit(1);
@@ -68,21 +71,40 @@ int main(int argc, char *argv[]) {
 	printf("error read\n");	exit(1);
     }
 
+    if (write(fdout, ptr, headerbytes) != headerbytes) {
+        printf("error write\n"); exit(1);
+    }
+
     i+=headerbytes;
     while( i<filesize ) {
-	int j;
+        int oldi = i;
+        int match = 0;
+        int fspeclength = 0;
+
+	//int j;
+
 	i += prebytes;
-	lendb = (ptr[i+1]<<8) + ptr[i+2];
-	/*
-	printf("%02X %02X len(%d) pre(%d) post(%d)\n", ptr[i+1], ptr[i+2], lendb, prebytes,postbytes);
-	printf("PRE:["); for(j=0;j<prebytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("]\n");
-	printf("DAT:["); for(j=0;j<lendb;j++) printf("%02X ", ptr[i+j]); printf("]\n");
-        printf("POS:["); for(j=0;j<postbytes;j++) printf("%02X ", ptr[i+j+lendb]); printf("]\n");
-        */
-        if (write(fdout, ptr + i, lendb) != lendb) {
-	    printf("error write\n"); exit(1);
+	lendb = (ptr[i+1]<<8) + ptr[i+2] + postbytes;
+        // comprobar si hay que escribir por sac/sic
+
+        if ((ptr[i+3] & 128) == 128) {
+            while((ptr[i+3+fspeclength] & 1) == 1) fspeclength++;
+            //printf("sac(%02X) sic(%02X) sac(%02X) sic(%02X) isac(%d) isic(%d)\n", ptr[i+3+fspeclength+1], ptr[i+3+fspeclength+2], sac, sic, isac, isic);
+            if ((ptr[i+3+fspeclength+1] == sac) &&
+                (ptr[i+3+fspeclength+2] == sic) ) {
+                match=1;
+            }
+        }
+
+	//printf("cat(%02X) len(%d) pre(%d) post(%d)\n", ptr[i], lendb - prebytes - postbytes, prebytes,postbytes);
+	//for(j=0;j<lendb+prebytes+postbytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("==\n\n");
+
+        if (!match) {
+            if (write(fdout, ptr + oldi, lendb) != lendb) {
+	        printf("error write\n"); exit(1);
+	    }
 	}
-	i += postbytes + lendb;
+	i += lendb;
     }
 
     free(ptr);

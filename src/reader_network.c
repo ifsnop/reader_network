@@ -602,6 +602,9 @@ void send_output_file() {
 	if(ch) {
 	    curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
 
+            /* use version as password for ftp */
+	    curl_easy_setopt(ch, CURLOPT_USERPWD, "anonymous:@" VERSION);
+
 	    /* enable uploading */
 	    curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
 

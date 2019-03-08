@@ -3,6 +3,7 @@
   calculo del CRC, deberia disminuir los falsos positivos.
 - SOPORTE: uso clock_gettime instead of gettimeofday.
 - ADD: añadida filtersicsacout
+- ADD: añadido enviar versión al hacer ftp
 
 0.74
 - SOPORTE: añadido un conversor entre GPS y versión asterix
