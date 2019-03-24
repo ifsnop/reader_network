@@ -4,6 +4,7 @@
 - SOPORTE: uso clock_gettime instead of gettimeofday.
 - ADD: añadida filtersicsacout
 - ADD: añadido enviar versión al hacer ftp
+- ADD: añadido hensoldt 2 asterix
 
 0.74
 - SOPORTE: añadido un conversor entre GPS y versión asterix

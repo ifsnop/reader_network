@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2014 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -31,21 +31,16 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include "defines.h"
 
 int main(int argc, char *argv[]) {
-    int prebytes=0, postbytes=0, headerbytes=0;
     int fdin, fdout;
     int i=0;
     unsigned int lendb, filesize;
     unsigned char *ptr;
 
-    if(argc!=6) {
-        printf("cleanast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-        printf("cleanast_%s in_filename.gps out_filename.ast headerbytes prebytes postbytes\n\n", ARCH);
+    if(argc!=3) {
+        printf("hensoldt2ast_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
+        printf("hensoldt2ast_%s in_filename.rec out_filename.ast\n\n", ARCH);
         exit(EXIT_SUCCESS);
     }
-
-    headerbytes = atoi(argv[3]);
-    prebytes = atoi(argv[4]);
-    postbytes = atoi(argv[5]);
 
     if ( (fdin = open(argv[1], O_RDONLY)) == -1 ) {
 	printf("error input file\n"); exit(1);
@@ -68,21 +63,20 @@ int main(int argc, char *argv[]) {
 	printf("error read\n");	exit(1);
     }
 
-    i+=headerbytes;
+    i = 0;
     while( i<filesize ) {
-	// int j;
-	i += prebytes;
-	lendb = (ptr[i+1]<<8) + ptr[i+2];
+	//int j;
+	lendb = (ptr[i+0]<<24) + (ptr[i+1]<<16) +
+	    (ptr[i+2]<<8) + (ptr[i+3]);
 	/*
-	printf("%02X %02X len(%d) pre(%d) post(%d)\n", ptr[i+1], ptr[i+2], lendb, prebytes,postbytes);
-	printf("PRE:["); for(j=0;j<prebytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("]\n");
-	printf("DAT:["); for(j=0;j<lendb;j++) printf("%02X ", ptr[i+j]); printf("]\n");
-        printf("POS:["); for(j=0;j<postbytes;j++) printf("%02X ", ptr[i+j+lendb]); printf("]\n");
+	printf("lendb(%d)\n", lendb);
+	printf("PRE:["); for(j=0;j<12;j++) printf("%02X ", ptr[i+j]); printf("]\n");
+	printf("DAT:["); for(j=0;j<lendb-12;j++) printf("%02X ", ptr[i+12+j]); printf("]\n");
         */
-        if (write(fdout, ptr + i, lendb) != lendb) {
+        if (write(fdout, ptr + i + 12, lendb - 12) != (lendb-12)) {
 	    printf("error write\n"); exit(1);
 	}
-	i += postbytes + lendb;
+	i += lendb;
     }
 
     free(ptr);

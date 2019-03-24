@@ -228,7 +228,10 @@ char *dest_file_format_string = NULL;
 	log_printf(LOG_VERBOSE, "not displaying pkt crc\n");
     }
 
-    cfg_get_str_array(&asterix_versions, &asterix_versions_count, "asterix_versions");
+    if (!cfg_get_str_array(&asterix_versions, &asterix_versions_count, "asterix_versions")) {
+        log_printf(LOG_ERROR, "asterix_versions entry missing\n");
+        exit(EXIT_FAILURE);
+    }
     if (0 == asterix_versions_count) {
         log_printf(LOG_ERROR, "asterix_versions entry missing\n");
         exit(EXIT_FAILURE);
