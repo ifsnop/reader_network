@@ -1,10 +1,23 @@
+0.75c
+- BUG: reader_network falla al decodificar I048/120 (visto
+ decodificando Tanger)
+
+0.75b
+- BUG: reader_rrd3 no contempla I048/090 y I001/090
+ (modo C) negativos
+
+0.75a
+- SOPORTE: desactiva el unset de ftp_proxy para enviar a aemet
+- SOPORTE: habilita el continuar un upload abortado de forma
+ automática.
+
 0.75
 - BUG: el tamano del paquete se tiene en cuenta en el
   calculo del CRC, deberia disminuir los falsos positivos.
 - SOPORTE: uso clock_gettime instead of gettimeofday.
-- ADD: añadida filtersicsacout
-- ADD: añadido enviar versión al hacer ftp
-- ADD: añadido hensoldt 2 asterix
+- SOPORTE: añadida filtersicsacout
+- SOPORTE: añadido enviar versión al hacer ftp
+- SOPORTE: añadido hensoldt 2 asterix
 
 0.74
 - SOPORTE: añadido un conversor entre GPS y versión asterix

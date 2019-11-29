@@ -561,8 +561,9 @@ void send_output_file() {
     const char buff_ftpactive[] = "-";
     struct stat file_info;
     curl_off_t fsize;
-    char noproxy_host[1024];
-    int slash_pos = 6, i = 0, j = 0;
+    // char noproxy_host[1024];
+    int i = 0, j = 0, is_anonymous = 0;
+    // int slash_pos = 6;
 
     memset(file, 0, 1024);
 
@@ -580,7 +581,7 @@ void send_output_file() {
     }
     fsize = (curl_off_t)file_info.st_size;
     if ( unsetenv("http_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv http_proxy\n");
-    if ( unsetenv("ftp_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
+    // if ( unsetenv("ftp_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
 
     for(i=0;i<dest_ftp_count;i++) {
 	if ( dest_ftp_uri[i][strlen(dest_ftp_uri[i])-1]!='/' )
@@ -594,11 +595,18 @@ void send_output_file() {
 	    exit(EXIT_FAILURE);
 	}
 
-	while ( (dest_ftp_uri[i][slash_pos] != '/') && (slash_pos<strlen(dest_ftp_uri[i])) ) slash_pos++;
-	snprintf(noproxy_host, slash_pos - 5, "%s", dest_ftp_uri[i] + 6);
-
-	if ( setenv("NO_PROXY", noproxy_host,1)==-1 ) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");
-        //system("echo poniendo noproxy\n"); system("echo _${NO_PROXY}_\n"); exit(EXIT_FAILURE);
+        if ( NULL != (strstr(dest_ftp_uri[i], "@")) ) {
+            log_printf(LOG_VERBOSE, "uploading as user\n");
+            is_anonymous = 0;
+        } else {
+            log_printf(LOG_VERBOSE, "uploading as anonymous\n");
+            is_anonymous = 1;
+        }
+        // no es necesario, porque queremos que haya proxy
+	// while ( (dest_ftp_uri[i][slash_pos] != '/') && (slash_pos<strlen(dest_ftp_uri[i])) ) slash_pos++;
+	// snprintf(noproxy_host, slash_pos - 5, "%s", dest_ftp_uri[i] + 6);
+	// if ( setenv("NO_PROXY", noproxy_host,1)==-1 ) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");
+        // system("echo poniendo noproxy\n"); system("echo _${NO_PROXY}_\n"); exit(EXIT_FAILURE);
 
 	curl_global_init(CURL_GLOBAL_ALL);
 	ch = curl_easy_init();
@@ -606,7 +614,8 @@ void send_output_file() {
 	    curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
 
             /* use version as password for ftp */
-	    curl_easy_setopt(ch, CURLOPT_USERPWD, "anonymous:@" VERSION);
+            if ( is_anonymous == 1 )
+                curl_easy_setopt(ch, CURLOPT_USERPWD, "anonymous:@" VERSION);
 
 	    /* enable uploading */
 	    curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
@@ -624,6 +633,13 @@ void send_output_file() {
 	    /* https://curl.haxx.se/libcurl/c/CURLOPT_FTP_USE_EPRT.html */
 	    /* If the value is 1, it tells curl to use the EPRT command when doing active FTP downloads (which is enabled by CURLOPT_FTPPORT). */
 	    curl_easy_setopt(ch, CURLOPT_FTP_USE_EPRT, 0L);
+	    
+	    /* It contains the offset in number of bytes that you want the transfer to
+	    start from. Set this option to 0 to make the transfer start from the beginning
+	    (effectively disabling resume). For FTP, set this option to -1 to make the
+	    transfer start from the end of the target file (useful to continue an interrupted
+	    upload). */
+	    curl_easy_setopt(ch, CURLOPT_RESUME_FROM_LARGE, -1L);
 
 	    /* now specify which file to upload */
 	    curl_easy_setopt(ch, CURLOPT_READDATA, fh);
@@ -1020,8 +1036,10 @@ unsigned long count2_plot_filtered = 0;
             fs.filter_type = dest_filter_flags;
 
             if ( dest_localhost || dest_filter_flags ) {
-                //log_printf(LOG_NORMAL, "\n==================================================================\n");
-		//ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
+                if ( dest_screen_crc ) {
+                    log_printf(LOG_NORMAL, "\n==================================================================\n");
+		    ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
+                }
 
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
@@ -1425,7 +1443,7 @@ unsigned long count2_plot_filtered = 0;
 				    }
 				    if (dest_file != NULL && record) {
 					if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
-					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == ast_size_datablock ) {
+					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) != ast_size_datablock ) {
 						log_printf(LOG_ERROR, "ERROR write_ast: %s (%d)\n", strerror(errno), fd_out_ast);
 					    }
 					}
@@ -1510,7 +1528,7 @@ unsigned long count2_plot_filtered = 0;
 		    radar_counter[i] = 0;
 		    radar_counter_bytes[i] = 0;
 		}
-		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d              \n", total_packets, total_bw, total_bytes);
+		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d (REMAINING SECS: %ld)     \n", total_packets, total_bw, total_bytes, (timed_t_start.tv_sec + timed - timed_t_current.tv_sec));
 		//for(i=0;i<(radar_count/5)+2;i++) { printf("\033[1A"); }
 		timed_t_Xsecs.tv_sec = t.tv_sec;
 		timed_t_Xsecs.tv_usec = t.tv_usec;

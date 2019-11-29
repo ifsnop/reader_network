@@ -37,7 +37,7 @@ struct datablock_plot {
         float y;                        //      CAT20
     };
     int modea;				//	CAT01
-    int modec;				//	CAT01
+    int modec   ;			//	CAT01 CAT48 (expresado en FL)
     int modec_status;			//	CAT01
     int modea_status;			//	CAT01
     int available;			//	CAT01 CAT48
@@ -59,6 +59,7 @@ struct datablock_plot {
             unsigned char bds_17[8];
             unsigned char bds_30[7];
             unsigned char bds_40[8];
+            unsigned char bds_44[8];
             unsigned char bds_50[8];
             unsigned char bds_60[8];
             int modes_status;

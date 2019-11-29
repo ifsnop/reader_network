@@ -98,6 +98,23 @@ char *tmp;
 		     }
 		     break;
 	}
+	case 0x66: { if (action == GET_SAC_SHORT) {
+			strncpy(tmp, "MAR", TEXT_LENGTH_SHORT);
+		     } else if (action == GET_SAC_LONG) {
+		    	strncpy(tmp, "Marruecos", TEXT_LENGTH_LONG);
+		     } else if (action == GET_SIC_SHORT) {
+		        switch (sic[0]) {
+		    	    case 3:  { strncpy(tmp, "TAN", TEXT_LENGTH_SHORT); break; }
+			    default: sprintf(tmp, "U%03d", sic[0]);
+		        }
+		     } else if (action == GET_SIC_LONG) {
+		        switch (sic[0]) {
+			    case 3:  { strncpy(tmp, "Tanger", TEXT_LENGTH_LONG); break; }
+			    default: sprintf(tmp, "U%03d", sic[0]);
+		        }
+		     }
+		     break;
+	}
 	case 0x68: { if (action == GET_SAC_SHORT) {
 			strncpy(tmp, "POR", TEXT_LENGTH_SHORT);
 		     } else if (action == GET_SAC_LONG) {
