@@ -78,8 +78,9 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define BDS_17 4
 #define BDS_30 8
 #define BDS_40 16
-#define BDS_50 32
-#define BDS_60 64
+#define BDS_44 32
+#define BDS_50 64
+#define BDS_60 128
 
 #define STATUS_MODEC_GARBLED 1
 #define STATUS_MODEC_NOTVALIDATED 2

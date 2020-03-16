@@ -128,6 +128,8 @@ done
 
 ls -la bin/
 
+#scp bin/reader_network64 10.40.210.32:/home/eval/reader_network64
+
 exit
 
 #old binaries

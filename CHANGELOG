@@ -1,10 +1,42 @@
+0.76
+- TIP: para quitar la sequencias ansi al activar dest_debug
+ o dest_screen_crc, podemos usar sed:
+ reader_network64 example.conf | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g" | tee file.txt
+- BUG: al decodificar cat48 que iba encadenada en el mismo
+ paquete udp, solo se decodificaba a localhost el primer
+ datarecord, el segundo se perdía (a la función de decodifi-
+ car ast48f se enviaban unos índices antiguos del paquete.
+- SOPORTE: añadido un dest_debug, para sacar por stderr el 
+ paquete que se procesa
+0.76
+- SOPORTE: añadido dest_file_nodirectory para no crear
+ directorios con timestamp, pero si un nombre de fichero
+ con fecha.
+- NO! SOPORTE: hace rejoin de los grupos mcast cada 90 segundos.
+ Esta idea no funciona, no se puede hacer un rejoin sin cerrar
+ el socket y perder datos.
+
+0.75c
+- BUG: quitado el debug para corregir I048/090
+- BUG: reader_network falla al decodificar I048/120 (visto
+ decodificando Tanger)
+
+0.75b
+- BUG: reader_rrd3 no contempla I048/090 y I001/090
+ (modo C) negativos
+
+0.75a
+- SOPORTE: desactiva el unset de ftp_proxy para enviar a aemet
+- SOPORTE: habilita el continuar un upload abortado de forma
+ automática.
+
 0.75
 - BUG: el tamano del paquete se tiene en cuenta en el
   calculo del CRC, deberia disminuir los falsos positivos.
 - SOPORTE: uso clock_gettime instead of gettimeofday.
-- ADD: añadida filtersicsacout
-- ADD: añadido enviar versión al hacer ftp
-- ADD: añadido hensoldt 2 asterix
+- SOPORTE: añadida filtersicsacout
+- SOPORTE: añadido enviar versión al hacer ftp
+- SOPORTE: añadido hensoldt 2 asterix
 
 0.74
 - SOPORTE: añadido un conversor entre GPS y versión asterix

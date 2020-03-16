@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -98,6 +98,23 @@ char *tmp;
 		     }
 		     break;
 	}
+	case 0x66: { if (action == GET_SAC_SHORT) {
+			strncpy(tmp, "MAR", TEXT_LENGTH_SHORT);
+		     } else if (action == GET_SAC_LONG) {
+		    	strncpy(tmp, "Marruecos", TEXT_LENGTH_LONG);
+		     } else if (action == GET_SIC_SHORT) {
+		        switch (sic[0]) {
+		    	    case 3:  { strncpy(tmp, "TAN", TEXT_LENGTH_SHORT); break; }
+			    default: sprintf(tmp, "U%03d", sic[0]);
+		        }
+		     } else if (action == GET_SIC_LONG) {
+		        switch (sic[0]) {
+			    case 3:  { strncpy(tmp, "Tanger", TEXT_LENGTH_LONG); break; }
+			    default: sprintf(tmp, "U%03d", sic[0]);
+		        }
+		     }
+		     break;
+	}
 	case 0x68: { if (action == GET_SAC_SHORT) {
 			strncpy(tmp, "POR", TEXT_LENGTH_SHORT);
 		     } else if (action == GET_SAC_LONG) {
@@ -165,6 +182,7 @@ char *tmp;
 			    case 133:{ strncpy(tmp, "RAN", TEXT_LENGTH_SHORT); break; }
 			    case 134:{ strncpy(tmp, "ALI", TEXT_LENGTH_SHORT); break; }
 			    case 135:{ strncpy(tmp, "TUR", TEXT_LENGTH_SHORT); break; }
+			    case 139:{ strncpy(tmp, "BPV", TEXT_LENGTH_SHORT); break; }
 			    case 190:{ strncpy(tmp, "FTV", TEXT_LENGTH_SHORT); break; }
 			    case 193:{ strncpy(tmp, "GNC", TEXT_LENGTH_SHORT); break; }
 			    case 194:{ strncpy(tmp, "TNS", TEXT_LENGTH_SHORT); break; }
@@ -215,6 +233,7 @@ char *tmp;
 			    case 133:{ strncpy(tmp, "Randa", TEXT_LENGTH_LONG); break; }
 			    case 134:{ strncpy(tmp, "Alicante", TEXT_LENGTH_LONG); break; }
 			    case 135:{ strncpy(tmp, "Turrillas", TEXT_LENGTH_LONG); break; }
+			    case 139:{ strncpy(tmp, "Barcelona PV", TEXT_LENGTH_LONG); break; }
                             case 190:{ strncpy(tmp, "Fuerteventura", TEXT_LENGTH_LONG); break; }
 			    case 193:{ strncpy(tmp, "Gran Canaria", TEXT_LENGTH_LONG); break; }
 			    case 194:{ strncpy(tmp, "Tenerife Sur", TEXT_LENGTH_LONG); break; }

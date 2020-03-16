@@ -352,7 +352,7 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
         if (dbp->modea_status & STATUS_MODEA_SMOOTHED)      strcpy(modea_l_s, "1"); else strcpy(modea_l_s, "0");
     }
     if (dbp->available & IS_MODEC) {
-        snprintf(modec_s, 6, "%d", dbp->modec*100);
+        snprintf(modec_s, 6, "%d", dbp->modec);
         if (dbp->modec_status & STATUS_MODEC_NOTVALIDATED)  strcpy(modec_v_s, "1"); else strcpy(modec_v_s, "0");
         if (dbp->modec_status & STATUS_MODEC_GARBLED)       strcpy(modec_g_s, "1"); else strcpy(modec_g_s, "0");
     }
@@ -488,7 +488,16 @@ int index = 0;
 		    //log_printf(LOG_NORMAL, "modec %02X %02X\n", ptr_raw[j], ptr_raw[j+1]);
 		    dbp.modec_status |= (ptr_raw[j] & 128) ? STATUS_MODEC_NOTVALIDATED : 0;
 		    dbp.modec_status |= (ptr_raw[j] & 64) ? STATUS_MODEC_GARBLED : 0;
-		    dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]) * 1.0/4.0;// * 100;
+		    // corregir porque no se hacía el complemento a 2.
+		    // dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]) * 1.0/4.0;// * 100;
+		    dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]);// * 1.0/4.0;// * 100;
+	            if ( dbp.modec > 8192 ) { // es negativo, hacer el complemento a 2
+	                // log_printf(LOG_NORMAL, "[%d][%d][%d] es mayor que 8192 v1\n", dbp.sac, dbp.sic, dbp.modec);
+	                dbp.modec += -16384;
+	                // log_printf(LOG_NORMAL, "[%d][%d][%d] es mayor que 8192 v2\n", dbp.sac, dbp.sic, dbp.modec);
+                    }
+                    dbp.modec *= (100.0 * 1.0/4.0); // el resultado va en FL, así que nunca habrá decimales
+        	    // log_printf(LOG_NORMAL, "[%d][%d]I048/090[%02X][%02X] (%d)\n", dbp.sac, dbp.sic, ptr_raw[j], ptr_raw[j+1], dbp.modec);
 		    size_current += 2; j += 2;
 		    dbp.available |= IS_MODEC;
 		}
@@ -1129,7 +1138,7 @@ int index = 0;
 	dbp.tod_stamp = current_time_today; dbp.id = id; dbp.index = index;
 	dbp.radar_responses = 0;
 
-	//ast_output_datablock(ptr_raw, size_datablock, dbp.id, dbp.index);
+	// ast_output_datablock(ptr_raw, size_datablock, dbp.id, dbp.index);
 	if (sizeFSPEC == 0) {
 	    log_printf(LOG_WARNING, "ERROR_FSPEC_SIZE[%d] %s\n", sizeFSPEC, ptr_raw);
 	    return T_ERROR;
@@ -1222,7 +1231,7 @@ unsigned char *datablock_start = NULL;
 //	    return T_ERROR;
 //	}
 
-	//ast_output_datablock(ptr_raw, size_datablock - size_current - 3, id, index);
+	// ast_output_datablock(ptr_raw, size_datablock - size_current - 3, id, index);
 
         datablock_start = ptr_raw;
 	j = sizeFSPEC;
@@ -1270,7 +1279,14 @@ unsigned char *datablock_start = NULL;
 	if ( ptr_raw[0] & 4 ) {  /* I048/090 */
 	    dbp.modec_status |= (ptr_raw[j] & 128) ? STATUS_MODEC_NOTVALIDATED : 0;
 	    dbp.modec_status |= (ptr_raw[j] & 64) ? STATUS_MODEC_GARBLED : 0;
-	    dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]) * 1.0/4.0;// * 100;
+	    dbp.modec = ( (ptr_raw[j] & 63)*256 + ptr_raw[j+1]);// * 1.0/4.0;// * 100;
+	    if ( dbp.modec > 8192 ) { // es negativo, hacer el complemento a 2
+	        // log_printf(LOG_NORMAL, "[%d][%d][%d] es mayor que 8192 v1\n", dbp.sac, dbp.sic, dbp.modec);
+	        dbp.modec += -16384;
+	        // log_printf(LOG_NORMAL, "[%d][%d][%d] es mayor que 8192 v2\n", dbp.sac, dbp.sic, dbp.modec);
+            }
+            dbp.modec *= (100.0 * 1.0/4.0); // el resultado va en FL, así que nunca habrá decimales
+	    // log_printf(LOG_NORMAL, "[%d][%d]I048/090[%02X][%02X] (%d)\n", dbp.sac, dbp.sic, ptr_raw[j], ptr_raw[j+1], dbp.modec);
 	    size_current += 2; j += 2;
 	    dbp.available |= IS_MODEC;
         }
@@ -1294,7 +1310,7 @@ unsigned char *datablock_start = NULL;
 	        //char * ptr_tmp;
 	        int i;
 	        //ptr_tmp = (char *) mem_alloc(6*3 + 1);
-	        //Bmemset(ptr_tmp, 0x0, 6*3 + 1);
+	        //memset(ptr_tmp, 0x0, 6*3 + 1);
 	        //for( i = 0; i < 6; i++ ) sprintf((char *)(ptr_tmp + i*3), "%02X ", (unsigned char) (ptr_raw[j+i]));
                 //log_printf(LOG_NORMAL, "I048/240[%s]\n", ptr_tmp);
                 //mem_free(ptr_tmp);
@@ -1342,6 +1358,7 @@ unsigned char *datablock_start = NULL;
                         case 0x17: ptr = dbp.bds_17; dbp.bds_available |= BDS_17; break;
                         case 0x30: ptr = dbp.bds_30; dbp.bds_available |= BDS_30; break;
                         case 0x40: ptr = dbp.bds_40; dbp.bds_available |= BDS_40; break;
+                        case 0x44: ptr = dbp.bds_44; dbp.bds_available |= BDS_44; break;
                         case 0x50: ptr = dbp.bds_50; dbp.bds_available |= BDS_50; break;
                         case 0x60: ptr = dbp.bds_60; dbp.bds_available |= BDS_60; break;
                         default:
@@ -1372,9 +1389,11 @@ unsigned char *datablock_start = NULL;
 		if ( ptr_raw[2] & 16 ) {  /* I048/100 */ j += 4; size_current += 4; }
 		if ( ptr_raw[2] & 8 ) {   /* I048/110 */ j += 2; size_current += 2; }
 		if ( ptr_raw[2] & 4 ) {   /* I048/120 */
+		    // log_printf(LOG_NORMAL, "[%02X%02X%02X]\n", ptr_raw[j],ptr_raw[j+1],ptr_raw[j+2] );
 		    int k = j;
 		    if ( ptr_raw[k] & 128 ) { j += 2; size_current += 2; }
 		    if ( ptr_raw[k] & 64 ) { int l = j; j += ptr_raw[l]*6 + 1; size_current += ptr_raw[l]*6 + 1; }
+		    j++; size_current++;
 		}
 		if ( ptr_raw[2] & 2 ) { /* I048/230 */
                     // log_printf(LOG_ERROR, "en I048/230\n");

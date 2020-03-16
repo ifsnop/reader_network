@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -33,8 +33,10 @@ long dest_free_space = -1;
 bool dest_file_gps = false, source_file_gps = false;
 bool dest_file_compress = false;
 bool dest_file_timestamp = false;
+bool dest_file_nodirectory = false;
 bool dest_localhost = false;
 bool dest_screen_crc = false;
+bool dest_debug = false;
 char **dest_filter_selection = NULL; // parsed from config
 int dest_filter_count = 0;
 int dest_filter_flags = FILTER_NONE; // config translated
@@ -218,6 +220,12 @@ char *dest_file_format_string = NULL;
 	log_printf(LOG_VERBOSE, "normal recording mode (no scrm/ha)\n");
     }
 
+    if (cfg_get_bool(&dest_debug, "dest_debug")) {
+	if (dest_debug) {
+	    log_printf(LOG_VERBOSE, "enabled debug output of packets\n");
+	}
+    }
+
     if (cfg_get_bool(&dest_screen_crc, "dest_screen_crc")) {
 	if (dest_screen_crc) {
 	    log_printf(LOG_VERBOSE, "outputing pkt crc\n");
@@ -227,6 +235,7 @@ char *dest_file_format_string = NULL;
     } else {
 	log_printf(LOG_VERBOSE, "not displaying pkt crc\n");
     }
+
 
     if (!cfg_get_str_array(&asterix_versions, &asterix_versions_count, "asterix_versions")) {
         log_printf(LOG_ERROR, "asterix_versions entry missing\n");
@@ -349,6 +358,9 @@ char *dest_file_format_string = NULL;
 	if (cfg_get_bool(&dest_file_timestamp, "dest_file_timestamp")) {
 	    if (dest_file_timestamp) log_printf(LOG_VERBOSE, "appending date+time to output file\n");
 	}
+	if (cfg_get_bool(&dest_file_nodirectory, "dest_file_nodirectory")) {
+	    if (dest_file_nodirectory) log_printf(LOG_VERBOSE, "don't use directories, only output file\n");
+	}
 	if (cfg_get_bool(&dest_file_compress, "dest_file_compress")) {
 	    if (dest_file_compress) log_printf(LOG_VERBOSE, "compress output file at end of recording\n");
 	}
@@ -443,20 +455,28 @@ struct tm *t2 = NULL;
 	if ((dest_file_format & DEST_FILE_FORMAT_AST ) == DEST_FILE_FORMAT_AST) {
 	    dest_file_final_ast = (char *) mem_alloc(512 + strlen(dest_file));
 	    if (dest_file_timestamp) {
-		int res = 0;
-		//sprintf(dest_file_final_ast, "%s_%04d%02d%02d%02d%02d%02d.ast", dest_file, t2->tm_year+1900, t2->tm_mon+1, t2->tm_mday,
-		//    t2->tm_hour, t2->tm_min, t2->tm_sec);
-		snprintf(dest_file_final_ast, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
-		if ( ((res = system(dest_file_final_ast)) == -1) || (WEXITSTATUS(res) != 0) ) {
-		    log_printf(LOG_ERROR, "ERROR makdir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
-		}
-		snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
-		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
-		    (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
-		    t2->tm_hour, t2->tm_min, t2->tm_sec,
-		    (dest_file_extension != NULL ? dest_file_extension : "ast"));
+	        if ( !dest_file_nodirectory ) {
+                    int res = 0;
+		    //sprintf(dest_file_final_ast, "%s_%04d%02d%02d%02d%02d%02d.ast", dest_file, t2->tm_year+1900, t2->tm_mon+1, t2->tm_mday,
+		    //    t2->tm_hour, t2->tm_min, t2->tm_sec);
+		    snprintf(dest_file_final_ast, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
+		    if ( ((res = system(dest_file_final_ast)) == -1) || (WEXITSTATUS(res) != 0) ) {
+		        log_printf(LOG_ERROR, "ERROR makdir %s\n", dest_file_final_ast); exit(EXIT_FAILURE);
+		    }
+		    snprintf(dest_file_final_ast, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
+		        t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
+		        (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
+		        t2->tm_hour, t2->tm_min, t2->tm_sec,
+		        (dest_file_extension != NULL ? dest_file_extension : "ast"));
+	        } else {
+		    snprintf(dest_file_final_ast, 512, "%s/%02d%02d%02d%s%02d%02d%02d.%s", dest_file,
+		        t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
+		        (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
+		        t2->tm_hour, t2->tm_min, t2->tm_sec,
+		        (dest_file_extension != NULL ? dest_file_extension : "ast"));
+	        }
 	    } else {
-		sprintf(dest_file_final_ast, "%s.%s", dest_file, (dest_file_extension != NULL ? dest_file_extension : "ast") );
+	        sprintf(dest_file_final_ast, "%s.%s", dest_file, (dest_file_extension != NULL ? dest_file_extension : "ast") );
 	    }
 	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_ast);
 	    if ( (fd_out_ast = open(dest_file_final_ast, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
@@ -467,18 +487,26 @@ struct tm *t2 = NULL;
 	if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
 	    dest_file_final_gps = (char *) mem_alloc(512 + strlen(dest_file));
 	    if (dest_file_timestamp) {
-		int res = 0;
-		snprintf(dest_file_final_gps, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
-		if ( ((res = system(dest_file_final_gps)) == -1) || (WEXITSTATUS(res) != 0) ) {
-		    log_printf(LOG_ERROR, "ERROR mkdir: %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
-		}
-		snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
-		    t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
-		    (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
-		    t2->tm_hour, t2->tm_min, t2->tm_sec,
-		    (dest_file_extension != NULL ? dest_file_extension : "gps"));
-		//sprintf(dest_file_final_gps, "%s/%02d/%02d/%02d%02d%02d.gps", dest_file, t2->tm_mon+1, t2->tm_mday,
-		//    t2->tm_hour, t2->tm_min, t2->tm_sec);
+	        if ( !dest_file_nodirectory ) {
+		    int res = 0;
+                    snprintf(dest_file_final_gps, 512, "/bin/mkdir -p %s/%02d/%02d/", dest_file, t2->tm_mon+1, t2->tm_mday);
+		    if ( ((res = system(dest_file_final_gps)) == -1) || (WEXITSTATUS(res) != 0) ) {
+		        log_printf(LOG_ERROR, "ERROR mkdir: %s\n", dest_file_final_gps); exit(EXIT_FAILURE);
+		    }
+		    snprintf(dest_file_final_gps, 512, "%s/%02d/%02d/%02d%02d%02d%s%02d%02d%02d.%s", dest_file, t2->tm_mon+1, t2->tm_mday,
+		        t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
+		        (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
+		        t2->tm_hour, t2->tm_min, t2->tm_sec,
+		        (dest_file_extension != NULL ? dest_file_extension : "gps"));
+		    //sprintf(dest_file_final_gps, "%s/%02d/%02d/%02d%02d%02d.gps", dest_file, t2->tm_mon+1, t2->tm_mday,
+		    //    t2->tm_hour, t2->tm_min, t2->tm_sec);
+	        } else {
+		    snprintf(dest_file_final_gps, 512, "%s/%02d%02d%02d%s%02d%02d%02d.%s", dest_file,
+		        t2->tm_year % 100, t2->tm_mon+1, t2->tm_mday,
+		        (dest_file_region_parsed != NULL ? dest_file_region_parsed : "-"),
+		        t2->tm_hour, t2->tm_min, t2->tm_sec,
+		        (dest_file_extension != NULL ? dest_file_extension : "gps"));
+	        }
 	    } else {
 		sprintf(dest_file_final_gps, "%s.%s", dest_file, (dest_file_extension != NULL ? dest_file_extension : "gps") );
 	    }
@@ -561,8 +589,9 @@ void send_output_file() {
     const char buff_ftpactive[] = "-";
     struct stat file_info;
     curl_off_t fsize;
-    char noproxy_host[1024];
-    int slash_pos = 6, i = 0, j = 0;
+    // char noproxy_host[1024];
+    int i = 0, j = 0, is_anonymous = 0;
+    // int slash_pos = 6;
 
     memset(file, 0, 1024);
 
@@ -580,7 +609,7 @@ void send_output_file() {
     }
     fsize = (curl_off_t)file_info.st_size;
     if ( unsetenv("http_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv http_proxy\n");
-    if ( unsetenv("ftp_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
+    // if ( unsetenv("ftp_proxy")==-1 ) log_printf(LOG_ERROR, "ERROR unsetenv ftp_proxy\n");
 
     for(i=0;i<dest_ftp_count;i++) {
 	if ( dest_ftp_uri[i][strlen(dest_ftp_uri[i])-1]!='/' )
@@ -594,11 +623,18 @@ void send_output_file() {
 	    exit(EXIT_FAILURE);
 	}
 
-	while ( (dest_ftp_uri[i][slash_pos] != '/') && (slash_pos<strlen(dest_ftp_uri[i])) ) slash_pos++;
-	snprintf(noproxy_host, slash_pos - 5, "%s", dest_ftp_uri[i] + 6);
-
-	if ( setenv("NO_PROXY", noproxy_host,1)==-1 ) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");
-        //system("echo poniendo noproxy\n"); system("echo _${NO_PROXY}_\n"); exit(EXIT_FAILURE);
+        if ( NULL != (strstr(dest_ftp_uri[i], "@")) ) {
+            log_printf(LOG_VERBOSE, "uploading as user\n");
+            is_anonymous = 0;
+        } else {
+            log_printf(LOG_VERBOSE, "uploading as anonymous\n");
+            is_anonymous = 1;
+        }
+        // no es necesario, porque queremos que haya proxy
+	// while ( (dest_ftp_uri[i][slash_pos] != '/') && (slash_pos<strlen(dest_ftp_uri[i])) ) slash_pos++;
+	// snprintf(noproxy_host, slash_pos - 5, "%s", dest_ftp_uri[i] + 6);
+	// if ( setenv("NO_PROXY", noproxy_host,1)==-1 ) log_printf(LOG_ERROR, "ERROR setenv NO_PROXY\n");
+        // system("echo poniendo noproxy\n"); system("echo _${NO_PROXY}_\n"); exit(EXIT_FAILURE);
 
 	curl_global_init(CURL_GLOBAL_ALL);
 	ch = curl_easy_init();
@@ -606,7 +642,8 @@ void send_output_file() {
 	    curl_easy_setopt(ch, CURLOPT_VERBOSE, 0L);
 
             /* use version as password for ftp */
-	    curl_easy_setopt(ch, CURLOPT_USERPWD, "anonymous:@" VERSION);
+            if ( is_anonymous == 1 )
+                curl_easy_setopt(ch, CURLOPT_USERPWD, "anonymous:@" VERSION);
 
 	    /* enable uploading */
 	    curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
@@ -624,6 +661,13 @@ void send_output_file() {
 	    /* https://curl.haxx.se/libcurl/c/CURLOPT_FTP_USE_EPRT.html */
 	    /* If the value is 1, it tells curl to use the EPRT command when doing active FTP downloads (which is enabled by CURLOPT_FTPPORT). */
 	    curl_easy_setopt(ch, CURLOPT_FTP_USE_EPRT, 0L);
+	    
+	    /* It contains the offset in number of bytes that you want the transfer to
+	    start from. Set this option to 0 to make the transfer start from the beginning
+	    (effectively disabling resume). For FTP, set this option to -1 to make the
+	    transfer start from the end of the target file (useful to continue an interrupted
+	    upload). */
+	    curl_easy_setopt(ch, CURLOPT_RESUME_FROM_LARGE, -1L);
 
 	    /* now specify which file to upload */
 	    curl_easy_setopt(ch, CURLOPT_READDATA, fh);
@@ -682,12 +726,55 @@ int loop=1;
 	log_printf(LOG_ERROR, "ERROR socket: %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
     }
-
     if ( setsockopt(s_output_multicast, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) < 0 ) {
 	log_printf(LOG_ERROR, "ERROR setsockopt: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
+    return;
+}
+
+void setup_rejoin_network(void) {
+/*
+    int i = 0, yes = 1;
+    socket_count = 0;
+    struct ip_mreq mreq;
+
+    while (i<(radar_count/5)) {
+        if (i>0 && 								     // si
+	    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
+	    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
+
+            int j = 0; // no hagas nada, pero es que no tengo tiempo de pensar como invertir el if
+            
+            // strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
+	    //log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i,
+	        // radar_definition[i*5], radar_definition[(i*5)+1],
+		// radar_definition[(i*5)+2], radar_definition[(i*5)+3],
+		// radar_definition[(i*5)+4]);
+        } else {
+	    log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s) socket(%d)\n", i,
+		radar_definition[i*5], radar_definition[(i*5)+1],
+		radar_definition[(i*5)+2], radar_definition[(i*5)+3],
+		radar_definition[(i*5)+4], s_reader[socket_count]);
+            if (!strncasecmp(source, "mult", 4)) {
+        	if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+		    log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
+		    exit(EXIT_FAILURE);
+		}
+		mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
+		mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
+		if (setsockopt(s_reader[socket_count], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+		    log_printf(LOG_ERROR, "add_membership setsockopt reader(%d:%s:%s): %s\n", socket_count,
+		        radar_definition[i*5+4], radar_definition[i*5+1], strerror(errno));
+		    exit(EXIT_FAILURE);
+		}
+            }
+            socket_count++;
+        }
+        i++;
+    }
+*/
     return;
 }
 
@@ -1020,8 +1107,10 @@ unsigned long count2_plot_filtered = 0;
             fs.filter_type = dest_filter_flags;
 
             if ( dest_localhost || dest_filter_flags ) {
-                //log_printf(LOG_NORMAL, "\n==================================================================\n");
-		//ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
+                if ( dest_screen_crc ) {
+                    log_printf(LOG_NORMAL, "\n==================================================================\n");
+		    ast_output_datablock(ast_ptr_raw + ast_pos, ast_size_datablock, count2_plot_processed, 0);
+                }
 
 		if (ast_ptr_raw[ast_pos] == '\x01') {
 		    count2_plot_processed++;
@@ -1348,8 +1437,10 @@ unsigned long count2_plot_filtered = 0;
 				}
 				is_processed = true;
 
-				//log_printf(LOG_VERBOSE,"-----udp(%d) ast_size_datablock(%d)\n", udp_size, ast_size_datablock);
-				//ast_output_datablock(ast_ptr_raw, udp_size, 0, 0);
+				if ( dest_debug ) {
+				    log_printf(LOG_ERROR, "-----udp(%d) ast_size_datablock(%d)\n", udp_size, ast_size_datablock);
+				    ast_output_datablock(ast_ptr_raw, udp_size, 0, 0);
+				}
 				
 				do {
 				    unsigned int crc = 0;
@@ -1396,7 +1487,10 @@ unsigned long count2_plot_filtered = 0;
 					// RBTreePrint(tree);
 				    }
 
-				    //ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
+				    if ( dest_debug ) {
+				        ast_output_datablock(ast_ptr_raw_tmp, ast_size_datablock, count2_plot_processed, 0);
+				    }
+				    
 				    if (dest_localhost && record) {
 					if (ast_ptr_raw_tmp[0] == '\x01')
 					    ast_procesarCAT01(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
@@ -1419,13 +1513,13 @@ unsigned long count2_plot_filtered = 0;
 					if (ast_ptr_raw_tmp[0] == '\x30')
 					    //ast_procesarCAT48(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true); //, FILTER_GROUND);
                                             //ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, dest_filter_flags, ast_ptr_raw_new, ast_size_datablock_new);
-                                            ast_procesarCAT48F(ast_ptr_raw + ast_pos + 3, ast_size_datablock, count2_plot_processed, dest_localhost, NULL);
+                                            ast_procesarCAT48F(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, dest_localhost, NULL);
 					if (ast_ptr_raw_tmp[0] == '\x3e')
 					    ast_procesarCAT62(ast_ptr_raw_tmp + 3, ast_size_datablock, count2_plot_processed, true);
 				    }
 				    if (dest_file != NULL && record) {
 					if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST) {
-					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) == ast_size_datablock ) {
+					    if ( (write(fd_out_ast, ast_ptr_raw_tmp, ast_size_datablock) ) != ast_size_datablock ) {
 						log_printf(LOG_ERROR, "ERROR write_ast: %s (%d)\n", strerror(errno), fd_out_ast);
 					    }
 					}
@@ -1478,11 +1572,11 @@ unsigned long count2_plot_filtered = 0;
 		    }
 		    i++;
 		}
-	    } else if (select_count == 0) {
+	    } else if ( select_count == 0 ) {
 		log_printf(LOG_VERBOSE, "%d sec(s) warning\n", SELECT_TIMEOUT);
-		if (dest_localhost)
+		if ( dest_localhost )
 		    setup_output_multicast();
-		for(i=0; i<socket_count; i++) {
+		for( i=0; i<socket_count; i++ ) {
 		    close(s_reader[i]);
 		}
 		socket_count = 0; setup_input_network();
@@ -1510,11 +1604,20 @@ unsigned long count2_plot_filtered = 0;
 		    radar_counter[i] = 0;
 		    radar_counter_bytes[i] = 0;
 		}
-		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d              \n", total_packets, total_bw, total_bytes);
+		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d (REMAINING SECS: %ld)     \n", total_packets, total_bw, total_bytes, (timed_t_start.tv_sec + timed - timed_t_current.tv_sec));
 		//for(i=0;i<(radar_count/5)+2;i++) { printf("\033[1A"); }
 		timed_t_Xsecs.tv_sec = t.tv_sec;
 		timed_t_Xsecs.tv_usec = t.tv_usec;
-	     }
+            }
+            
+            // FORCE REJOIN EVERY 60 SECONDS
+/*
+            // Se comenta porque no funciona, no es posible hacer un membership add, dice socket ocupado
+	    if ( (t.tv_sec+t.tv_usec/1000000.0) > (timed_t_Xsecs.tv_sec + timed_t_Xsecs.tv_usec/1000000.0 + 60) ) {
+                log_printf(LOG_VERBOSE, "rejoining multicast\n");
+                setup_rejoin_network();
+            }
+*/
 /*
 	{ // delay statistics
 	    struct timeval delay_t;
