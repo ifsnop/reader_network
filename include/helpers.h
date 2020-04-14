@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2012 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -21,5 +21,5 @@ You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
+extern char *parse_hora(float segs);
 
-inline char *parse_hora(float segs);

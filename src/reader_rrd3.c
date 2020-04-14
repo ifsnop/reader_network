@@ -861,7 +861,7 @@ int main(int argc, char *argv[]) {
 	    exit(EXIT_FAILURE);
 	}
 	//log_printf(LOG_ERROR, "readed %ld bytes\n", (unsigned long) ast_size_total);
-        if (source_file_gps_version == 0) {
+        if ( 0 == source_file_gps_version ) {
 	    unsigned char *memcmp1;
 	    memcmp1 = (unsigned char *) mem_alloc(20);
 	    memcmp1 = memset(memcmp1, 0xCD, 20);
@@ -873,8 +873,7 @@ int main(int argc, char *argv[]) {
 	        //log_printf(LOG_ERROR, "GPSv2 input auto-activated\n");
 	    }
 	    mem_free(memcmp1);
-	} else {
-	    if (source_file_gps_version == 1)
+	} else if ( 1 == source_file_gps_version ) {
 		ast_pos = 2200; offset = 10;
 	}
 

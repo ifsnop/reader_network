@@ -4,6 +4,7 @@
 rm libs/*.a 2> /dev/null
 rm obj/*.o 2> /dev/null
 
+rm bin/filter* 2> /dev/null
 rm bin/client* 2> /dev/null
 rm bin/reader* 2> /dev/null
 rm bin/cleanast* 2> /dev/null

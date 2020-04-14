@@ -164,7 +164,7 @@ int ast_procesarCAT48F(unsigned char *ptr_raw, ssize_t size_datablock, unsigned 
 int ast_procesarCAT62(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, bool enviar);
 void ast_output_datablock(unsigned char *ptr_raw, ssize_t size_datablock, unsigned long id, unsigned long index);
 int ast_get_size_FSPEC(unsigned char *ptr_raw, ssize_t size_datablock);
-inline char* parse_hora(float segs);
+//inline char* parse_hora(float segs); // already declared in helpers.c
 bool filter_test(unsigned char *ptr_raw, int ptr, int filter_type);
 void decode_bds30(struct datablock_plot * dbp, struct bds30 * bds, char *stmt);
 

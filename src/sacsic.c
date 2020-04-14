@@ -252,15 +252,14 @@ char *tmp;
 	    //char t[10];
 	    //memset(t,0x0, 10);
 	    //sprintf(t, "%03d",  sic[0]);
-	    
 	    if (action == GET_SAC_SHORT) {
 		snprintf(tmp, TEXT_LENGTH_SHORT, "U%03d", sac[0]);
 	    } else if (action == GET_SAC_LONG) {
-	    	snprintf(tmp, TEXT_LENGTH_LONG, "Uknown(%03d)", sac[0]);
+		snprintf(tmp, TEXT_LENGTH_LONG, "Unknown(%03d)", sac[0]);
 	    } else if (action == GET_SIC_SHORT) {
-		snprintf(tmp, TEXT_LENGTH_SHORT, "U%03d", sic[0]);
+		snprintf(tmp, TEXT_LENGTH_SHORT+1, "U%03d", sic[0]);
 	    } else if (action == GET_SIC_LONG) {
-	    	snprintf(tmp, TEXT_LENGTH_LONG, "Uknown(%03d)", sic[0]);
+		snprintf(tmp, TEXT_LENGTH_LONG, "Unknown(%03d)", sic[0]);
 	    }
 	    /*
 	    if ( (action == GET_SIC_SHORT) || (action == GET_SAC_SHORT) ) {

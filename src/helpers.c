@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -27,11 +27,10 @@ inline char *parse_hora(float segs) {
 char tmp[8];
 char *res;
 float tmpsecs;
-	    
 struct tm *stm;
 time_t t;
-		    
-    res = mem_alloc(14);    
+
+    res = mem_alloc(14);
     memset(tmp,0x0,8);
     t = (long) floor(segs);
     stm = gmtime(&t);

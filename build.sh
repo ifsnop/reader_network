@@ -59,13 +59,13 @@ for destarch in $destarchs; do
 	rm -r 3rdparty/tmp/zlib-1.2.8 2> /dev/null
 	mkdir 3rdparty/tmp/ 2> /dev/null
 	cd 3rdparty/tmp > /dev/null
-        gzip -dc ../zlib-1.2.8.tar.gz | tar xf - 
-        cd ../.. > /dev/null
+	gzip -dc ../zlib-1.2.8.tar.gz | tar xf -
+	cd ../.. > /dev/null
 
 	DESTDIR=`pwd`/3rdparty/tmp/
 	cd $DESTDIR/zlib-1.2.8 > /dev/null
-        CFLAGS="-m${destarch}" ./configure --static > /tmp/build${destarch}${arch}.log 2>&1
-        make install DESTDIR=$DESTDIR >> /tmp/build${destarch}${arch}.log 2>&1
+	CFLAGS="-m${destarch}" ./configure --static > /tmp/build${destarch}${arch}.log 2>&1
+	make install DESTDIR=$DESTDIR >> /tmp/build${destarch}${arch}.log 2>&1
 	popd > /dev/null
 	cp $DESTDIR/usr/local/lib/libz.a libs/libz${destarch}${arch}.a
     fi
@@ -74,22 +74,22 @@ for destarch in $destarchs; do
 	pushd . > /dev/null
 	rm -r 3rdparty/tmp/curl-7.30.0 2> /dev/null
 	mkdir 3rdparty/tmp/ 2> /dev/null
-        cd 3rdparty/tmp > /dev/null
+	cd 3rdparty/tmp > /dev/null
 	bzip2 -dc ../curl-7.30.0.tar.bz2 | tar xf -
-        cd ../.. > /dev/null
+	cd ../.. > /dev/null
 
 	DESTDIR=`pwd`/3rdparty/tmp/
 	cd $DESTDIR/curl-7.30.0 > /dev/null
 	export CFLAGS="-m${destarch}"
 	./configure --enable-static --without-libidn --without-librtmp \
-            --disable-shared --disable-ssl \
+	    --disable-shared --disable-ssl \
 	    --disable-ipv6 --disable-rtsp --disable-dict --disable-gopher --disable-https \
 	    --disable-telnet --disable-smtp --disable-smtps --disable-imap --disable-imaps \
 	    --disable-pop3 --disable-pop3s --disable-ftps --without-ssl --without-polarssl \
 	    --disable-ldap --disable-ldaps --disable-debug --disable-ntlm-wb \
 	    --disable-tls-srp --prefix=/usr/local/${destarch}${arch} >> /tmp/build${destarch}${arch}.log 2>&1
 	make install DESTDIR=$DESTDIR >> /tmp/build${destarch}${arch}.log 2>&1
-        popd > /dev/null
+	popd > /dev/null
 	cp $DESTDIR/usr/local/${destarch}${arch}/lib/libcurl.a libs/libcurl${destarch}${arch}.a
     fi
 
@@ -104,6 +104,7 @@ for destarch in $destarchs; do
 	src/md5.c"
 
     gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts -I/usr/include/mysql -DBIG_JOINS=1 `mysql_config --libs | cut -d" " -f 1` -lmysqlclient
+    #echo gcc $gccopts -o bin/reader_network${destarch}${arch} $rncfiles src/reader_network.c $rnopts
     gcc $gccopts -o bin/reader_network${destarch}${arch} $rncfiles src/reader_network.c $rnopts
     #strip bin/reader_network${destarch} 2> /dev/null
 
@@ -112,10 +113,13 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/client_time${destarch}${arch} src/client_time.c src/sacsic.c src/helpers.c src/startup.c $rnopts
     gcc $gccopts -o bin/client${destarch}${arch} src/client.c src/sacsic.c src/helpers.c src/startup.c $rnopts
     gcc $gccopts -o bin/cleanast${destarch}${arch} src/utils/cleanast.c $rnopts
+    gcc $gccopts -o bin/cleanast_s${destarch}${arch} src/utils/cleanast_s.c $rnopts
+    gcc $gccopts -o bin/filtercat${destarch}${arch} src/utils/filtercat.c $rnopts
+    gcc $gccopts -o bin/filtercat_s${destarch}${arch} src/utils/filtercat_s.c $rnopts
+    gcc $gccopts -o bin/filtercatout${destarch}${arch} src/utils/filtercatout.c $rnopts
     gcc $gccopts -o bin/filtersacsic${destarch}${arch} src/utils/filtersacsic.c $rnopts
     gcc $gccopts -o bin/filtersacsicout${destarch}${arch} src/utils/filtersacsicout.c $rnopts
-    gcc $gccopts -o bin/filtercat${destarch}${arch} src/utils/filtercat.c $rnopts
-    gcc $gccopts -o bin/filtercatout${destarch}${arch} src/utils/filtercatout.c $rnopts
+exit 0
     gcc $gccopts -o bin/joingps${destarch}${arch} src/utils/joingps.c $rnopts
     gcc $gccopts -o bin/memresps${destarch}${arch} src/memresp/memresps.c $rnopts
     gcc $gccopts -o bin/gps2era${destarch}${arch} src/utils/gps2era.c $rnopts

@@ -21,8 +21,7 @@ You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
-#define VERSION "0.76"
+#define VERSION "0.78"
 #define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2020 Diego Torres\n\n" \
     "This program comes with ABSOLUTELY NO WARRANTY.\n" \
     "This is free software, and you are welcome to redistribute it\n" \
@@ -35,7 +34,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define ARCH "LNX"
 #endif
 
-#define TEXT_LENGTH_SHORT 4
+#define TEXT_LENGTH_SHORT 5
 #define TEXT_LENGTH_LONG  20
 
 #define MULTICAST_PLOTS_GROUP "224.0.0.49"
@@ -44,7 +43,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define UNICAST_PLOTS "172.88.2.221"
 #define UNICAST_PLOTS_PORT 4001
 
-#define MAX_PACKET_LENGTH 65532
+#define RN_MAX_PACKET_LENGTH 65532
 
 #define MAX_RADAR_NUMBER 64
 #define MAX_SEGMENT_NUMBER 3200

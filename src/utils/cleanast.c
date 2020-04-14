@@ -70,10 +70,10 @@ int main(int argc, char *argv[]) {
 
     i+=headerbytes;
     while( i<filesize ) {
-	// int j;
 	i += prebytes;
 	lendb = (ptr[i+1]<<8) + ptr[i+2];
 	/*
+	int j;
 	printf("%02X %02X len(%d) pre(%d) post(%d)\n", ptr[i+1], ptr[i+2], lendb, prebytes,postbytes);
 	printf("PRE:["); for(j=0;j<prebytes;j++) printf("%02X ", ptr[i+j-prebytes]); printf("]\n");
 	printf("DAT:["); for(j=0;j<lendb;j++) printf("%02X ", ptr[i+j]); printf("]\n");

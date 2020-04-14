@@ -1001,6 +1001,10 @@ unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
 unsigned long count2_plot_filtered = 0;
 
+//    char * unused = parse_hora(0);
+//    printf("%s\n", unused);
+//    mem_free(unused);
+
     printf("reader_network_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
     startup();
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
@@ -1321,7 +1325,7 @@ unsigned long count2_plot_filtered = 0;
 
 	setup_input_network();
 
-	ast_ptr_raw = (unsigned char *) mem_alloc(MAX_PACKET_LENGTH);
+	ast_ptr_raw = (unsigned char *) mem_alloc(RN_MAX_PACKET_LENGTH);
 	gettimeofday(&timed_t_current, NULL);
 	timed_t_Xsecs.tv_sec = timed_t_current.tv_sec;
 	timed_t_Xsecs.tv_usec = timed_t_current.tv_usec;
@@ -1335,7 +1339,7 @@ unsigned long count2_plot_filtered = 0;
 	    fd_set reader_set;
 
 	    gettimeofday(&timed_t_current, NULL);
-	    memset(ast_ptr_raw, 0x00, MAX_PACKET_LENGTH);
+	    memset(ast_ptr_raw, 0x00, RN_MAX_PACKET_LENGTH);
 	    timeout.tv_sec = SELECT_TIMEOUT; timeout.tv_usec = 0;
 
 	    FD_ZERO(&reader_set);
@@ -1380,7 +1384,7 @@ unsigned long count2_plot_filtered = 0;
 			int udp_size=0; bool record = true, is_processed = false;
 			memset(&cast_group, 0, sizeof(cast_group));
 			addrlen = sizeof(struct sockaddr);
-			if ((udp_size = recvfrom(s_reader[i], ast_ptr_raw, MAX_PACKET_LENGTH, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
+			if ((udp_size = recvfrom(s_reader[i], ast_ptr_raw, RN_MAX_PACKET_LENGTH, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
 			    log_printf(LOG_ERROR, "ERROR recvfrom: %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
 			}
@@ -1526,7 +1530,7 @@ unsigned long count2_plot_filtered = 0;
 					if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
 					    unsigned long timegps;
 					    unsigned char byte;
-					    unsigned char output_ptr[MAX_PACKET_LENGTH];
+					    unsigned char output_ptr[RN_MAX_PACKET_LENGTH];
 					    memcpy(output_ptr, ast_ptr_raw_tmp, ast_size_datablock);
                                             memset(output_ptr + ast_size_datablock, 0, 10);
 

@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2019 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -209,14 +209,14 @@ void decode_bds30(/*unsigned char * ptr_raw, int j, */struct datablock_plot * db
     }
 
     if (dbp->available & IS_COMM_CAP) {
-        snprintf(com_s, 2, "%d", dbp->di048_230_com);
-        snprintf(stat_s, 2, "%d", dbp->di048_230_stat);
-        snprintf(si_s, 2, "%d", dbp->di048_230_si);
-        snprintf(mssc_s, 2, "%d", dbp->di048_230_mssc);
-        snprintf(arc_s, 2, "%d", dbp->di048_230_arc);;
-        snprintf(aic_s, 2, "%d", dbp->di048_230_aic);
-        snprintf(b1a_s, 2, "%d", dbp->di048_230_b1a);
-        snprintf(b1b_s, 2, "%d", dbp->di048_230_b1b);
+        snprintf(com_s, 4, "%d", dbp->di048_230_com);
+        snprintf(stat_s, 4, "%d", dbp->di048_230_stat);
+        snprintf(si_s, 4, "%d", dbp->di048_230_si);
+        snprintf(mssc_s, 4, "%d", dbp->di048_230_mssc);
+        snprintf(arc_s, 4, "%d", dbp->di048_230_arc);;
+        snprintf(aic_s, 4, "%d", dbp->di048_230_aic);
+        snprintf(b1a_s, 4, "%d", dbp->di048_230_b1a);
+        snprintf(b1b_s, 4, "%d", dbp->di048_230_b1b);
     }
 
     bds1 = (dbp->bds_30[0] & 0xF0) >> 4;
