@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2013 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -224,8 +224,10 @@ int main(int argc, char *argv[]) {
 	if (current_date.tv_sec >= (old_date.tv_sec + LAP_TIME)) {
 	    close(fd_out);
 	    // compressing old memresp recording in background
-	    sprintf(ptr_bzip, "/bin/sh -c '/bin/bzip2 %s' &", ptr_filename); 
-	    system(ptr_bzip);
+	    sprintf(ptr_bzip, "/bin/sh -c '/bin/bzip2 %s' &", ptr_filename);
+	    if ( (ret = system(ptr_bzip)) < 0 ) {
+		printf("error system: call bzip2 %s\n", strerror(errno)); exit(EXIT_FAILURE);
+	    }
 	    t2 = gmtime(&current_date.tv_sec);
             snprintf(ptr_destdir, 255, "%s/%02d/", argv[1], t2->tm_mday);
             snprintf(ptr_mkdir, 255, "/bin/mkdir -p %s", ptr_destdir);
@@ -244,15 +246,17 @@ int main(int argc, char *argv[]) {
 	    if (FD_ISSET(s_in, &reader_set)) {
 		int udp_size=0;
 		socklen_t addrlen = sizeof(struct sockaddr_in);
-	    	memset(&cast_group, 0, sizeof(cast_group));
+		memset(&cast_group, 0, sizeof(cast_group));
 	        if ((udp_size = recvfrom(s_in, ptr_in, 65535, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
-		    printf("error recvfrom:%s\n", strerror(errno)); //exit(EXIT_FAILURE);
-                    close(s_in);
-                    subscribe();
-        	}
+		    printf("error recvfrom: %s\n", strerror(errno)); //exit(EXIT_FAILURE);
+		    close(s_in);
+		    subscribe();
+		}
 		if (( udp_size > 0) && (!strcasecmp(inet_ntoa(cast_group.sin_addr), MCAST_SOURCE_IP))) {
 		    // write to file
-		    write(fd_out, ptr_in, udp_size);
+		    if ( write(fd_out, ptr_in, udp_size) == -1 ) {
+			printf("error write: %s\n", strerror(errno));
+		    }
 		} else {
 		    // no sabemos de donde viene!
 		}

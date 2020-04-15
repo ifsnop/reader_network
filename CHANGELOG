@@ -1,6 +1,7 @@
 0.78
-- ADD: añadido filtercat_s y cleanast_s, usando streams,
- permitiendo pipes y sin tener que usar archivos temporales.
+- ADD: añadido filtercat_s, filtersacsic_s y cleanast_s,
+ usando streams, permitiendo pipes y sin tener que usar
+ archivos temporales.
 - SOPORTE: corregidos un montón de fallos y warnings al
  compilar con gcc v7.
 0.77

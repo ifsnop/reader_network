@@ -80,7 +80,7 @@ ssize_t write_bytes(unsigned char *p, ssize_t count, FILE * f) {
 }
 
 int main(int argc, char *argv[]) {
-    int pre_bytes = 0, post_bytes = 0, header_bytes = 0, db_bytes = 0, cat = 0;
+    int pre_bytes = 0, post_bytes = 0, header_bytes = 0, db_bytes = 0, sac = 0, sic = 0;
     FILE *fin = NULL, *fout = NULL;
     // unsigned int lendb, filesize;
 
@@ -89,18 +89,19 @@ int main(int argc, char *argv[]) {
 
     ssize_t rcount = 0, count = 0, wcount = 0;
 
-    if( argc != 7 ) {
+    if( argc != 8 ) {
 	printf("filtercat_s%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	printf("filtercat_s%s in_filename.gps out_filename.gps headerbytes prebytes postbytes cat\n", ARCH);
-	printf("positive cat: include asterix with this cat\n");
-	printf("negative cat: exclude asterix with this cat\n\n");
+	printf("filtercat_s%s in_filename.gps out_filename.gps headerbytes prebytes postbytes sac sic\n", ARCH);
+	printf("positive sac sic: include asterix from sensor with this sac sic\n");
+	printf("negative sac sic: exclude asterix from sensor with this sac sic\n\n");
 	exit(EXIT_SUCCESS);
     }
 
     header_bytes = atoi(argv[3]);
     pre_bytes = atoi(argv[4]);
     post_bytes = atoi(argv[5]);
-    cat = atoi(argv[6]);
+    sac = atoi(argv[6]);
+    sic = atoi(argv[7]);
 
     if ( !strcmp(argv[1], "-") ) {
 	if ( NULL == (fin = fdopen(dup(fileno(stdin)), "rb")) ) {
@@ -139,6 +140,8 @@ int main(int argc, char *argv[]) {
     post_ptr = calloc(1, post_bytes);
 
     for(;;) {
+	unsigned char db_sac = 0, db_sic = 0;
+	int fspeclength = 0;
 	if ( 0 != pre_bytes  && (pre_bytes == read_bytes(pre_ptr, pre_bytes, fin)) ) {
 	    if ( DEBUG ) print_bytes(pre_ptr, pre_bytes);
 	}
@@ -156,19 +159,36 @@ int main(int argc, char *argv[]) {
 	    if ( DEBUG ) print_bytes(post_ptr, post_bytes);
 	}
 
-	rcount += pre_bytes + db_bytes + post_bytes;
+	// get fspec size
+	if ((ptr[3] & 128) == 128) { // if sac/sic defined
+	    while((ptr[3+fspeclength] & 1) == 1) fspeclength++;
+	    db_sac = ptr[3 + fspeclength + 1];
+	    db_sic = ptr[3 + fspeclength + 2];
+	    if ( DEBUG ) {
+		print_bytes(&db_sac, 1);
+		print_bytes(&db_sic, 1);
+	    }
 
-//	fprintf(stderr, "%02X %02X ____ ", -cat, ptr[0]);
+	    if ( DEBUG ) fprintf(stderr, "sac %d sic %d db_sac %d db_sic %d\n", sac, sic, db_sac, db_sic);
 
-       if ( ((0 < cat) && (cat == ptr[0])) ||  // cat positivo
-           ((0 > cat) && (-cat != ptr[0])) ) { // cat negativo
-	    // fprintf(stderr, "%02X %02X\n", cat, ptr[0]);
-	    if ( DEBUG ) fprintf(stderr, "OK\n");
-	    write_bytes(pre_ptr, pre_bytes, fout);
-	    write_bytes(ptr, db_bytes, fout);
-	    write_bytes(post_ptr, post_bytes, fout);
-	    wcount += pre_bytes + db_bytes + post_bytes;
+	    if ( ((0 < sac) && (sac == db_sac)) && // sac positivo
+		((0 < sic) && (sic == db_sic)) ) { // sic positivo
+		if ( DEBUG ) fprintf(stderr, "MATCH\n");
+		write_bytes(pre_ptr, pre_bytes, fout);
+		write_bytes(ptr, db_bytes, fout);
+		write_bytes(post_ptr, post_bytes, fout);
+		wcount += pre_bytes + db_bytes + post_bytes;
+	    } else if ( ((0 > sac) && (-sac != db_sac)) || // sac negativo
+		((0 > sic) && (-sic != db_sic)) ) { // sic negativo
+		if ( DEBUG ) fprintf(stderr, "MATCH\n");
+		write_bytes(pre_ptr, pre_bytes, fout);
+		write_bytes(ptr, db_bytes, fout);
+		write_bytes(post_ptr, post_bytes, fout);
+		wcount += pre_bytes + db_bytes + post_bytes;
+	    }
 	}
+
+	rcount += pre_bytes + db_bytes + post_bytes;
 	if ( DEBUG ) print_separator();
 
     }
