@@ -55,7 +55,7 @@ ssize_t read_bytes(unsigned char *p, ssize_t count, FILE * f) {
     ssize_t rcount = 0;
     if ( 0 == (rcount = fread(p, 1, count, f)) ) {
 	if ( feof(f) ) {
-	    fprintf(stderr, "end of input file\n");
+	    //fprintf(stderr, "end of input file\n");
 	} else {
 	    fprintf(stderr, "error reading header (%s)\n", strerror(errno)); exit(1);
 	}
@@ -143,8 +143,7 @@ int main(int argc, char *argv[]) {
 	}
 	if ( DEBUG ) print_separator();
     }
-    fprintf(stderr, "bytes readed (%lu)\n", count);
-    fprintf(stderr, "bytes written (%lu)\n", wcount);
+    fprintf(stderr, "readed(%lu)/written(%lu)\n", count, wcount);
 
     free(ptr);
     if ( fout && (0 != fclose(fout)) ) {
