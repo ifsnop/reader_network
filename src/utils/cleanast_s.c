@@ -35,8 +35,9 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define DEBUG 0
 
 void print_bytes(unsigned char* p, ssize_t count) {
-    fprintf(stderr, "%ld [", count);
-    for(ssize_t i = 0; i < count; i++)
+    ssize_t i = 0;
+    fprintf(stderr, "%zu [", count);
+    for(i = 0; i < count; i++)
 	fprintf(stderr, "%02X ", p[i]);
     fprintf(stderr, "]\n");
     return;
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
     if ( 0 != header_bytes ) {
 	ptr = calloc(1, header_bytes);
 	if ( header_bytes != (rcount = read_bytes(ptr, header_bytes, fin)) ) {
-	    fprintf(stderr, "error reading header header_bytes(%d) rcount(%lu)\n", header_bytes, rcount);
+	    fprintf(stderr, "error reading header header_bytes(%d) rcount(%zu)\n", header_bytes, rcount);
 	    exit(EXIT_FAILURE);
 	}
 	if ( DEBUG ) print_bytes(ptr, header_bytes);
@@ -143,7 +144,7 @@ int main(int argc, char *argv[]) {
 	}
 	if ( DEBUG ) print_separator();
     }
-    fprintf(stderr, "readed(%lu)/written(%lu)\n", count, wcount);
+    fprintf(stderr, "readed(%zu)/written(%zu)\n", count, wcount);
 
     free(ptr);
     if ( fout && (0 != fclose(fout)) ) {
