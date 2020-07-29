@@ -4,6 +4,10 @@
  archivos temporales.
 - SOPORTE: corregidos un montón de fallos y warnings al
  compilar con gcc v7.
+- SOPORTE: añadido una segunda pareja de sac/sic para los
+ filtros de filtersacsic (solo añadir, para el caso de
+ extraer radar+adsb de una grabación multiradar).
+
 0.77
 - TIP: para quitar la sequencias ansi al activar dest_debug
  o dest_screen_crc, podemos usar sed:
@@ -12,8 +16,9 @@
  paquete udp, solo se decodificaba a localhost el primer
  datarecord, el segundo se perdía (a la función de decodifi-
  car ast48f se enviaban unos índices antiguos del paquete.
-- SOPORTE: añadido un dest_debug, para sacar por stderr el 
+- SOPORTE: añadido un dest_debug, para sacar por stderr el
  paquete que se procesa
+
 0.76
 - SOPORTE: añadido dest_file_nodirectory para no crear
  directorios con timestamp, pero si un nombre de fichero

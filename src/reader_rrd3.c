@@ -1041,6 +1041,12 @@ void update_calculations(struct datablock_plot *dbp) {
             midnight_t += 86400; // new day
         last_tod_stamp = dbp->tod_stamp;
 
+
+	//if (dbp->cat == 1 && dbp->sac==20 && dbp->sic==2 && dbp->tod_stamp>=(28800+300) && dbp->tod_stamp<(29100+300)) {
+	//    printf("%3.5f;%3.5f;%3.5f\n", dbp->tod_stamp, dbp->tod, diff);
+	//}
+
+
     }
 
     //log_printf(LOG_NORMAL,"%03d;%03d;%3.3f;%3.3f;%3.3f\n", dbp.sac, dbp.sic, dbp.tod_stamp, dbp.tod, diff);

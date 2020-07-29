@@ -81,7 +81,7 @@ ssize_t write_bytes(unsigned char *p, ssize_t count, FILE * f) {
 }
 
 int main(int argc, char *argv[]) {
-    int pre_bytes = 0, post_bytes = 0, header_bytes = 0, db_bytes = 0, sac = 0, sic = 0;
+    int pre_bytes = 0, post_bytes = 0, header_bytes = 0, db_bytes = 0, sac1 = 0, sic1 = 0, sac2 = 0, sic2 = 0;
     FILE *fin = NULL, *fout = NULL;
     // unsigned int lendb, filesize;
 
@@ -90,9 +90,9 @@ int main(int argc, char *argv[]) {
 
     ssize_t rcount = 0, count = 0, wcount = 0;
 
-    if( argc != 8 ) {
+    if( argc != 8 && argc != 10) {
 	printf("filtercat_s%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	printf("filtercat_s%s in_filename.gps out_filename.gps headerbytes prebytes postbytes sac sic\n", ARCH);
+	printf("filtercat_s%s in_filename.gps out_filename.gps headerbytes prebytes postbytes sac sic [sac sic]\n", ARCH);
 	printf("positive sac sic: include asterix from sensor with this sac sic\n");
 	printf("negative sac sic: exclude asterix from sensor with this sac sic\n\n");
 	exit(EXIT_SUCCESS);
@@ -101,8 +101,12 @@ int main(int argc, char *argv[]) {
     header_bytes = atoi(argv[3]);
     pre_bytes = atoi(argv[4]);
     post_bytes = atoi(argv[5]);
-    sac = atoi(argv[6]);
-    sic = atoi(argv[7]);
+    sac1 = atoi(argv[6]);
+    sic1 = atoi(argv[7]);
+    if (argc == 10 ) {
+	sac2 = atoi(argv[8]);
+	sic2 = atoi(argv[9]);
+    }
 
     if ( !strcmp(argv[1], "-") ) {
 	if ( NULL == (fin = fdopen(dup(fileno(stdin)), "rb")) ) {
@@ -170,18 +174,29 @@ int main(int argc, char *argv[]) {
 		print_bytes(&db_sic, 1);
 	    }
 
-	    if ( DEBUG ) fprintf(stderr, "sac %d sic %d db_sac %d db_sic %d\n", sac, sic, db_sac, db_sic);
+	    if ( DEBUG ) {
+	        if ( argc == 8 )  // solo nos han pasado una pareja de sac sic
+	            fprintf(stderr, "sac1 %d sic1 %d db_sac %d db_sic %d\n", sac1, sic1, db_sac, db_sic);
+	        else // nos han pasado dos parejas de sac/sic
+	            fprintf(stderr, "sac1 %d sic1 %d sac2 %d sic2 %d db_sac %d db_sic %d\n", sac1, sic1, sac2, sic2, db_sac, db_sic);
+	    }
 
-	    if ( ((0 < sac) && (sac == db_sac)) && // sac positivo
-		((0 < sic) && (sic == db_sic)) ) { // sic positivo
-		if ( DEBUG ) fprintf(stderr, "MATCH\n");
+            // con esta implementación, solo se utiliza el segundo par de sac/sic para añadir
+            // si queremos quitar dos parejas, (usando la segunda pareja como negativa) la segunda
+            // no se tiene en cuenta
+
+	    if ( (((0 < sac1) && (sac1 == db_sac)) && // sac positivo
+		((0 < sic1) && (sic1 == db_sic)) ) ||
+		( argc == 10 && 0 < sac2 && sac2 == db_sac && 0 < sic2 && sic2 == db_sic )
+		) { // sic positivo
+		if ( DEBUG ) fprintf(stderr, "MATCH sac1/sic1 || MATCH sac2/sic2\n");
 		write_bytes(pre_ptr, pre_bytes, fout);
 		write_bytes(ptr, db_bytes, fout);
 		write_bytes(post_ptr, post_bytes, fout);
 		wcount += pre_bytes + db_bytes + post_bytes;
-	    } else if ( ((0 > sac) && (-sac != db_sac)) || // sac negativo
-		((0 > sic) && (-sic != db_sic)) ) { // sic negativo
-		if ( DEBUG ) fprintf(stderr, "MATCH\n");
+	    } else if ( ((0 > sac1) && (-sac1 != db_sac)) || // sac negativo
+		((0 > sic1) && (-sic1 != db_sic)) ) { // sic negativo
+		if ( DEBUG ) fprintf(stderr, "MATCH sac1/sic1\n");
 		write_bytes(pre_ptr, pre_bytes, fout);
 		write_bytes(ptr, db_bytes, fout);
 		write_bytes(post_ptr, post_bytes, fout);
