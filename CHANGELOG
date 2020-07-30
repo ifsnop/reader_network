@@ -7,6 +7,8 @@
 - SOPORTE: añadido una segunda pareja de sac/sic para los
  filtros de filtersacsic (solo añadir, para el caso de
  extraer radar+adsb de una grabación multiradar).
+- SOPORTE: añadida configuración por defecto para problemas
+ en radares con psr, grabaciones mssrs,scdi y lan ext.
 
 0.77
 - TIP: para quitar la sequencias ansi al activar dest_debug
