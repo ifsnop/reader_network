@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
     if ( 0 != header_bytes ) {
 	ptr = calloc(1, header_bytes);
 	if ( header_bytes != (rcount = read_bytes(ptr, header_bytes, fin)) ) {
-	    fprintf(stderr, "error reading header header_bytes(%d) rcount(%zu)\n", header_bytes, rcount);
+	    fprintf(stderr, "error reading header header_bytes(%d) rcount(%zd)\n", header_bytes, rcount);
 	    exit(EXIT_FAILURE);
 	}
 	if ( DEBUG ) print_bytes(ptr, header_bytes);

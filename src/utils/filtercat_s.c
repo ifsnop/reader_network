@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
 
 //	fprintf(stderr, "%02X %02X ____ ", -cat, ptr[0]);
 
-       if ( ((0 < cat) && (cat == ptr[0])) ||  // cat positivo
+       if ( ((0 <= cat) && (cat == ptr[0])) ||  // cat positivo
            ((0 > cat) && (-cat != ptr[0])) ) { // cat negativo
 	    // fprintf(stderr, "%02X %02X\n", cat, ptr[0]);
 	    if ( DEBUG ) fprintf(stderr, "OK\n");

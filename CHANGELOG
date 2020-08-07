@@ -9,6 +9,7 @@
  extraer radar+adsb de una grabación multiradar).
 - SOPORTE: añadida configuración por defecto para problemas
  en radares con psr, grabaciones mssrs,scdi y lan ext.
+- BUG: filtercat_s y filtersacsic_s no soportaban sac=0
 
 0.77
 - TIP: para quitar la sequencias ansi al activar dest_debug

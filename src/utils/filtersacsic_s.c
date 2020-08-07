@@ -185,9 +185,9 @@ int main(int argc, char *argv[]) {
             // si queremos quitar dos parejas, (usando la segunda pareja como negativa) la segunda
             // no se tiene en cuenta
 
-	    if ( (((0 < sac1) && (sac1 == db_sac)) && // sac positivo
-		((0 < sic1) && (sic1 == db_sic)) ) ||
-		( argc == 10 && 0 < sac2 && sac2 == db_sac && 0 < sic2 && sic2 == db_sic )
+	    if ( (((0 <= sac1) && (sac1 == db_sac)) && // sac positivo
+		((0 <= sic1) && (sic1 == db_sic)) ) ||
+		( argc == 10 && 0 <= sac2 && sac2 == db_sac && 0 <= sic2 && sic2 == db_sic )
 		) { // sic positivo
 		if ( DEBUG ) fprintf(stderr, "MATCH sac1/sic1 || MATCH sac2/sic2\n");
 		write_bytes(pre_ptr, pre_bytes, fout);
