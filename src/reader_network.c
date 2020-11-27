@@ -1395,8 +1395,21 @@ unsigned long count2_plot_filtered = 0;
 //			    log_printf(LOG_VERBOSE, "%d %d\n",
 //			        (s_reader[i]!=radar_destination[j].socket),
 //			        (strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])!=0));
+//			    if ( (s_reader[i] == radar_destination[j].socket) ) {
+//			        log_printf(LOG_VERBOSE, "%s %s\n",
+//				    inet_ntoa(cast_group.sin_addr),
+//				    radar_definition[j*5+3]
+//				);
+//			    }
+			    // Si llega por nuestro socket y o bien tiene la misma ip de origen
+			    // o bien la ip de origen se definió en el archivo de configuración
+			    // como 0.0.0.0, se procesa el dato.
 			    if ( (s_reader[i]==radar_destination[j].socket) &&
-			         (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) )
+			        (
+				    (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) ||
+				    (!strcasecmp("0.0.0.0", radar_definition[j*5+3]))
+				)
+				)
 			        break;
 			}
 			
