@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2020 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2021 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -648,6 +648,12 @@ void send_output_file() {
 	    /* enable uploading */
 	    curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
 
+	    /* connection timeout */
+	    curl_easy_setopt(ch, CURLOPT_CONNECTTIMEOUT, 300L);
+
+	    /* upload timeout */
+	    curl_easy_setopt(ch, CURLOPT_TIMEOUT, (fsize<1000000 ? 300L : 7200L));
+
 	    /* specify target */
 	    curl_easy_setopt(ch, CURLOPT_URL, buff_1);
 	    curl_easy_setopt(ch, CURLOPT_HTTPPROXYTUNNEL, 0L);
@@ -667,7 +673,7 @@ void send_output_file() {
 	    (effectively disabling resume). For FTP, set this option to -1 to make the
 	    transfer start from the end of the target file (useful to continue an interrupted
 	    upload). */
-	    curl_easy_setopt(ch, CURLOPT_RESUME_FROM_LARGE, -1L);
+	    curl_easy_setopt(ch, CURLOPT_RESUME_FROM_LARGE, (curl_off_t) -1L);
 
 	    /* now specify which file to upload */
 	    curl_easy_setopt(ch, CURLOPT_READDATA, fh);
@@ -819,8 +825,13 @@ void setup_input_network(void) {
 
 		    if (!strncasecmp(source, "mult", 4)) {
 			unsigned char ttl = 32;
+			int recv_buffer_size = 100 * 1024;
 			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
 			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
+			    exit(EXIT_FAILURE);
+			}
+			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_RCVBUF, &recv_buffer_size, sizeof(recv_buffer_size)) < 0) {
+			    log_printf(LOG_ERROR, "rcvbuf setsockopt reader %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
 			}
 			if ( setsockopt(s_reader[socket_count], IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {

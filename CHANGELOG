@@ -1,3 +1,9 @@
+0.79
+- ADD timeout en los uploads por ftp del curl
+- ADD a cast to curl_easy_setopt -> (curl_off_t)
+- ADD llamada a setsockopt para cambiar tamaño de buffer
+ de recepción a 128Kb
+
 0.78
 - ADD: añadido filtercat_s, filtersacsic_s y cleanast_s,
  usando streams, permitiendo pipes y sin tener que usar
