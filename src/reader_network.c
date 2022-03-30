@@ -881,6 +881,11 @@ void setup_input_network(void) {
 		    socket_count++;
 		}
 		i++;
+		if ( i >= MAX_RADAR_NUMBER ) {
+		    log_printf(LOG_VERBOSE, "Max number of defined radars reached, exiting\n");
+		    exit(-1);
+		}
+
 	    }
 
     return;

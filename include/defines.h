@@ -45,7 +45,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 #define RN_MAX_PACKET_LENGTH 65532
 
-#define MAX_RADAR_NUMBER 64
+#define MAX_RADAR_NUMBER 256
 #define MAX_SEGMENT_NUMBER 3200
 
 #define UPDATE_TIME 300.0
