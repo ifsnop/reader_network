@@ -1,4 +1,6 @@
 0.79
+- ADD listersacsic_s para imprimir los sac/sic contenidos
+en una grabación.
 - ADD timeout en los uploads por ftp del curl
 - ADD a cast to curl_easy_setopt -> (curl_off_t)
 - ADD llamada a setsockopt para cambiar tamaño de buffer
