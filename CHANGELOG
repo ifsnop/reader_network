@@ -1,6 +1,8 @@
 0.79
+- ADD joingps_s para juntar dos ficheros basado en el
+fechado GPS, soporta streams.
 - ADD listersacsic_s para imprimir los sac/sic contenidos
-en una grabación.
+en una grabación, soporta streams.
 - ADD timeout en los uploads por ftp del curl
 - ADD a cast to curl_easy_setopt -> (curl_off_t)
 - ADD llamada a setsockopt para cambiar tamaño de buffer
