@@ -1,4 +1,7 @@
 0.79
+- ADD filtertime_s para filtrar un fichero GPS,
+a partir de una fecha inicio y una fecha fin en
+formato HH:MM.
 - ADD joingps_s para juntar dos ficheros basado en el
 fechado GPS, soporta streams.
 - ADD listersacsic_s para imprimir los sac/sic contenidos

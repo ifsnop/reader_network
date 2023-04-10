@@ -117,6 +117,7 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/listersacsic_s${destarch}${arch} src/utils/listersacsic_s.c $rnopts
     gcc $gccopts -o bin/filtercat${destarch}${arch} src/utils/filtercat.c $rnopts
     gcc $gccopts -o bin/filtercat_s${destarch}${arch} src/utils/filtercat_s.c $rnopts
+    gcc $gccopts -o bin/filtertime_s${destarch}${arch} src/utils/filtertime_s.c $rnopts
     gcc $gccopts -o bin/filtercatout${destarch}${arch} src/utils/filtercatout.c $rnopts
     gcc $gccopts -o bin/filtersacsic${destarch}${arch} src/utils/filtersacsic.c $rnopts
     gcc $gccopts -o bin/filtersacsicout${destarch}${arch} src/utils/filtersacsicout.c $rnopts
