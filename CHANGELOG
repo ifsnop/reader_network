@@ -1,4 +1,5 @@
 0.79
+- ADD support for I048/SP
 - ADD filtertime_s para filtrar un fichero GPS,
 a partir de una fecha inicio y una fecha fin en
 formato HH:MM.
