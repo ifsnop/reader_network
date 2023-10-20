@@ -104,6 +104,7 @@ int main(int argc, char *argv[]) {
     double /*start_time, end_time = 0, */current_time = 0;
 
     int skip_midnight = 0;
+    int salir = 0;
 
     struct tm start_date_tm;
     struct tm end_date_tm;
@@ -221,10 +222,21 @@ int main(int argc, char *argv[]) {
 
 	rcount += pre_bytes + db_bytes + post_bytes;
 
+	if ( 1 == salir )
+	    continue;
+
+	// si la hora del plot está entre las 23:00 y las 23:30, no hacemos el skip
+	// de seguridad en la medianoche, se entiene que la grabación viene de antes
+	if ( 0 == skip_midnight && current_time > 82800 && current_time < 84600 ) {
+	    skip_midnight = 1;
+	}
+
+	// si la grabación empieza más allá de las 23:53, omitimos hasta que sean las 00:00
 	if ( 0 == skip_midnight && current_time > 86000) {
 	    if ( DEBUG ) printf("skipping 0\n");
 	    continue;
 	}
+	// una vez pasado este momento, nunca más vamos a omitir
 	skip_midnight = 1;
 
 	// printf("%3.3f %3.3f  %3.3f\n", start_time, current_time, end_time);
@@ -235,6 +247,7 @@ int main(int argc, char *argv[]) {
 
 	if ( current_time > end_date_timet ) {
 	    if ( DEBUG ) printf("skipping 2\n");
+	    salir = 1;
 	    continue;
 	}
 
