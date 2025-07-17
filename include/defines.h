@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2021 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2025 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -21,8 +21,8 @@ You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "0.79"
-#define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2021 Diego Torres\n\n" \
+#define VERSION "0.80"
+#define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2025 Diego Torres\n\n" \
     "This program comes with ABSOLUTELY NO WARRANTY.\n" \
     "This is free software, and you are welcome to redistribute it\n" \
     "under certain conditions; see COPYING file for details.\n\n"

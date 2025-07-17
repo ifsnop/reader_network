@@ -1,3 +1,6 @@
+0.80
+- ADD support for files >2GiB in older 64bits linux
+
 0.79
 - ADD support for I048/SP
 - ADD filtertime_s para filtrar un fichero GPS,

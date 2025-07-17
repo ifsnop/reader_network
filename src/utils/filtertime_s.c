@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2022 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2024 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -131,8 +131,8 @@ int main(int argc, char *argv[]) {
     memset(&end_date_tm, 0, sizeof(struct tm));
 
     // formateamos la fecha de entrada en un string
-    snprintf(start_date_str, 17, "1970-01-01 %s:00", argv[6]);
-    snprintf(end_date_str, 17, "1970-01-01 %s:00", argv[7]);
+    snprintf(start_date_str, 20, "1970-01-01 %s:00", argv[6]);
+    snprintf(end_date_str, 20, "1970-01-01 %s:59", argv[7]);
 
     // usamos strptime para pasar de string a struct tm
 /*

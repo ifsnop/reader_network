@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2021 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2025 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -1003,7 +1003,9 @@ int main(int argc, char *argv[]) {
 
 ssize_t ast_size_total;
 ssize_t ast_pos = 0;
-ssize_t ast_size_tmp;
+ssize_t ast_size_tmp = 0;
+ssize_t ast_size_readed = 0;
+ssize_t ast_size_pending = 0;
 int ast_size_datablock;
 unsigned char *ast_ptr_raw;
 struct timeval t;
@@ -1067,11 +1069,30 @@ unsigned long count2_plot_filtered = 0;
 
 	ast_size_total = setup_input_file();
 	ast_ptr_raw = (unsigned char *) mem_alloc(ast_size_total);
-	if ( (ast_size_tmp = read(fd_in, ast_ptr_raw, ast_size_total)) != ast_size_total) {
-	    log_printf(LOG_ERROR, "ERROR read: %s\n", strerror(errno));
-	    exit(EXIT_FAILURE);
+	log_printf(LOG_ERROR, "ast_size_total (%ld)\n", ast_size_total);
+	ast_size_pending = ast_size_total;
+	errno = 0;
+	while ( ast_size_pending != 0 ) {
+	    log_printf(LOG_ERROR, "(1) readed %ld bytes, cumulative readed %ld, pending %ld bytes\n",
+		(unsigned long) ast_size_tmp,
+		(unsigned long) ast_size_readed,
+		(unsigned long) ast_size_pending
+	    );
+
+	    ast_size_tmp = read(fd_in, ast_ptr_raw + ast_size_readed, ast_size_pending);
+	    if ( 0 != errno || 0 == ast_size_tmp ) {
+		log_printf(LOG_ERROR, "ERROR read(%d): %s\n", errno, strerror(errno));
+		exit(EXIT_FAILURE);
+	    }
+
+	    ast_size_readed += ast_size_tmp;
+	    ast_size_pending -= ast_size_tmp;
+	    log_printf(LOG_ERROR, "(2) readed %ld bytes, cumulative readed %ld, pending %ld bytes\n",
+		(unsigned long) ast_size_tmp,
+		(unsigned long) ast_size_readed,
+		(unsigned long) ast_size_pending
+	    );
 	}
-	log_printf(LOG_NORMAL, "readed %ld bytes\n", (unsigned long) ast_size_total);
         if (source_file_gps_version == 0) {
             if ( !source_file_gps ) { // acaba en ast, es un archivo asterix
                 offset = 0; ast_pos = 0;
