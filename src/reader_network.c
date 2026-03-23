@@ -3,7 +3,7 @@ reader_network - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
-Copyright (C) 2002-2025 Diego Torres <diego dot torres at gmail dot com>
+Copyright (C) 2002-2026 Diego Torres <diego dot torres at gmail dot com>
 
 This file is part of the reader_network utils.
 
@@ -1584,6 +1584,7 @@ unsigned long count2_plot_filtered = 0;
 					    memcpy(output_ptr, ast_ptr_raw_tmp, ast_size_datablock);
                                             memset(output_ptr + ast_size_datablock, 0, 10);
 
+					    // 0, 1st, 2nd & 3rd will hold source ip
 					    byte = (cast_group.sin_addr.s_addr >> 24) & 0xFF;
 					    memcpy(output_ptr + ast_size_datablock + 0, &byte, 1);
 					    byte = (cast_group.sin_addr.s_addr >> 16) & 0xFF;
@@ -1594,7 +1595,14 @@ unsigned long count2_plot_filtered = 0;
 					    memcpy(output_ptr + ast_size_datablock + 3, &byte, 1);
 
                                             // 4, 5 & 9 are still empty
+					    // but: 4th & 5th will hold a copy of ast_size_datablock (or udp_size)
+					    // (9th byte will hold 0xCD as GPS version)
+					    byte = (ast_size_datablock >> 8) & 0xFF;
+					    memcpy(output_ptr + ast_size_datablock + 4, &byte, 1);
+					    byte = (ast_size_datablock) & 0xFF;
+					    memcpy(output_ptr + ast_size_datablock + 5, &byte, 1);
 
+					    // 6th, 7th & 8th will hold timestamp
 					    timegps = current_time_today * 128.0;
 					    byte = (timegps >> 16) & 0xFF;
 					    memcpy(output_ptr + ast_size_datablock + 6, &byte, 1);
@@ -1602,6 +1610,9 @@ unsigned long count2_plot_filtered = 0;
 					    memcpy(output_ptr + ast_size_datablock + 7, &byte, 1);
 					    byte = (timegps) & 0xFF;
 					    memcpy(output_ptr + ast_size_datablock + 8, &byte, 1);
+					    byte = 0xCD; // GPS watermark
+					    memcpy(output_ptr + ast_size_datablock + 9, &byte, 1);
+
 					    if ( (write(fd_out_gps, output_ptr, ast_size_datablock+10) ) != (ast_size_datablock+10)) {
 						log_printf(LOG_ERROR, "ERROR write_gps: %s (fd:%d)\n", strerror(errno), fd_out_gps);
 					    }
