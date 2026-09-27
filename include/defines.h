@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "0.82"
+#define VERSION "0.83"
 #define COPYRIGHT_NOTICE " v%s Copyright (C) 2002 - 2026 Diego Torres\n\n" \
     "This program comes with ABSOLUTELY NO WARRANTY.\n" \
     "This is free software, and you are welcome to redistribute it\n" \
@@ -39,6 +39,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 #define MULTICAST_PLOTS_GROUP "224.0.0.49"
 #define MULTICAST_PLOTS_PORT 7001
+#define MULTICAST_PLOTS_RCVBUF (4 * 1024 * 1024) // el kernel lo limita a net.core.rmem_max
 
 #define UNICAST_PLOTS "172.88.2.221"
 #define UNICAST_PLOTS_PORT 4001
@@ -54,7 +55,8 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 #define SELECT_TIMEOUT 10
 
-#define SCRM_MAX_QUEUE_SIZE 2500
+#define SCRM_MAX_QUEUE_SIZE 2500 // tamaño inicial, crece si el trafico lo necesita
+#define SCRM_MAX_QUEUE_SIZE_LIMIT 1048576 // tope de crecimiento (unos 80 MB en el peor caso)
 #define SCRM_TIMEOUT 4
 
 #define DEST_FILE_FORMAT_UNKNOWN 1

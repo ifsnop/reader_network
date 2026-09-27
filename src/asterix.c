@@ -540,7 +540,6 @@ int index = 0;
 		exit(EXIT_FAILURE);
 	    }
 */	    if (enviar) {
-                usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT001
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
@@ -602,7 +601,6 @@ int ast_procesarCAT02(unsigned char *ptr_raw, ssize_t size_datablock, unsigned l
 	    }
 	    // log_printf(LOG_ERROR, "e)CAT02] dbp.type(%d) db.tod(%3.3f) dbp.available(%d)\n", dbp.type, dbp.tod, dbp.available);
 	    if (enviar) {
-	        usleep(10);
                 if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT002
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	        }
@@ -649,7 +647,6 @@ struct datablock_plot dbp;
 			(ptr_raw[sizeFSPEC + 4]<<8) + 
 			(ptr_raw[sizeFSPEC + 5])) / 128.0;
 	    if (enviar) {
-	        usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT008
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		    exit(EXIT_FAILURE);
@@ -785,7 +782,6 @@ int index = 0;
 	    }
 */
 	    if (enviar) {
-                usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT010
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
@@ -836,7 +832,6 @@ struct datablock_plot dbp;
 	    default: dbp.type = IS_ERROR;				break;
 	}
 	if (enviar) {
-            usleep(10);
             if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT019
 		log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 	    }
@@ -972,7 +967,6 @@ int index = 0;
 		exit(EXIT_FAILURE);
 //	    }
 */	    if (enviar) {
-                usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT020
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
@@ -1100,7 +1094,6 @@ int index = 0;
 	    }
 */
 	    if (enviar) {
-                usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT021
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
@@ -1166,7 +1159,6 @@ int index = 0;
 	    dbp.tod = ((float)(ptr_raw[j]*256*256 + ptr_raw[j+1]*256 + ptr_raw[j+2]))/128.0;
 	    size_current += 3; j += 3;
 	    if (enviar) {
-	        usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT034
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}
@@ -1462,7 +1454,6 @@ unsigned char *datablock_start = NULL;
             }
             */
 	    if (enviar) {
-                usleep(10);
 		if (sendto(s_output_multicast, &dbp, sizeof(dbp), 0, (struct sockaddr *) &srvaddr, sizeof(srvaddr)) < 0) { // CAT048
 		    log_printf(LOG_ERROR, "ERROR sendto: %s\n", strerror(errno));
 		}

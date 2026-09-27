@@ -1,3 +1,23 @@
+0.83
+- BUG: un datablock con tamaño 0 (paquete mal formado) dejaba el bucle
+ de captura colgado para siempre cuando se decodificaba o se grababa en
+ gps. Ahora los datablocks de menos de 3 bytes se descartan y se cuentan
+ en "stats malformed".
+- BUG: un paquete de una ip de origen no configurada cortaba el recorrido
+ de los sockets listos en esa vuelta del select(), retrasando al resto de
+ flujos; además no se contaba en "ignored".
+- BUG: con dest_localhost, un usleep(10) por cada plot decodificado
+ (~60us reales) limitaba el lector a unos 16.000 plots/s; con 150 flujos
+ se perdia el 46% de los paquetes. Eliminado. client y client_time piden
+ ahora un buffer de recepción de 4MB para absorber las ráfagas.
+- BUG: cada reconexión tras 10s sin tráfico perdía un descriptor de
+ fichero (socket de salida a localhost sin cerrar).
+- BUG: la cola de mode_scrm era fija (2500 entradas); con más de ~625
+ pkt/s agregados la ventana de deduplicación bajaba de 4s y se colaban
+ duplicados. Ahora crece bajo demanda hasta 1.048.576 entradas.
+- ADD: prueba de carga en tests/load/ (150 flujos multicast en loopback,
+ compara dos binarios: compare.sh <antes> <después> <dir>).
+
 0.82
 - ADD mode_continuous: en vez de terminar el proceso al cumplirse "timed"
  (obligando a relanzar desde cron para grabar 24h seguidas, con solape y

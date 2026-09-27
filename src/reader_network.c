@@ -75,6 +75,7 @@ struct Queue {
     //[SCRM_MAX_QUEUE_SIZE];
     int front, rear;
     int count;
+    int capacity;
 };
 
 struct Queue q;
@@ -964,13 +965,37 @@ ssize_t size;
 
 void AddQueue(void* a) {
     // printf("add addr:%x crc:%x\n", (unsigned int)a, ((rb_red_blk_node*)a)->crc32);
-    if (q.count != SCRM_MAX_QUEUE_SIZE) {
+    if (q.count != q.capacity) {
 	if (q.count > 0)
-	    q.rear = (q.rear + 1) % SCRM_MAX_QUEUE_SIZE;
+	    q.rear = (q.rear + 1) % q.capacity;
 	q.node[q.rear] = (rb_red_blk_node *) a;
 	q.count++;
     }
     return;
+}
+
+/* Duplica la capacidad de la cola circular de dedup manteniendo el orden de
+   antiguedad, para que la ventana efectiva siga siendo SCRM_TIMEOUT aunque el
+   trafico agregado sea alto. Devuelve false si ya esta en el tope. */
+bool GrowQueue(void) {
+    rb_red_blk_node **node_new;
+    int i, capacity_new;
+
+    if (q.capacity >= SCRM_MAX_QUEUE_SIZE_LIMIT)
+	return false;
+    capacity_new = q.capacity * 2;
+    if (capacity_new > SCRM_MAX_QUEUE_SIZE_LIMIT)
+	capacity_new = SCRM_MAX_QUEUE_SIZE_LIMIT;
+    node_new = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * capacity_new);
+    for (i = 0; i < q.count; i++)
+	node_new[i] = q.node[(q.front + i) % q.capacity];
+    mem_free(q.node);
+    q.node = node_new;
+    q.front = 0;
+    q.rear = (q.count > 0) ? q.count - 1 : 0;
+    q.capacity = capacity_new;
+    log_printf(LOG_VERBOSE, "scrm queue grown to %d entries\n", capacity_new);
+    return true;
 }
 
 void DeleteQueue(void *a) {
@@ -980,7 +1005,7 @@ void DeleteQueue(void *a) {
 	if (q.count > 1) {
 	    // log_printf(LOG_ERROR, "2>deleting addr:%p crc:%08x\n", q.node[q.front], q.node[q.front]->crc32);
 	    q.node[q.front] = NULL;
-	    q.front = (q.front + 1) % SCRM_MAX_QUEUE_SIZE;
+	    q.front = (q.front + 1) % q.capacity;
 	}
 	q.count--;
     }
@@ -1041,6 +1066,7 @@ unsigned long count2_plot_unique = 0;
 unsigned long count2_plot_duped = 0;
 unsigned long count2_udp_received = 0;
 unsigned long count2_plot_filtered = 0;
+unsigned long count2_plot_malformed = 0;
 
 //    char * unused = parse_hora(0);
 //    printf("%s\n", unused);
@@ -1077,6 +1103,7 @@ unsigned long count2_plot_filtered = 0;
     if (mode_scrm) {
 	tree = RBTreeCreate(UIntComp,AddQueue,DeleteQueue);
 	q.node = (rb_red_blk_node **) mem_alloc(sizeof(rb_red_blk_node *) * SCRM_MAX_QUEUE_SIZE);
+	q.capacity = SCRM_MAX_QUEUE_SIZE;
 	q.rear = q.front = q.count = 0;
 	// q.node =  mem_alloc(rb_red_blk_node);
     }
@@ -1523,8 +1550,9 @@ unsigned long count2_plot_filtered = 0;
 			        break;
 			}
 			
-			if (j==(radar_count/5))
-			    break; // no ha aparecido ningun blanco que pertenezca a un radar definido en la configuracion
+			/* si no pertenece a ningun radar configurado, se ignora solo este
+			   paquete y se sigue con el resto de sockets listos: un "break" aqui
+			   saldria del bucle de sockets y dejaria sin leer los demas flujos */
 
 //			while (j<(radar_count/5)) {
 
@@ -1536,7 +1564,7 @@ unsigned long count2_plot_filtered = 0;
 //			    radar_destination[s_reader[i]].dest_ip, 
 //			    inet_ntoa(cast_group.sin_addr), cast_group.sin_port);
 			    //if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
-			    {
+			    if (j < (radar_count/5)) {
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
 				int salir = 0;
 				
@@ -1571,6 +1599,12 @@ unsigned long count2_plot_filtered = 0;
 				
 				do {
 				    unsigned int crc = 0;
+				    if (ast_size_datablock < 3) {
+					/* datablock invalido (menor que la cabecera CAT+LEN): con
+					   tamaño 0 el puntero no avanzaria y el bucle no terminaria */
+					count2_plot_malformed++;
+					break;
+				    }
 				    count2_plot_processed++; // smr barajas mete varios plots que hay que desmontar para fechar
 				    record = true;
 
@@ -1584,8 +1618,15 @@ unsigned long count2_plot_filtered = 0;
 					rb_red_blk_node *node = RBExactQuery(tree,crc);
 					if (!node) { // no existe en arbol
 					    count2_plot_unique++;
-					    if (tree->count>=SCRM_MAX_QUEUE_SIZE) { // si arbol lleno, borrar nodo mas antiguo
+					    // si la cola esta llena se amplia; solo si ya esta en el tope se
+					    // borra el nodo mas antiguo (y la ventana de dedup baja de SCRM_TIMEOUT)
+					    if (tree->count>=q.capacity && !GrowQueue()) {
 						rb_red_blk_node *node_old = q.node[q.front];
+						static bool warned = false;
+						if (!warned) {
+						    log_printf(LOG_ERROR, "scrm queue limit (%d) reached, dedup window below %d secs\n", q.capacity, SCRM_TIMEOUT);
+						    warned = true;
+						}
 //						if (node_old->access==0) {
 //						    log_printf(LOG_ERROR,"borrando sin dupe crc32[%08x] count[%d]\n", node_old->crc32, node_old->access);
 //						}
@@ -1712,8 +1753,10 @@ unsigned long count2_plot_filtered = 0;
 		}
 	    } else if ( select_count == 0 ) {
 		log_printf(LOG_VERBOSE, "%d sec(s) warning\n", SELECT_TIMEOUT);
-		if ( dest_localhost )
+		if ( dest_localhost ) {
+		    close(s_output_multicast); // si no, se pierde un descriptor en cada reconexion
 		    setup_output_multicast();
+		}
 		for( i=0; i<socket_count; i++ ) {
 		    close(s_reader[i]);
 		}
@@ -1791,6 +1834,8 @@ unsigned long count2_plot_filtered = 0;
     log_printf(LOG_NORMAL, "stats received[%ld] processed[%ld]/ignored[%ld]/filtered[%ld] = unique[%ld]+duped[%ld]\n",
         count2_udp_received, count2_plot_processed, count2_plot_ignored,
         count2_plot_filtered, count2_plot_unique, count2_plot_duped);
+    if (count2_plot_malformed > 0)
+	log_printf(LOG_NORMAL, "stats malformed[%ld] (datablocks with size < 3 discarded)\n", count2_plot_malformed);
 
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;

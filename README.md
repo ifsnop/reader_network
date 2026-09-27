@@ -1,4 +1,4 @@
-reader_network 0.82 - A package of utilities to record and work with
+reader_network 0.83 - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 

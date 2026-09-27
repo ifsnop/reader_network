@@ -86,6 +86,7 @@ struct ip_mreq mreq;
 struct sockaddr_in addr;
 fd_set reader_set;
 int s, yes = 1;
+int rcvbuf = MULTICAST_PLOTS_RCVBUF;
 bool forced_exit = false;
 
 void insertList(struct sorted_list **p, int segment, int count) {
@@ -156,6 +157,9 @@ void server_connect(void) {
     if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
 	log_printf(LOG_ERROR, "setsockopt %s\n", strerror(errno));
 	exit(EXIT_FAILURE);
+    }
+    if ( setsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) < 0) {
+	log_printf(LOG_ERROR, "setsockopt rcvbuf %s\n", strerror(errno));
     }
     if ( bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 	log_printf(LOG_ERROR, "bind %s\n", strerror(errno));

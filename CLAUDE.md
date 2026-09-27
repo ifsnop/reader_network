@@ -172,6 +172,37 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   cruzando varias rotaciones: cero duplicados escritos, cero paquetes
   perdidos.
 
+## Prueba de carga (`tests/load/`)
+
+Compara dos binarios con muchos flujos multicast en loopback (150 por
+defecto, 239.255.X.Y:5000). Cada paquete lleva un datablock CAT048 con
+SIC = número de flujo y TOD = número de secuencia, así que `analyze.py`
+cuenta pérdidas y duplicados por flujo leyendo el fichero `.gps` grabado.
+
+```
+tests/load/compare.sh <binario_antes> <binario_despues> <dir_trabajo> [escenarios]
+tests/load/run_load.sh <binario> <escenario> <dir_trabajo>   # un solo caso
+```
+
+Escenarios: `base`, `decode` (dest_localhost), `noise` (ip de origen no
+configurada), `scrm` (duplicados retrasados 1,5 s), `malformed`
+(datablock de tamaño 0), `fdleak` (35 s sin tráfico). La configuración se
+genera en cada ejecución y el hash de `asterix_versions` se fuerza con la
+variable de entorno del mismo nombre, así que no depende de la máquina.
+Además de las pérdidas, recoge el delta de `RcvbufErrors` de
+`/proc/net/snmp` (descartes del kernel por buffer lleno) y el número de
+descriptores abiertos del lector al principio y al final.
+
+Guardar el binario "antes" (`cp bin/reader_network64 ...`) **antes** de
+tocar el código, porque `build.sh` sobrescribe `bin/`.
+
+Resultados al corregir los problemas de rendimiento con más de 100 flujos
+(CHANGELOG 0.83): `decode` pasó de 46 % de pérdidas a 0 %, `malformed` de
+proceso colgado a 0 %, `scrm` de 60.000 duplicados grabados a 0 y
+`fdleak` de un descriptor perdido cada 10 s a ninguno. En `noise` no se
+llegó a ver pérdida con el emisor en Python (hace falta más ruido del
+que el bucle puede drenar), aunque el fallo del `break` era real.
+
 ## Conclusiones de esta sesión: el código y cómo trabajar aquí
 
 ### Sobre el código
@@ -214,6 +245,29 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   el origen fijo cada vez, en lugar de acumular sumando `intervalo` al
   anterior — así es autocorrectivo si el proceso se retrasa o se salta
   algún ciclo, en vez de arrastrar el desfase para siempre.
+- **El bucle de captura es de un solo hilo: cualquier espera dentro de él
+  se paga en paquetes perdidos.** Los `usleep(10)` por plot que había en
+  `asterix.c` (un `usleep(10)` real dura ~60 us por el timer slack de
+  Linux) bastaban para perder casi la mitad del tráfico con 150 flujos.
+  No meter esperas ni trabajo lento en ese camino; si algo tiene que ir
+  más despacio (p.ej. los consumidores de `dest_localhost`), que lo
+  absorba su buffer de recepción, no el lector.
+- **Cualquier campo de longitud leído del propio paquete hay que validarlo
+  antes de usarlo para avanzar un puntero**: un tamaño 0 dejaba el
+  `do/while` de datablocks sin salida y paraba la captura de todos los
+  flujos.
+- **Problemas pendientes con muchos flujos** (detectados en la revisión,
+  aún sin corregir): la reconexión multicast solo ocurre si *todos* los
+  flujos llevan 10 s en silencio (un flujo que pierde la suscripción IGMP
+  no se recupera); dos entradas no consecutivas de `radar_definition` con
+  el mismo grupo:puerto abren dos sockets y procesan cada paquete dos
+  veces; coste fijo por vuelta del bucle (`memset` de 64 KB,
+  reconstrucción del `fd_set`, un solo `recvfrom` por socket y vuelta);
+  búsqueda lineal del radar comparando IPs como texto; un `write()` sin
+  buffer por datablock; la comprobación de máximo de radares en
+  `parse_config()` es código muerto (va detrás de un `exit()`). Si se
+  pasa a `poll()`, preferirlo a `epoll`/`recvmmsg` por compatibilidad con
+  distribuciones antiguas.
 
 ### Sobre la forma de trabajar en este proyecto
 
@@ -222,8 +276,8 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   (el de `SIGCHLD`/`system()` y el de `EINTR` en `select()`) compilaban
   sin ningún error ni warning — solo aparecieron al ejecutar el binario
   de verdad contra tráfico multicast real. Para tocar el bucle de
-  captura/rotación, montar un emisor UDP de prueba (multicast en
-  loopback, `IP_MULTICAST_IF=127.0.0.1`) y verificar con datos reales.
+  captura/rotación, usar `tests/load/` (multicast en loopback) y comparar
+  el binario de antes con el de después.
 - **Forma de verificar sin pérdida de datos**: enviar paquetes con un
   contador secuencial en el payload, dejar correr el proceso a través de
   varias rotaciones/reinicios, descomprimir todos los ficheros de salida

@@ -31,6 +31,7 @@ int main(int argc, char *argv[]) {
 //    struct hostent * pHostInfo;
 //    long nHostAddress;
     int yes = 1, s, dbplen;
+    int rcvbuf = MULTICAST_PLOTS_RCVBUF;
     socklen_t addrlen;
     bool forced_exit = false;
 
@@ -51,6 +52,9 @@ int main(int argc, char *argv[]) {
     if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0 ) {
         log_printf(LOG_ERROR, "ERROR setsockopt: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
+    }
+    if ( setsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) < 0 ) {
+        log_printf(LOG_ERROR, "ERROR setsockopt rcvbuf: %s\n", strerror(errno));
     }
 
     if ( bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
