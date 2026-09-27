@@ -256,18 +256,10 @@ que el bucle puede drenar), aunque el fallo del `break` era real.
   antes de usarlo para avanzar un puntero**: un tamaño 0 dejaba el
   `do/while` de datablocks sin salida y paraba la captura de todos los
   flujos.
-- **Problemas pendientes con muchos flujos** (detectados en la revisión,
-  aún sin corregir): la reconexión multicast solo ocurre si *todos* los
-  flujos llevan 10 s en silencio (un flujo que pierde la suscripción IGMP
-  no se recupera); dos entradas no consecutivas de `radar_definition` con
-  el mismo grupo:puerto abren dos sockets y procesan cada paquete dos
-  veces; coste fijo por vuelta del bucle (`memset` de 64 KB,
-  reconstrucción del `fd_set`, un solo `recvfrom` por socket y vuelta);
-  búsqueda lineal del radar comparando IPs como texto; un `write()` sin
-  buffer por datablock; la comprobación de máximo de radares en
-  `parse_config()` es código muerto (va detrás de un `exit()`). Si se
-  pasa a `poll()`, preferirlo a `epoll`/`recvmmsg` por compatibilidad con
-  distribuciones antiguas.
+- **Problemas pendientes**: están detallados en `TODO.md` (ubicación,
+  problema, propuesta y cómo verificar cada uno). Ojo con el orden: el
+  `memset` de 64 KB por vuelta no se puede quitar antes de validar que el
+  tamaño de cada datablock no supera los bytes restantes del paquete.
 
 ### Sobre la forma de trabajar en este proyecto
 
