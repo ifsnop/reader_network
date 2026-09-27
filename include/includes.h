@@ -28,6 +28,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <sys/select.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <getopt.h>

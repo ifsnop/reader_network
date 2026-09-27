@@ -42,6 +42,9 @@ int dest_filter_count = 0;
 int dest_filter_flags = FILTER_NONE; // config translated
 bool mode_daemon = false;
 bool mode_scrm = false;
+bool mode_continuous = false;
+volatile sig_atomic_t shutdown_requested = 0;
+time_t next_rotation_t = 0; // proximo corte absoluto (epoch), solo con mode_continuous
 long timed = 0;
 long timed_stats_interval = 0;
 time_t midnight_t; //segundos desde el 1-1-1970 hasta las 00:00:00 del dia actual
@@ -323,11 +326,16 @@ char *dest_file_format_string = NULL;
 	}
         log_printf(LOG_VERBOSE, "reading from broadcast\n");
     }
+    cfg_get_bool(&mode_continuous, "mode_continuous");
     if (cfg_get_int(&timed, "timed")) {
-        if (timed == 0) 
+        if (timed == 0)
 	    log_printf(LOG_VERBOSE, "recording forever (user interrupt or input file interrupt)\n");
 	else
 	    log_printf(LOG_VERBOSE, "recording for %ld secs only\n", timed);
+    }
+    if (mode_continuous && timed == 0) {
+	timed = 7200;
+	log_printf(LOG_VERBOSE, "mode_continuous enabled without 'timed', defaulting rotation interval to %ld secs (2h)\n", timed);
     }
     if ( cfg_get_int(&dest_free_space, "dest_free_space") ) {
 	log_printf(LOG_VERBOSE, "minimum free space configured at %ld Mb\n", dest_free_space);
@@ -404,6 +412,18 @@ char *dest_file_format_string = NULL;
     if (dest_screen_crc && timed_stats_interval != 0) {
 	log_printf(LOG_VERBOSE, "disabling timed_stats_interval (dest_screen_crc set)\n");
 	timed_stats_interval = 0;
+    }
+
+    if (mode_continuous) {
+	if (strncasecmp(source, "mult", 4) && strncasecmp(source, "broa", 4)) {
+	    log_printf(LOG_ERROR, "mode_continuous only applies to network sources (multicast/broadcast), not source=\"%s\"\n", source);
+	    exit(EXIT_FAILURE);
+	}
+	if (!dest_file_timestamp) {
+	    log_printf(LOG_ERROR, "mode_continuous requires dest_file_timestamp=true (otherwise rotation would overwrite the same file)\n");
+	    exit(EXIT_FAILURE);
+	}
+	log_printf(LOG_VERBOSE, "mode_continuous enabled: rotating output file every %ld secs (aligned to absolute clock), running until stopped by SIGTERM/SIGINT\n", timed);
     }
 
     cfg_close();
@@ -998,6 +1018,9 @@ void free_config(void) {
     return;
 }
 
+static void handle_shutdown(int sig) {
+    shutdown_requested = 1;
+}
 
 int main(int argc, char *argv[]) {
 
@@ -1037,6 +1060,14 @@ unsigned long count2_plot_filtered = 0;
 	exit(EXIT_SUCCESS);
     }
     parse_config(argv[1]);
+    signal(SIGTERM, handle_shutdown);
+    signal(SIGINT, handle_shutdown);
+    /* OJO: no usar signal(SIGCHLD, SIG_IGN) aqui. system() (usado en mkdir y
+       bzip2, en setup_output_file()/close_output_file()) necesita hacer su
+       propio wait() sobre el hijo que lanza para poder devolver su codigo de
+       salida; si SIGCHLD esta a SIG_IGN, el kernel re-siega ese hijo antes de
+       que system() pueda leerlo y system() devuelve -1 siempre. Los hijos de
+       rotacion se cosechan explicitamente mas abajo con waitpid(WNOHANG). */
     log_printf(LOG_NORMAL, "init...\n");
     setup_time();
     if (dest_localhost)
@@ -1051,6 +1082,12 @@ unsigned long count2_plot_filtered = 0;
     }
 
     gettimeofday(&timed_t_start, NULL);
+
+    if (mode_continuous) {
+	long k = ((timed_t_start.tv_sec - midnight_t) / timed) + 1;
+	next_rotation_t = midnight_t + k * timed;
+	log_printf(LOG_VERBOSE, "mode_continuous: rotating every %ld secs, next rotation at epoch(%ld)\n", timed, (long)next_rotation_t);
+    }
 
     if (!strncasecmp(source, "file", 4)) {
 /*
@@ -1367,7 +1404,9 @@ unsigned long count2_plot_filtered = 0;
 	timed_t_Xsecs.tv_sec = timed_t_current.tv_sec;
 	timed_t_Xsecs.tv_usec = timed_t_current.tv_usec;
 
-	while ( timed==0 || (timed_t_current.tv_sec <= (timed_t_start.tv_sec + timed))) {
+	while ( !shutdown_requested &&
+	        ( mode_continuous || timed==0 ||
+	          (timed_t_current.tv_sec <= (timed_t_start.tv_sec + timed)) ) ) {
 	    struct timeval timeout;
 	    int select_count;
 	    socklen_t addrlen = sizeof(struct sockaddr_in);
@@ -1376,6 +1415,40 @@ unsigned long count2_plot_filtered = 0;
 	    fd_set reader_set;
 
 	    gettimeofday(&timed_t_current, NULL);
+
+	    if (mode_continuous) {
+		/* cosechar hijos de rotacion ya terminados, sin bloquear y sin
+		   tocar SIGCHLD globalmente (ver comentario en main()) */
+		while (waitpid(-1, NULL, WNOHANG) > 0) ;
+	    }
+
+	    if (mode_continuous && timed_t_current.tv_sec >= next_rotation_t) {
+		pid_t pid = fork();
+		if (pid == 0) {
+		    /* hijo: procesa en background la ventana que se acaba de cerrar */
+		    close_output_file();
+		    if (dest_ftp_count > 0) send_output_file();
+		    _exit(0);
+		} else if (pid > 0) {
+		    long k;
+		    /* padre: cierra sus propios descriptores (sin comprimir/subir, eso ya lo hace el hijo) */
+		    close(fd_out_ast); fd_out_ast = -1;
+		    close(fd_out_gps); fd_out_gps = -1;
+		    if (dest_file_final_ast != NULL) { mem_free(dest_file_final_ast); dest_file_final_ast = NULL; }
+		    if (dest_file_final_gps != NULL) { mem_free(dest_file_final_gps); dest_file_final_gps = NULL; }
+		    setup_output_file();
+		    timed_t_start = timed_t_current; // solo cosmetico, para el display de stats existente
+		    /* recalcular el siguiente corte desde el origen fijo (midnight_t), no sumando
+		       "timed" al anterior: así se autocorrige si el proceso se ha saltado algún
+		       corte (p.ej. tras una suspensión del sistema) en vez de arrastrar el desfase. */
+		    k = ((timed_t_current.tv_sec - midnight_t) / timed) + 1;
+		    next_rotation_t = midnight_t + k * timed;
+		} else {
+		    log_printf(LOG_ERROR, "ERROR fork: %s\n", strerror(errno));
+		    /* se reintenta en la siguiente vuelta del bucle */
+		}
+	    }
+
 	    memset(ast_ptr_raw, 0x00, RN_MAX_PACKET_LENGTH);
 	    timeout.tv_sec = SELECT_TIMEOUT; timeout.tv_usec = 0;
 
@@ -1645,6 +1718,12 @@ unsigned long count2_plot_filtered = 0;
 		    close(s_reader[i]);
 		}
 		socket_count = 0; setup_input_network();
+	    } else if ( errno == EINTR ) {
+		/* select() interrumpido por una señal (p.ej. nuestro propio
+		   SIGTERM/SIGINT de apagado ordenado): no es un error fatal,
+		   simplemente se vuelve a evaluar la condición del while,
+		   que detectará shutdown_requested y saldrá por el camino
+		   normal de cierre (comprimir+subir la última ventana). */
 	    } else {
 		log_printf(LOG_ERROR, "socket error: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);

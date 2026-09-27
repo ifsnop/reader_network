@@ -108,3 +108,60 @@ literales más cortos que `TEXT_LENGTH_SHORT` (p.ej. `"LOC"`, `"FRA"`),
 `memcpy` leería más allá del literal en memoria (que solo ocupa
 `strlen+1` bytes) — un acceso fuera de rango real. Por eso, para las
 llamadas `strncpy` con literales que ya caben en el límite, no tocar.
+
+## Modo continuo (`mode_continuous`) en `reader_network`
+
+Por defecto, en modo red (`source = "multicast"`/`"broadcast"`),
+`reader_network` graba durante `timed` segundos y **termina el proceso**
+(`src/reader_network.c`, condición del `while` principal); para grabar
+24h seguidas hacía falta relanzarlo desde `cron` cada `timed` segundos,
+solapando ventanas y recortando el solape a posteriori con
+`src/utils/filtertime_s.c` + `src/utils/joingps_s.c` para no perder ni
+duplicar datos en el borde.
+
+Con `mode_continuous = true` en el `.conf` (ver `bin/conf/example.conf`),
+el proceso **no termina nunca por tiempo**: `timed` pasa a ser el
+intervalo de rotación del fichero de salida, y el proceso sigue leyendo
+la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
+
+- **Rotación alineada a hora absoluta, no relativa al arranque.** Con
+  `timed=14400` (4h) el corte ocurre exactamente a las 00:00, 04:00,
+  08:00, 12:00, 16:00, 20:00 — nunca "4h después de que arrancó el
+  proceso". Se calcula desde `midnight_t` (medianoche del día de
+  arranque, `setup_time()`), como `midnight_t + k*timed`; tras cada
+  rotación se recalcula el siguiente corte desde ese mismo origen fijo
+  (no sumando `timed` al anterior), de forma autocorrectiva si el
+  proceso se salta algún corte (p.ej. tras una suspensión del sistema).
+- **Compresión (`bzip2`) y subida FTP en background**: cada rotación
+  hace `fork()`; el hijo se queda con la copia (copy-on-write) del
+  fichero recién cerrado y hace `close_output_file()` +
+  `send_output_file()` tal cual ya existían, sin bloquear al padre, que
+  sigue leyendo `select()`/`recvfrom()` sin interrupción — así no se
+  pierden paquetes UDP durante la rotación. Los hijos de rotación ya
+  terminados se cosechan con `waitpid(-1, NULL, WNOHANG)` en cada vuelta
+  del bucle — **importante**: NO se usa `signal(SIGCHLD, SIG_IGN)` para
+  esto, porque `system()` (usado internamente en `setup_output_file()`
+  para el `mkdir` y en `close_output_file()` para `bzip2`) necesita hacer
+  su propio `wait()` sobre el hijo que lanza para poder devolver el
+  código de salida; con `SIGCHLD` a `SIG_IGN` el kernel re-siega ese hijo
+  antes de que `system()` lo pueda leer y `system()` devuelve -1 siempre
+  (bug real encontrado y corregido durante las pruebas de esta feature:
+  todos los `mkdir`/`bzip2` del proceso fallaban con `SIG_IGN` puesto
+  globalmente). No hay límite de hijos concurrentes de compresión/FTP si
+  el FTP está caído mucho tiempo — se acepta como limitación conocida.
+- **Requiere** `dest_file_timestamp = true` (si no, cada rotación pisaría
+  el mismo fichero de nombre fijo antes de que el hijo lo procese) y
+  `source` sea `multicast`/`broadcast` (no `file`, que no tiene bucle
+  temporizado). `parse_config()` valida esto al arrancar y aborta con
+  mensaje claro si no se cumple.
+- Si `timed` es 0/no está definido con `mode_continuous=true`, se usa
+  7200s (2h) por defecto — un fichero infinito no tiene sentido en este
+  modo.
+- Funciona igual con la fuente en silencio total: el chequeo de rotación
+  está antes del `select()` (que tiene timeout fijo de 10s,
+  `SELECT_TIMEOUT`), así que el bucle sigue iterando y rotando aunque no
+  llegue ningún paquete.
+- El único estado nuevo que se reserva por rotación
+  (`dest_file_final_ast`/`dest_file_final_gps`, vía `setup_output_file()`)
+  se libera explícitamente en el padre antes de cada rotación siguiente,
+  para no acumular memoria en un proceso pensado para no morir nunca.
