@@ -165,3 +165,77 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   (`dest_file_final_ast`/`dest_file_final_gps`, vía `setup_output_file()`)
   se libera explícitamente en el padre antes de cada rotación siguiente,
   para no acumular memoria en un proceso pensado para no morir nunca.
+- `mode_scrm` (deduplicación por CRC32) es completamente ortogonal a la
+  rotación: el árbol/cola de dedup es estado global del proceso, no del
+  fichero de salida, así que sigue funcionando igual a través de las
+  rotaciones sin ningún reseteo. Verificado con tráfico duplicado real
+  cruzando varias rotaciones: cero duplicados escritos, cero paquetes
+  perdidos.
+
+## Conclusiones de esta sesión: el código y cómo trabajar aquí
+
+### Sobre el código
+
+- **Nunca usar `signal(SIGCHLD, SIG_IGN)` en este proceso.** Todo el
+  postprocesado (`mkdir`, `bzip2`) se hace con `system()`, que necesita
+  hacer su propio `wait()` sobre el hijo que lanza para poder devolver el
+  código de salida. Si `SIGCHLD` está a `SIG_IGN`, el kernel re-siega ese
+  hijo antes de que `system()` lo pueda leer, y `system()` devuelve -1
+  siempre, en **cualquier** punto del programa, no solo donde se instaló
+  el `SIG_IGN`. Si en el futuro hace falta cosechar hijos propios (p.ej.
+  para más trabajo en background), usar `waitpid(-1, NULL, WNOHANG)`
+  explícito en el sitio que corresponda, nunca `SIG_IGN` global.
+- **No había ningún manejador de señales en todo el proyecto antes de
+  esta sesión** (ni SIGTERM, SIGINT, SIGALRM). En cuanto se instala uno,
+  cualquier syscall bloqueante (`select()`, `recvfrom()`...) puede
+  devolver `EINTR`, y el patrón de error habitual en este código es
+  "cualquier error de socket es fatal, `exit(EXIT_FAILURE)`" — hay que
+  revisar esos puntos y añadir un caso especial para `EINTR` (ver el de
+  `select()` en el bucle principal), o el propio manejador de apagado
+  ordenado provoca una salida sucia en vez de limpia.
+- **La configuración vive en variables globales sueltas**, no en un
+  struct — no hay problema en añadir claves nuevas leyéndolas con
+  `cfg_get_*` en `parse_config()`, pero cualquier validación cruzada
+  entre claves (como la de `mode_continuous` con `dest_file_timestamp`)
+  hay que ponerla al final de `parse_config()`, después de haber leído
+  todo lo que depende.
+- **Patrón útil para trabajo en background sin hilos**: `fork()` +
+  copy-on-write. El hijo hereda una foto fija de las variables globales
+  en el instante del `fork()` (fichero recién cerrado, nombres, etc.);
+  todo lo que el padre haga después (liberar punteros, reabrir un
+  fichero nuevo) ocurre en una copia de memoria independiente. Es el
+  mecanismo más simple posible para no bloquear el bucle de captura con
+  trabajo lento (compresión, FTP), dado que este proyecto no usa hilos
+  en ningún sitio.
+- **Alineación a hora absoluta**: para cualquier acción periódica que deba
+  coincidir con horas de reloj "en punto" (no "cada N segundos desde que
+  arrancó"), calcular el próximo instante como `origen_fijo + k*intervalo`
+  (aquí `origen_fijo = midnight_t`) y **recalcular** ese mismo `k` desde
+  el origen fijo cada vez, en lugar de acumular sumando `intervalo` al
+  anterior — así es autocorrectivo si el proceso se retrasa o se salta
+  algún ciclo, en vez de arrastrar el desfase para siempre.
+
+### Sobre la forma de trabajar en este proyecto
+
+- **Compilar no es suficiente para dar por bueno un cambio en el bucle
+  principal de `reader_network.c`.** Los dos bugs reales de esta sesión
+  (el de `SIGCHLD`/`system()` y el de `EINTR` en `select()`) compilaban
+  sin ningún error ni warning — solo aparecieron al ejecutar el binario
+  de verdad contra tráfico multicast real. Para tocar el bucle de
+  captura/rotación, montar un emisor UDP de prueba (multicast en
+  loopback, `IP_MULTICAST_IF=127.0.0.1`) y verificar con datos reales.
+- **Forma de verificar sin pérdida de datos**: enviar paquetes con un
+  contador secuencial en el payload, dejar correr el proceso a través de
+  varias rotaciones/reinicios, descomprimir todos los ficheros de salida
+  y comprobar que la secuencia de contadores es continua (sin huecos ni
+  repeticiones) de principio a fin. Es la forma más directa de detectar
+  pérdida o duplicación de paquetes en el borde de una rotación.
+- **El requisito de compatibilidad con distribuciones Linux muy antiguas
+  es real y se respeta con guardas de preprocesador** (`#if defined(...)`
+  alrededor de features nuevas), no evitando usarlas — ver los fixes de
+  `log.c`/`sacsic.c` más arriba como plantilla.
+- Diego prefiere que las decisiones de diseño con trade-offs reales
+  (activación opt-in vs. cambio de comportamiento por defecto, límites
+  de recursos en background workers, etc.) se le planteen como preguntas
+  concretas con una opción recomendada, en vez de asumir una elección
+  por mi cuenta.

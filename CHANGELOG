@@ -1,3 +1,19 @@
+0.82
+- ADD mode_continuous: en vez de terminar el proceso al cumplirse "timed"
+ (obligando a relanzar desde cron para grabar 24h seguidas, con solape y
+ recorte posterior), el proceso rota el fichero de salida internamente y
+ sigue corriendo indefinidamente hasta recibir SIGTERM/SIGINT. La rotación
+ se alinea a hora absoluta del reloj (timed=14400 rota exactamente a las
+ 00/04/08/12/16/20h, no "cada 4h desde que arrancó"). La compresión bzip2
+ y la subida por FTP de cada fichero rotado corren en un proceso hijo en
+ background, sin interrumpir la captura de paquetes UDP entrantes.
+- BUG: fallo de compilación en glibc/gcc recientes (facilitynames
+ undeclared en libdebug/log.c, por perder __USE_MISC al definir
+ _ISOC99_SOURCE explícitamente) y warning -Wstringop-truncation nuevo
+ en sacsic.c (gcc >= 8); corregidos sin afectar a compiladores antiguos.
+- SOPORTE: deshabilitados en build.sh los binarios reader_rrd3
+ (dependencia de mysql) y memresps, ya no se usan.
+
 0.81
 - ADD in gps timestamp the size of the datablock
 
