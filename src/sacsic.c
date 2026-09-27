@@ -41,6 +41,14 @@ char *tmp;
 		     } else if (action == GET_SAC_LONG) {
 		    	strncpy(tmp, "Local", TEXT_LENGTH_LONG);
 		     } else if (action == GET_SIC_SHORT) {
+			/* truncamiento a TEXT_LENGTH_SHORT intencionado: silenciar
+			 * -Wstringop-truncation (solo existe desde GCC 8, y el
+			 * pragma push/pop desde GCC 4.6, asi que se protege con
+			 * __GNUC__ para no afectar a compiladores antiguos) */
+#if defined(__GNUC__) && (__GNUC__ >= 8)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
 		        switch (sic[0]) {
 			    case 1: { strncpy(tmp, "SMR-TFN", TEXT_LENGTH_SHORT); break; }
 			    case 2: { strncpy(tmp, "SMR-PMA", TEXT_LENGTH_SHORT); break; }
@@ -57,6 +65,9 @@ char *tmp;
 			    case 107: { strncpy(tmp, "SMMS-BCN", TEXT_LENGTH_SHORT); break; }
 			    default: sprintf(tmp, "U%03d", sic[0]);
 		        }
+#if defined(__GNUC__) && (__GNUC__ >= 8)
+#pragma GCC diagnostic pop
+#endif
 		     } else if (action == GET_SIC_LONG) {
 		        switch (sic[0]) {
 			    case 1: { strncpy(tmp, "SMR-Tenerife N", TEXT_LENGTH_LONG); break; }
@@ -281,7 +292,7 @@ char *tmp;
         case 1: { strcpy(tmp, "Paracuellos I"); break; }
 	case 2: { strcpy(tmp, "Paracuellos II"); break; }
 	case 4: { strcpy(tmp, "Alcolea"); break; }
-	case 7: { strcpy(tmp, "Solórzano"); break; }
+	case 7: { strcpy(tmp, "Solï¿½rzano"); break; }
 	case 9: { strcpy(tmp, "Valladolid"); break; }
 	case 10: { strcpy(tmp, "As Pontes"); break; }
 	case 11: { strcpy(tmp, "Monflorite"); break; }

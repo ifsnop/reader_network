@@ -32,6 +32,11 @@
 /* vsnprintf() */
 #define _ISOC99_SOURCE
 
+/* facilitynames (needs __USE_MISC, which _DEFAULT_SOURCE enables; glibc
+ * disables it by default once any feature-test macro like _ISOC99_SOURCE
+ * above is defined explicitly) */
+#define _DEFAULT_SOURCE
+
 /* facilitynames */
 #define SYSLOG_NAMES
 
@@ -47,7 +52,7 @@
 #include <sys/stat.h>
 #include <syslog.h>
 
-#include <libdebug/log.h>
+#include "libdebug/log.h"
 
 #ifndef DEBUG_LOG
 #define mem_alloc malloc
