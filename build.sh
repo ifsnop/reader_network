@@ -103,7 +103,7 @@ for destarch in $destarchs; do
 	src/red_black_tree_misc.c src/red_black_tree_stack.c \
 	src/md5.c"
 
-    gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts -I/usr/include/mysql -DBIG_JOINS=1 `mysql_config --libs` -lmysqlclient
+    #gcc $gccopts -DCLIENT_RRD -o bin/reader_rrd3${destarch}${arch} $rncfiles src/reader_rrd3.c $rnopts -I/usr/include/mysql -DBIG_JOINS=1 `mysql_config --libs` -lmysqlclient
     #echo gcc $gccopts -o bin/reader_network${destarch}${arch} $rncfiles src/reader_network.c $rnopts
     gcc $gccopts -o bin/reader_network${destarch}${arch} $rncfiles src/reader_network.c $rnopts
     #strip bin/reader_network${destarch} 2> /dev/null
@@ -124,7 +124,7 @@ for destarch in $destarchs; do
     gcc $gccopts -o bin/filtersacsic_s${destarch}${arch} src/utils/filtersacsic_s.c $rnopts
     gcc $gccopts -o bin/joingps${destarch}${arch} src/utils/joingps.c $rnopts
     gcc $gccopts -o bin/joingps_s${destarch}${arch} src/utils/joingps_s.c $rnopts
-    gcc $gccopts -o bin/memresps${destarch}${arch} src/memresp/memresps.c $rnopts
+    #gcc $gccopts -o bin/memresps${destarch}${arch} src/memresp/memresps.c $rnopts
     gcc $gccopts -o bin/gps2era${destarch}${arch} src/utils/gps2era.c $rnopts
     gcc $gccopts -o bin/hensoldt2ast${destarch}${arch} src/utils/hensoldt2ast.c $rnopts
 done
