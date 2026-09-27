@@ -7,6 +7,9 @@ bin/clean*
 bin/filter*
 bin/join*
 bin/memresp*
+bin/gps2era64
+bin/hensoldt2ast64
+bin/listersacsic_s64
 bin/datos/13*.*ast
 bin/datos/14*.*ast
 bin/datos/13*.*gps
