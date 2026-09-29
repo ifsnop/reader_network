@@ -26,6 +26,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <netinet/in.h>
 #include <sys/time.h>
 #include <sys/select.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
 #include <signal.h>

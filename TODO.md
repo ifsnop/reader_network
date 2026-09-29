@@ -2,9 +2,11 @@
 
 Problemas detectados al revisar `src/reader_network.c` para más de 100
 flujos multicast y durante el desarrollo de `mode_continuous` (versiones
-0.82-0.83), todavía sin corregir. Los números de línea corresponden al
-commit `7f192ff` (0.83); si el código ha cambiado, buscar por el nombre de
-función o el fragmento citado.
+0.82-0.83), todavía sin corregir. Los números de línea corresponden a la
+versión 0.84; si el código ha cambiado, buscar por el nombre de función o
+el fragmento citado. Los puntos ya resueltos están al final, en
+"Resueltos"; se conserva la numeración original para no romper las
+referencias cruzadas entre puntos.
 
 Para cualquier cambio en el bucle de captura: guardar antes el binario
 actual (`cp bin/reader_network64 /tmp/rn.antes`, porque `build.sh`
@@ -20,7 +22,7 @@ compatibilidad con distribuciones Linux muy antiguas.
 ### 1. La reconexión multicast es "todo o nada"
 
 - **Dónde**: bucle principal, rama `else if ( select_count == 0 )`
-  (`src/reader_network.c:1754-1763`).
+  (`src/reader_network.c:1825`).
 - **Problema**: los sockets solo se cierran y se vuelven a suscribir
   cuando `select()` pasa `SELECT_TIMEOUT` (10 s) sin datos en **ningún**
   socket. Con muchos flujos eso casi nunca ocurre, así que si un flujo
@@ -37,20 +39,27 @@ compatibilidad con distribuciones Linux muy antiguas.
     funcionó ("socket ocupado", ver CHANGELOG), así que hay que cerrar y
     reabrir ese socket concreto.
   - Al reabrir, actualizar `radar_destination[j].socket` de todos los
-    radares que comparten ese socket (ver `setup_input_network()`).
+    radares que comparten ese socket. Desde 0.84 se recorren con la lista
+    del socket (`socket_first_radar[idx]` y `radar_destination[j].next`,
+    ver `setup_input_network()`). Si se reabre en la misma posición de
+    `s_reader[]`, `socket_index` y la lista no cambian.
+  - Desde 0.84 un socket puede tener el grupo suscrito en varias
+    interfaces (entradas con el mismo grupo:puerto e interfaz distinta):
+    al reabrirlo hay que repetir todas esas suscripciones, no solo la de
+    la primera entrada.
   - `select()` usa `s_reader[socket_count - 1] + 1` como `nfds`
-    suponiendo que el último socket tiene el descriptor más alto; al
-    reabrir un socket suelto eso deja de ser cierto. Calcular el máximo
-    real, o resolverlo junto con el paso a `poll()` (punto 6).
+    (línea 1576), suponiendo que el último socket tiene el descriptor más
+    alto; al reabrir un socket suelto eso deja de ser cierto. Calcular el
+    máximo real, o resolverlo junto con el paso a `poll()` (punto 6).
 - **Verificar**: escenario nuevo en `tests/load/` en el que un flujo deja
   de emitir un rato y vuelve mientras el resto sigue; comprobar en el log
   que solo se reconecta ese socket y que el flujo se recupera.
 
 ### 2. Un error al rotar el fichero mata el proceso en `mode_continuous`
 
-- **Dónde**: `setup_output_file()` (`src/reader_network.c:435` en
+- **Dónde**: `setup_output_file()` (`src/reader_network.c:451` en
   adelante), llamada en cada rotación desde el bucle principal (bloque
-  `pid_t pid = fork();`, línea 1453).
+  `pid_t pid = fork();`, línea 1528).
 - **Problema**: casi todos los errores de `setup_output_file()` hacen
   `exit(EXIT_FAILURE)`: fallo del `mkdir` vía `system()`, fallo de
   `open()`, y sobre todo el chequeo de `dest_free_space` con `statvfs()`,
@@ -67,35 +76,17 @@ compatibilidad con distribuciones Linux muy antiguas.
   - Complementario: documentar el uso con un supervisor (systemd
     `Restart=on-failure`).
 
-### 3. Sockets duplicados si el mismo grupo:puerto no aparece en entradas consecutivas
-
-- **Dónde**: `setup_input_network()`, condición
-  `i>0 && !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && ...`
-  (`src/reader_network.c:817`).
-- **Problema**: solo se reutiliza el socket si la entrada **anterior**
-  tiene el mismo grupo y puerto. Si el mismo grupo:puerto aparece en
-  entradas separadas de `radar_definition`, se abre un segundo socket con
-  `SO_REUSEADDR`; el kernel entrega cada paquete a los dos, así que se
-  procesa dos veces y, sin `mode_scrm`, queda duplicado en la grabación.
-  Con configuraciones de más de 100 entradas es fácil que ocurra.
-- **Propuesta**: buscar en todas las entradas anteriores (no solo en
-  `i-1`) un socket ya abierto con el mismo grupo y puerto, y reutilizarlo.
-  Mantener el orden de `s_reader[]`.
-- **Verificar**: escenario de `tests/load/` con una configuración que
-  repita un grupo en entradas no consecutivas, sin `mode_scrm`; debe
-  salir `duplicados grabados = 0`.
-
 ### 4. Datablocks cuyo tamaño supera los bytes restantes del paquete
 
 - **Dónde**: bucle de datablocks (`do { ... } while (salir==0)`),
   `ast_size_datablock = (ast_ptr_raw[1]<<8) + ast_ptr_raw[2];`
-  (línea 1589) y `ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ...`
-  (línea 1738).
+  (línea 1666) y `ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ...`
+  (línea 1806).
 - **Problema**: en 0.83 se descartan los tamaños menores que 3, pero si
   el tamaño declarado es mayor que lo que queda del paquete UDP, el
   código lee más allá de `udp_size` y graba bytes que no pertenecen al
   paquete. Hoy esos bytes son ceros gracias al `memset` de 64 KB que se
-  hace en cada vuelta (línea 1479); **si se quita ese `memset`
+  hace en cada vuelta (línea 1554); **si se quita ese `memset`
   (punto 5), se grabarían restos de paquetes anteriores**.
 - **Propuesta**: comprobar `ast_ptr_raw_tmp + ast_size_datablock <= ast_ptr_raw + udp_size`
   y decidir la política (descartar el resto del paquete y contarlo como
@@ -110,13 +101,13 @@ compatibilidad con distribuciones Linux muy antiguas.
 
 ### 5. Coste fijo en cada vuelta del bucle
 
-- **Dónde**: bucle principal, líneas 1479-1487 y bloque
+- **Dónde**: bucle principal, líneas 1554-1576 y bloque
   `if ( select_count > 0 )`.
 - **Problema**: en cada vuelta se hace:
   - `memset` de `RN_MAX_PACKET_LENGTH` (64 KB) sobre `ast_ptr_raw`
-    (línea 1479), innecesario porque `recvfrom()` devuelve el tamaño.
+    (línea 1554), innecesario porque `recvfrom()` devuelve el tamaño.
     A 5.000 vueltas/s son unos 320 MB/s de escritura en memoria.
-  - `FD_ZERO` + `FD_SET` de todos los sockets (línea 1484), `select()`
+  - `FD_ZERO` + `FD_SET` de todos los sockets (línea 1573), `select()`
     (O(descriptor máximo) en el kernel) y `FD_ISSET` de todos los sockets.
   - Un solo `recvfrom()` por socket listo y vuelta: con tráfico alto se
     repite todo lo anterior por cada paquete.
@@ -129,7 +120,7 @@ compatibilidad con distribuciones Linux muy antiguas.
 
 ### 6. `select()` y el límite de `FD_SETSIZE`
 
-- **Dónde**: línea 1487.
+- **Dónde**: línea 1576.
 - **Problema**: `select()` no admite descriptores ≥ `FD_SETSIZE` (1024);
   `FD_SET` con un descriptor mayor escribe fuera del `fd_set` (corrupción
   de memoria, no un error controlado). Con hasta 255 radares no se llega
@@ -140,69 +131,63 @@ compatibilidad con distribuciones Linux muy antiguas.
   antigua. No usar `epoll`/`recvmmsg` salvo con guardas de preprocesador
   (Linux ≥ 2.6 / ≥ 2.6.33), por el requisito de compatibilidad.
 
-### 7. Búsqueda lineal del radar por cada paquete
-
-- **Dónde**: bucle `for(j=0;(j<radar_count/5); j++)` tras el
-  `recvfrom()` (líneas 1531-1552).
-- **Problema**: por cada paquete recorre todos los radares y compara la
-  IP de origen como texto (`inet_ntoa()` + `strcasecmp()`). Es O(número
-  de radares) por paquete.
-- **Propuesta**: en `setup_input_network()`, precalcular para cada socket
-  la lista de radares que lo usan con la IP de origen ya en binario
-  (`in_addr_t`, `inet_addr()`) y un indicador de comodín para `0.0.0.0`.
-  Al recibir, recorrer solo esa lista comparando enteros.
-
-### 8. Un `write()` sin buffer por cada datablock y copia en pila en formato gps
-
-- **Dónde**: `write(fd_out_ast, ...)` (línea 1690) y, en formato gps,
-  `unsigned char output_ptr[RN_MAX_PACKET_LENGTH]` + `memcpy` + `write()`
-  (líneas 1697-1730).
-- **Problema**: una llamada al sistema por datablock (varios por paquete
-  si el paquete trae varios), y en gps además se copia cada datablock a un
-  buffer de 64 KB en la pila solo para añadirle los 10 bytes de fecha.
-- **Propuesta**:
-  - gps: usar `writev()` con dos segmentos (datablock + 10 bytes) y
-    eliminar la copia.
-  - Opcional: buffer propio de salida (p.ej. 64 KB) volcado por tamaño o
-    por tiempo. Si se hace, **vaciarlo antes del `fork()` de la rotación**
-    (si no, el hijo hereda datos sin escribir y se duplicarían o se
-    perderían) y antes de salir. Valorar el riesgo de perder hasta un
-    buffer entero si el proceso muere de golpe.
-
-### 9. Buffer de recepción fijo de 100 KB por socket
-
-- **Dónde**: `setup_input_network()`, `int recv_buffer_size = 100 * 1024;`
-  (línea 849).
-- **Problema**: con flujos de mucho tráfico, cualquier parón del bucle
-  (compresión en el propio proceso al cerrar, disco lento, etc.) llena el
-  buffer y el kernel descarta paquetes (se ve en `RcvbufErrors` de
-  `/proc/net/snmp`, que `tests/load/` ya mide).
-- **Propuesta**: hacerlo configurable en el `.conf`. El kernel lo limita a
-  `net.core.rmem_max` salvo `SO_RCVBUFFORCE` (requiere root).
-
 ---
 
 ## Prioridad baja: correcciones menores
 
-### 10. Comprobación del máximo de radares incorrecta
+### 11. Corte de rotación en `mode_continuous` no es atómico por paquete
 
-- **Dónde**: `parse_config()` (línea 316) y `setup_input_network()`
-  (línea 905).
-- **Problemas**:
-  - La comprobación `if (radar_count>MAX_RADAR_NUMBER)` está después de
-    un `exit()` dentro del bloque de error, así que nunca se ejecuta.
-    Además compara número de cadenas (5 por radar) con número de radares.
-  - La rama `broadcast` no tiene ninguna comprobación.
-  - En `setup_input_network()` el `i++` va antes de
-    `if ( i >= MAX_RADAR_NUMBER )`, así que con exactamente 256 radares
-    sale con error aunque el array tiene 256 posiciones.
-- **Propuesta**: comprobar `radar_count/5 > MAX_RADAR_NUMBER` en
-  `parse_config()` para multicast y broadcast (y que `radar_count` sea
-  múltiplo de 5), y corregir la comprobación de `setup_input_network()`.
+- **Dónde**: chequeo de rotación (`src/reader_network.c:1527-1552`),
+  `select()`+`recvfrom()` (líneas 1576-1615) y los `write()`/`writev()` a
+  `fd_out_ast`/`fd_out_gps` (líneas 1767 y 1798).
+- **Problema**: la decisión de rotar se toma una vez por vuelta del
+  bucle, **antes** de leer los paquetes pendientes, y se basa en la hora
+  de proceso (`gettimeofday` al principio de la vuelta), no en la hora
+  real de llegada de cada paquete (no se usa `SO_TIMESTAMP` ni nada del
+  kernel). Además solo se hace **un** `recvfrom()` por socket y vuelta
+  (no se vacía el buffer del kernel). Esto abre dos ventanas de carrera,
+  ambas acotadas a lo que tarda un `select()`+`recvfrom()` (normalmente
+  microsegundos, sin esperas artificiales en el bucle):
+  1. Un paquete que llega justo **después** del corte pero se lee en una
+     vuelta cuyo chequeo de rotación ya se había hecho (con
+     `select()` bloqueado esperando ese mismo paquete) se escribe en el
+     fichero **antiguo**, aunque su hora real de llegada sea ya del
+     siguiente intervalo.
+  2. Si en el instante del corte hay más de un datagrama ya encolado en
+     el kernel para el mismo socket, solo se lee uno esa vuelta; el
+     resto se lee en la vuelta siguiente, después de rotar, y acaba en
+     el fichero **nuevo** aunque llegara antes del corte. Requiere
+     backlog justo en el instante de la rotación (tráfico de varios
+     flujos a la vez), el escenario que fuerza `tests/load/`.
+  En ambos casos el impacto está acotado a como mucho un paquete por
+  socket/flujo por rotación; con flujos de radar reales (no
+  sincronizados entre sí) la probabilidad de coincidir con esa ventana
+  de microsegundos en cada corte es baja, pero no nula, y crece con el
+  número de flujos.
+- **Decisión (2026-09-28)**: no se aborda por ahora, prioridad baja. Si
+  se retoma:
+  - El caso 2 se resolvería vaciando cada socket con
+    `recvfrom(..., MSG_DONTWAIT)` hasta `EAGAIN` justo antes de rotar
+    (relacionado con el punto 5, "vaciar cada socket listo"), con
+    cuidado de no retrasar la rotación indefinidamente si el tráfico
+    nunca da un hueco (habría que decidir si acotar ese drenaje con un
+    tiempo máximo).
+  - El caso 1 no se puede eliminar solo con drenaje: haría falta el
+    timestamp real de llegada del paquete (p.ej. `SO_TIMESTAMP`) para
+    decidir a qué fichero pertenece cada paquete por su hora real, no
+    por la hora en que el proceso lo lee. Cambio más profundo en el
+    formato interno de fechado.
+- **Verificar**: no existe hoy ningún escenario en `tests/load/` que
+  compruebe en qué lado del corte cae cada paquete cercano al instante
+  de rotación (los escenarios actuales miden pérdidas/duplicados
+  agregados, no la partición exacta por fichero). Habría que añadir uno
+  que sincronice el envío de paquetes con los instantes de rotación
+  configurados y compare, tras descomprimir, la hora de cada paquete
+  contra el nombre/rango de su fichero.
 
-### 11. `EINTR` en `recvfrom()`
+### 12. `EINTR` en `recvfrom()`
 
-- **Dónde**: líneas 1524-1526.
+- **Dónde**: líneas 1614-1616.
 - **Problema**: desde 0.82 hay manejadores de SIGTERM/SIGINT, y cualquier
   error de `recvfrom()` es fatal (`exit(EXIT_FAILURE)`), incluido
   `EINTR`. Es poco probable porque `select()` ya indicó que hay datos,
@@ -211,49 +196,43 @@ compatibilidad con distribuciones Linux muy antiguas.
 - **Propuesta**: tratar `EINTR` (y `EAGAIN` si se pasa a `MSG_DONTWAIT`,
   punto 5) como "no hay paquete" y seguir.
 
-### 12. En modo no continuo, el corte por `timed` puede tardar hasta 20 s con la fuente en silencio
+### 18. Otras utilidades siguen calculando horas con `mktime()` (hora local)
 
-- **Dónde**: condición del `while` principal (línea 1436).
-- **Problema**: la condición usa `timed_t_current`, que se actualiza al
-  principio de la vuelta **anterior**, antes de un `select()` que puede
-  bloquear 10 s. Sin tráfico, el proceso tarda hasta
-  2 × `SELECT_TIMEOUT` en terminar tras cumplirse `timed`. Es un
-  comportamiento anterior a 0.82; con tráfico real la diferencia es de
-  milisegundos. No afecta a la rotación de `mode_continuous`, que usa un
-  valor recién leído.
-- **Propuesta**: actualizar `timed_t_current` justo después del
-  `select()` (o calcular el timeout del `select()` como el mínimo entre
-  `SELECT_TIMEOUT` y lo que falte para `timed`).
+- **Dónde**: `src/utils/reader_file.c:83` (`t3 = mktime(t2)`, medianoche
+  del día), `src/utils/filtertime_s.c:149-150` (convierte las horas de
+  inicio/fin del filtro con `mktime()` y las compara con la hora gps, que
+  son segundos desde las 00:00 UTC) y `src/reader_rrd3.c:436`
+  (deshabilitado en `build.sh`).
+- **Problema**: el mismo que se corrigió en `reader_network` en 0.84
+  (punto 14): `mktime()` interpreta la fecha como hora local, así que solo
+  dan el resultado correcto si el sistema está en UTC. En `filtertime_s`
+  el rango filtrado saldría desplazado el desfase de la zona horaria.
+- **Propuesta**: calcular en UTC. Para la medianoche,
+  `tv_sec - tv_sec % 86400`. Para `filtertime_s`, pasar `HH:MM:SS`
+  directamente a segundos del día (`h*3600 + m*60 + s`) en vez de
+  `strptime()` + `mktime()`.
 
-### 13. `midnight_t` depende de la zona horaria del sistema
+### 19. SIGTERM/SIGINT no interrumpen la compresión/subida final
 
-- **Dónde**: `setup_time()`, `midnight_t = mktime(t2)` (línea 941), con
-  `t2` obtenido de `gmtime()`.
-- **Problema**: `mktime()` interpreta la fecha como hora **local**, así
-  que `midnight_t` solo es la medianoche UTC si el sistema está en UTC.
-  Afecta al fechado de los ficheros gps (`current_time_today`) y a la
-  alineación de las rotaciones de `mode_continuous`. Probablemente todas
-  las instalaciones están en UTC, pero no está garantizado.
-- **Propuesta**: calcular `midnight_t = tv.tv_sec - (tv.tv_sec % 86400)`
-  (medianoche UTC, portable, sin depender de `TZ`). Comprobar antes que
-  ninguna instalación dependa del comportamiento actual.
-
-### 14. Sin límite de hijos de compresión/FTP en `mode_continuous`
-
-- **Dónde**: bloque de rotación (línea 1453) y `send_output_file()`.
-- **Problema**: si el servidor FTP está caído mucho tiempo, cada rotación
-  lanza un hijo que reintenta hasta 10 veces con timeouts de hasta 7200 s,
-  y pueden acumularse varios en paralelo. Se aceptó así en 0.82 como
-  primera versión.
-- **Propuesta**: limitar el número de hijos vivos (contándolos con el
-  `waitpid(WNOHANG)` que ya existe) o pasar a un único proceso de subida
-  con cola de ficheros pendientes.
+- **Dónde**: `handle_shutdown()` y el final de `main()`
+  (`close_output_file()` + `send_output_file()`).
+- **Problema**: el manejador solo pone `shutdown_requested = 1`, que se
+  consulta en la condición del bucle de captura. Una vez fuera del bucle,
+  durante el `bzip2` y los hasta 10 intentos de curl, un SIGTERM no hace
+  nada (visto al probar 0.84 con un FTP inalcanzable: `timeout -s TERM`
+  no paraba el proceso). Con los timeouts de 0.84, el peor caso con el
+  FTP caído es de unos 10 × 62 s por URI; antes podía durar mucho más.
+  Un supervisor (systemd) acabará mandando SIGKILL.
+- **Propuesta** (a decidir): si llega un segundo SIGTERM/SIGINT durante el
+  cierre, abandonar los reintentos de FTP (comprobar `shutdown_requested`
+  entre intentos de curl) o restaurar el manejador por defecto al salir
+  del bucle.
 
 ---
 
 ## Prueba de carga (`tests/load/`)
 
-### 15. El escenario `noise` no llega a provocar pérdidas
+### 16. El escenario `noise` no llega a provocar pérdidas
 
 - **Problema**: el fallo del `break` corregido en 0.83 solo produce
   pérdidas cuando el ruido de una IP no configurada supera lo que el
@@ -263,8 +242,48 @@ compatibilidad con distribuciones Linux muy antiguas.
 - **Propuesta**: emisor en C (o varios procesos Python en paralelo) para
   poder saturar, y medir también la latencia por flujo, no solo pérdidas.
 
-### 16. Escenarios para los puntos 1 y 3
+### 17. Escenario para el punto 1
 
-- Añadir un escenario de flujo que se corta y vuelve (punto 1) y otro con
-  un grupo:puerto repetido en entradas no consecutivas (punto 3), para
-  poder verificar esas correcciones cuando se hagan.
+- Añadir un escenario de flujo que se corta y vuelve (punto 1), para poder
+  verificar esa corrección cuando se haga. El del punto 3 (grupo:puerto
+  repetido en entradas no consecutivas) ya existe desde 0.84: `dupgroup`.
+
+---
+
+## Resueltos
+
+### En 0.84
+
+- **3. Sockets duplicados si el mismo grupo:puerto no aparece en entradas
+  consecutivas.** `setup_input_network()` busca en todas las entradas
+  anteriores. Si la interfaz es otra, suscribe el grupo en esa interfaz
+  sobre el mismo socket (antes nunca se suscribía, ni siquiera con
+  entradas consecutivas). Solo se grababa duplicado cuando la IP de origen
+  encajaba con las dos entradas (p.ej. `0.0.0.0`); en los demás casos el
+  paquete se recibía dos veces y la copia sobrante contaba como `ignored`.
+  Escenario `dupgroup` de `tests/load/`.
+- **7. Búsqueda lineal del radar por cada paquete.** Cada socket tiene su
+  lista de radares (`socket_first_radar[]` + `radar_destination[].next`)
+  con la IP de origen en binario. Al recibir se comparan enteros, sin
+  `inet_ntoa()` ni `strcasecmp()`.
+- **8. Copia en pila en formato gps.** Datablock + 10 bytes con un solo
+  `writev()`. No se añade buffer de salida propio (decisión: no arriesgar
+  datos sin escribir si el proceso muere de golpe).
+- **9. Buffer de recepción fijo de 100 KB.** Nueva clave
+  `source_recv_buffer_size` (bytes, por defecto 212992). Con root se pide
+  con `SO_RCVBUFFORCE`. En el log de arranque aparecen el valor pedido y
+  el que da el kernel.
+- **10. Comprobación del máximo de radares.** `parse_config()` valida, para
+  multicast y broadcast, que haya 5 cadenas por radar y como mucho
+  `MAX_RADAR_NUMBER` (256) radares. Con 256 ya arranca.
+- **13. Corte por `timed` hasta 20 s tarde con la fuente en silencio.** El
+  timeout del `select()` se acorta hasta el final de la grabación (sin
+  disparar la reconexión) y `timed_t_current` se actualiza después del
+  `select()`.
+- **14. `midnight_t` dependía de la zona horaria.** Ahora es
+  `tv_sec - tv_sec % 86400`: medianoche UTC siempre. El resto de
+  utilidades, en el punto 18.
+- **15. Hijos de compresión/FTP sin límite en `mode_continuous`.** No se
+  limitan; en su lugar curl aborta cada intento si no conecta en 60 s o
+  si la transferencia se para 60 s (`CURLOPT_TIMEOUT` sigue en 300/7200 s
+  para subidas lentas que avanzan).

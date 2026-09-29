@@ -1,4 +1,4 @@
-reader_network 0.83 - A package of utilities to record and work with
+reader_network 0.84 - A package of utilities to record and work with
 multicast radar data in ASTERIX format. (radar as in air navigation
 surveillance).
 
@@ -30,11 +30,12 @@ manual paso a paso. El detalle completo de cada clave está comentado en
   segundos; al cumplirse, el proceso comprime, sube por FTP si aplica, y
   termina. Pensado para relanzarse periódicamente desde `cron`.
 - `mode_continuous = true`: `timed` pasa a ser el **intervalo de
-  rotación**, alineado a hora absoluta del reloj (p.ej. `timed=14400`
-  rota exactamente a las 00/04/08/12/16/20h, no "cada 4h desde que
-  arrancó"). El proceso no termina solo; se para con SIGTERM/SIGINT.
-  Cada rotación comprime y sube el fichero recién cerrado en un proceso
-  hijo en background, sin interrumpir la captura. Requiere
+  rotación**, alineado a hora absoluta del reloj en UTC (p.ej.
+  `timed=14400` rota exactamente a las 00/04/08/12/16/20h UTC, no "cada
+  4h desde que arrancó"), sea cual sea la zona horaria del sistema. El
+  proceso no termina solo; se para con SIGTERM/SIGINT. Cada rotación
+  comprime y sube el fichero recién cerrado en un proceso hijo en
+  background, sin interrumpir la captura. Requiere
   `dest_file_timestamp = true` y `source` multicast/broadcast. Sustituye
   al patrón cron + solape + recorte posterior (`filtertime_s`/`joingps_s`)
   para grabaciones 24/7 sin huecos ni duplicados.
@@ -59,18 +60,31 @@ manual paso a paso. El detalle completo de cada clave está comentado en
 - `dest_file_region`: prefijo/etiqueta opcional en el nombre.
 - `dest_file_format` (`ast` | `gps`) y `dest_file_extension`: `ast` graba
   el ASTERIX crudo; `gps` añade 10 bytes de timestamp a cada datablock
-  (ver el código fuente para el formato exacto).
+  (segundos desde las 00:00:00 UTC; ver el código fuente para el formato
+  exacto).
 - `dest_file_compress`: comprime con `bzip2` al cerrar el fichero.
 - `dest_free_space`: aborta si el espacio libre baja de N MB (solo con
   `dest_file_timestamp`).
 - `dest_ftp_uri`: lista de URIs FTP donde subir cada fichero ya cerrado
-  (usuario:contraseña en la URI, o anónimo si no se indica).
+  (usuario:contraseña en la URI, o anónimo si no se indica). Hasta 10
+  intentos por URI; cada intento se aborta si no conecta en 60 s o si la
+  transferencia se queda parada 60 s (tope total: 300 s para ficheros de
+  menos de 1 MB, 7200 s para el resto).
 
 ## Radares / red y control de versión
 
 - `radar_definition`: 5 campos por radar — nombre, grupo multicast,
   puerto, ip de origen (`0.0.0.0` para aceptar cualquiera), ip de la
-  interfaz local por la que escuchar.
+  interfaz local por la que escuchar. Máximo 256 radares. Las entradas con
+  el mismo grupo y puerto comparten un único socket aunque no estén
+  seguidas (si llegan por interfaces distintas, se suscribe el grupo en
+  cada una); ante varias entradas que encajan con un paquete, gana la
+  primera del fichero.
+- `source_recv_buffer_size`: buffer de recepción de cada socket de
+  entrada, en bytes (por defecto 212992, el `net.core.rmem_max` por
+  defecto de Linux). Sin root el kernel lo limita a `net.core.rmem_max`;
+  con root se pide con `SO_RCVBUFFORCE` y no hay límite. El valor usado
+  se muestra en el log de arranque.
 - `asterix_versions`: lista de hashes MD5 permitidos para arrancar,
   calculado normalmente desde `/var/lib/dbus/machine-id` (o forzado con
   la variable de entorno `asterix_versions`); `reader_network64 -r`

@@ -2,12 +2,12 @@
 # Ejecuta los escenarios de run_load.sh con dos binarios y muestra una tabla.
 #
 # Uso: compare.sh <binario_antes> <binario_despues> <dir_trabajo> [escenarios...]
-# Por defecto: base decode noise scrm malformed fdleak
+# Por defecto: base decode noise scrm malformed fdleak dupgroup
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 A=$1 B=$2 WORK=$3
 shift 3
-SCENARIOS=${*:-base decode noise scrm malformed fdleak}
+SCENARIOS=${*:-base decode noise scrm malformed fdleak dupgroup}
 mkdir -p "$WORK"
 for s in $SCENARIOS; do
     for bin in "$A" "$B"; do

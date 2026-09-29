@@ -10,6 +10,9 @@
 #   scrm      20 pkt/s por flujo, mode_scrm=true, cada paquete se repite 1,5 s despues
 #   malformed 20 pkt/s por flujo, en el segundo 5 llega un datablock de tamaño 0
 #   fdleak    sin trafico durante 35 s con dest_localhost=true (cuenta descriptores)
+#   dupgroup  base + una entrada final que repite el grupo:puerto del flujo 0 (no
+#             consecutiva) con ip de origen 0.0.0.0: si se abre un segundo socket
+#             para el mismo grupo, cada paquete del flujo 0 se graba dos veces
 #
 # Deja en <dir_trabajo>/<escenario>-<binario>/ la configuracion, el log del
 # lector, meta.json (estado, descriptores, errores de buffer UDP del kernel)
@@ -22,7 +25,7 @@ WORK=$(readlink -f "$3")
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 FLOWS=150 RATE=50 RECORDS=4 DURATION=20
-LOCALHOST=false SCRM=false NOISE=0 DUP=0 MALFORMED=-1
+LOCALHOST=false SCRM=false NOISE=0 DUP=0 MALFORMED=-1 DUPGROUP=false
 case "$SCEN" in
     base) ;;
     decode) LOCALHOST=true ;;
@@ -30,6 +33,7 @@ case "$SCEN" in
     scrm) RATE=20 RECORDS=1 SCRM=true DUP=1.5 ;;
     malformed) RATE=20 RECORDS=1 DURATION=15 MALFORMED=5 ;;
     fdleak) RATE=0 LOCALHOST=true DURATION=35 ;;
+    dupgroup) DUPGROUP=true ;;
     *) echo "escenario desconocido: $SCEN" >&2; exit 2 ;;
 esac
 
@@ -53,9 +57,12 @@ HASH=01234567890123456789012345678901
     echo "asterix_versions = \"$HASH\""
     echo 'radar_definition = {'
     for ((i = 0; i < FLOWS; i++)); do
-        sep=","; [ $i -eq $((FLOWS - 1)) ] && sep=""
+        sep=","; [ $i -eq $((FLOWS - 1)) ] && [ "$DUPGROUP" = false ] && sep=""
         echo "    \"f$i\", \"239.255.$((1 + i / 250)).$((1 + i % 250))\", \"5000\", \"127.0.0.1\", \"127.0.0.1\"$sep"
     done
+    if [ "$DUPGROUP" = true ]; then
+        echo '    "dup0", "239.255.1.1", "5000", "0.0.0.0", "127.0.0.1"'
+    fi
     echo '}'
 } > "$RUN/test.conf"
 

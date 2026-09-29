@@ -1,3 +1,32 @@
+0.84
+- BUG: si el mismo grupo:puerto aparecía en entradas no consecutivas de
+ radar_definition se abría un segundo socket; el kernel entregaba cada
+ paquete a los dos (se grababa dos veces si la ip de origen encajaba con
+ ambas entradas, p.ej. 0.0.0.0). Ahora se reutiliza el socket de
+ cualquier entrada anterior, y si la interfaz es otra se suscribe el
+ grupo también en esa interfaz. Nuevo escenario tests/load "dupgroup".
+- BUG: la comprobación del máximo de radares nunca se ejecutaba y con
+ exactamente 256 radares el proceso salía con error. Ahora se valida al
+ leer la configuración (5 cadenas por radar, máximo 256), también en
+ broadcast.
+- BUG: en modo no continuo, sin tráfico, el corte por "timed" podía
+ llegar hasta 20s tarde; ahora termina a su hora.
+- BUG: midnight_t (fechado gps y alineación de rotaciones) se calculaba
+ con mktime() y dependía de la zona horaria del sistema; ahora es
+ siempre la medianoche UTC.
+- MEJORA: la ip de origen de cada paquete se compara solo con los radares
+ de su socket y en binario (antes se recorrían todos con inet_ntoa() y
+ strcasecmp()).
+- MEJORA: en formato gps el datablock y sus 10 bytes se escriben con un
+ único writev(), sin copiarlos a un buffer de 64KB en la pila.
+- ADD source_recv_buffer_size: buffer de recepción de cada socket de
+ entrada, en bytes (por defecto 212992; antes fijo a 100KB). Con root se
+ pide con SO_RCVBUFFORCE. El valor usado se muestra al arrancar.
+- CAMBIO: subida FTP con timeout de conexión de 60s (antes 300s) y aborto
+ si la transferencia se queda parada 60s, para que los hijos de
+ mode_continuous no se acumulen con el servidor FTP caído. El tope total
+ (300s/7200s) se mantiene.
+
 0.83
 - BUG: un datablock con tamaño 0 (paquete mal formado) dejaba el bucle
  de captura colgado para siempre cuando se decodificaba o se grababa en

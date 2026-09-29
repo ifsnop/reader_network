@@ -124,10 +124,10 @@ el proceso **no termina nunca por tiempo**: `timed` pasa a ser el
 intervalo de rotación del fichero de salida, y el proceso sigue leyendo
 la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
 
-- **Rotación alineada a hora absoluta, no relativa al arranque.** Con
+- **Rotación alineada a hora absoluta UTC, no relativa al arranque.** Con
   `timed=14400` (4h) el corte ocurre exactamente a las 00:00, 04:00,
-  08:00, 12:00, 16:00, 20:00 — nunca "4h después de que arrancó el
-  proceso". Se calcula desde `midnight_t` (medianoche del día de
+  08:00, 12:00, 16:00, 20:00 UTC — nunca "4h después de que arrancó el
+  proceso". Se calcula desde `midnight_t` (medianoche UTC del día de
   arranque, `setup_time()`), como `midnight_t + k*timed`; tras cada
   rotación se recalcula el siguiente corte desde ese mismo origen fijo
   (no sumando `timed` al anterior), de forma autocorrectiva si el
@@ -147,8 +147,13 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   antes de que `system()` lo pueda leer y `system()` devuelve -1 siempre
   (bug real encontrado y corregido durante las pruebas de esta feature:
   todos los `mkdir`/`bzip2` del proceso fallaban con `SIG_IGN` puesto
-  globalmente). No hay límite de hijos concurrentes de compresión/FTP si
-  el FTP está caído mucho tiempo — se acepta como limitación conocida.
+  globalmente). No se limita el número de hijos concurrentes; en su lugar
+  cada intento de curl se aborta si no conecta en 60 s
+  (`CURLOPT_CONNECTTIMEOUT`) o si la transferencia se queda parada 60 s
+  (`CURLOPT_LOW_SPEED_LIMIT`/`LOW_SPEED_TIME`), así que con el FTP caído
+  un hijo vive unos 10 intentos × ~62 s por URI y no se acumulan (el tope
+  total de `CURLOPT_TIMEOUT`, 7200 s, solo se alcanza con una subida
+  lenta que sigue avanzando).
 - **Requiere** `dest_file_timestamp = true` (si no, cada rotación pisaría
   el mismo fichero de nombre fijo antes de que el hijo lo procese) y
   `source` sea `multicast`/`broadcast` (no `file`, que no tiene bucle
@@ -186,9 +191,12 @@ tests/load/run_load.sh <binario> <escenario> <dir_trabajo>   # un solo caso
 
 Escenarios: `base`, `decode` (dest_localhost), `noise` (ip de origen no
 configurada), `scrm` (duplicados retrasados 1,5 s), `malformed`
-(datablock de tamaño 0), `fdleak` (35 s sin tráfico). La configuración se
-genera en cada ejecución y el hash de `asterix_versions` se fuerza con la
-variable de entorno del mismo nombre, así que no depende de la máquina.
+(datablock de tamaño 0), `fdleak` (35 s sin tráfico), `dupgroup` (una
+entrada final repite el grupo:puerto del flujo 0 con origen `0.0.0.0`;
+con un socket por entrada, cada paquete del flujo 0 se graba dos veces).
+La configuración se genera en cada ejecución y el hash de
+`asterix_versions` se fuerza con la variable de entorno del mismo
+nombre, así que no depende de la máquina.
 Además de las pérdidas, recoge el delta de `RcvbufErrors` de
 `/proc/net/snmp` (descartes del kernel por buffer lleno) y el número de
 descriptores abiertos del lector al principio y al final.
@@ -202,6 +210,11 @@ proceso colgado a 0 %, `scrm` de 60.000 duplicados grabados a 0 y
 `fdleak` de un descriptor perdido cada 10 s a ninguno. En `noise` no se
 llegó a ver pérdida con el emisor en Python (hace falta más ruido del
 que el bucle puede drenar), aunque el fallo del `break` era real.
+
+En 0.84 (sockets compartidos por grupo:puerto, búsqueda del radar por
+socket y `writev()` en gps), `dupgroup` pasó de 1000 duplicados grabados a
+0, sin cambios en el resto de escenarios (0 % de pérdidas en ambos
+binarios).
 
 ## Conclusiones de esta sesión: el código y cómo trabajar aquí
 
@@ -238,6 +251,10 @@ que el bucle puede drenar), aunque el fallo del `break` era real.
   mecanismo más simple posible para no bloquear el bucle de captura con
   trabajo lento (compresión, FTP), dado que este proyecto no usa hilos
   en ningún sitio.
+- **Todas las horas son UTC, nunca hora local.** `midnight_t` se calcula
+  como `tv_sec - tv_sec % 86400`; no usar `mktime()` (interpreta la
+  fecha como hora local y solo coincide con UTC si el sistema tiene
+  `TZ=UTC`). Afecta al fechado gps y a la alineación de rotaciones.
 - **Alineación a hora absoluta**: para cualquier acción periódica que deba
   coincidir con horas de reloj "en punto" (no "cada N segundos desde que
   arrancó"), calcular el próximo instante como `origen_fijo + k*intervalo`

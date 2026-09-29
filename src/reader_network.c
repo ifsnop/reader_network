@@ -83,9 +83,15 @@ struct Queue q;
 struct radar_destination_s {
     int socket; // socket descriptor
     char dest_ip[256]; // destination multicast address
+    int socket_index; // posicion del socket en s_reader[]
+    in_addr_t source_addr; // ip de origen (radar_definition[j*5+3]) ya en binario
+    bool source_any; // ip de origen "0.0.0.0": se acepta cualquier origen
+    int next; // siguiente radar que comparte el mismo socket (-1 = no hay mas)
 };
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
+int *socket_first_radar = NULL; // por socket (indice de s_reader[]), primer radar que lo usa (-1 = ninguno)
+long source_recv_buffer_size = 212992; // SO_RCVBUF de cada socket de entrada (net.core.rmem_max por defecto en linux)
 
 void setup_asterix_versions() {
     int read_size = 0, i;
@@ -309,23 +315,33 @@ char *dest_file_format_string = NULL;
 		log_printf(LOG_VERBOSE, "AST input activated\n");
 	    }
 	}
-    } else if (!strncasecmp(source, "mult", 4)) {
+    } else if (!strncasecmp(source, "mult", 4) || !strncasecmp(source, "broa", 4)) {
 	if (!cfg_get_str_array(&radar_definition, &radar_count, "radar_definition")) {
 	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
 	    exit(EXIT_FAILURE);
-	    if (radar_count>MAX_RADAR_NUMBER) {
-		log_printf(LOG_ERROR, "maximum number of entries in radar_definition (%d > %d)\n", radar_count, MAX_RADAR_NUMBER);
+	}
+	if (radar_count < 5 || (radar_count % 5) != 0) {
+	    log_printf(LOG_ERROR, "radar_definition needs 5 strings per radar (name, group, port, source ip, interface ip), found %d strings\n", radar_count);
+	    exit(EXIT_FAILURE);
+	}
+	if ((radar_count/5) > MAX_RADAR_NUMBER) {
+	    log_printf(LOG_ERROR, "maximum number of radars in radar_definition exceeded (%d > %d)\n", radar_count/5, MAX_RADAR_NUMBER);
+	    exit(EXIT_FAILURE);
+	}
+	if (!strncasecmp(source, "mult", 4))
+	    log_printf(LOG_VERBOSE, "reading from multicast\n");
+	else
+	    log_printf(LOG_VERBOSE, "reading from broadcast\n");
+        memset(radar_destination, 0, sizeof(struct radar_destination_s)*MAX_RADAR_NUMBER);
+	if (cfg_get_int(&source_recv_buffer_size, "source_recv_buffer_size")) {
+	    if (source_recv_buffer_size <= 0 || source_recv_buffer_size > 1024L*1024*1024) {
+		log_printf(LOG_ERROR, "source_recv_buffer_size must be between 1 and %ld bytes (%ld)\n", 1024L*1024*1024, source_recv_buffer_size);
 		exit(EXIT_FAILURE);
 	    }
+	    log_printf(LOG_VERBOSE, "socket receive buffer: %ld bytes (source_recv_buffer_size)\n", source_recv_buffer_size);
+	} else {
+	    log_printf(LOG_VERBOSE, "socket receive buffer: %ld bytes (default)\n", source_recv_buffer_size);
 	}
-        log_printf(LOG_VERBOSE, "reading from multicast\n");
-        memset(radar_destination, 0, sizeof(struct radar_destination_s)*MAX_RADAR_NUMBER);
-    } else if (!strncasecmp(source, "broa", 4)) {
-	if (!cfg_get_str_array(&radar_definition, &radar_count, "radar_definition")) {
-	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
-	    exit(EXIT_FAILURE);
-	}
-        log_printf(LOG_VERBOSE, "reading from broadcast\n");
     }
     cfg_get_bool(&mode_continuous, "mode_continuous");
     if (cfg_get_int(&timed, "timed")) {
@@ -670,10 +686,16 @@ void send_output_file() {
 	    curl_easy_setopt(ch, CURLOPT_UPLOAD, 1L);
 
 	    /* connection timeout */
-	    curl_easy_setopt(ch, CURLOPT_CONNECTTIMEOUT, 300L);
+	    curl_easy_setopt(ch, CURLOPT_CONNECTTIMEOUT, 60L);
 
 	    /* upload timeout */
 	    curl_easy_setopt(ch, CURLOPT_TIMEOUT, (fsize<1000000 ? 300L : 7200L));
+
+	    /* abort a stalled upload (less than 1 byte/s during 60 secs) instead of
+	       waiting for CURLOPT_TIMEOUT: with the ftp server down, each rotation
+	       child in mode_continuous would otherwise live for hours */
+	    curl_easy_setopt(ch, CURLOPT_LOW_SPEED_LIMIT, 1L);
+	    curl_easy_setopt(ch, CURLOPT_LOW_SPEED_TIME, 60L);
 
 	    /* specify target */
 	    curl_easy_setopt(ch, CURLOPT_URL, buff_1);
@@ -805,28 +827,95 @@ void setup_rejoin_network(void) {
     return;
 }
 
+/* Fija el buffer de recepcion de un socket de entrada a source_recv_buffer_size.
+   Si existe SO_RCVBUFFORCE (linux >= 2.6.14) se intenta primero, porque no esta
+   limitado por net.core.rmem_max (solo funciona siendo root); si no, SO_RCVBUF. */
+void setup_recv_buffer(int s) {
+    static bool logged = false; // la reconexion vuelve a pasar por aqui, basta con informar una vez
+    int size = (int) source_recv_buffer_size, effective = 0;
+    socklen_t len = sizeof(effective);
+    const char *how = "SO_RCVBUF";
+    bool done = false;
+
+#if defined(SO_RCVBUFFORCE)
+    if (setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &size, sizeof(size)) == 0) {
+	done = true; how = "SO_RCVBUFFORCE";
+    }
+#endif
+    if (!done && setsockopt(s, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) < 0) {
+	log_printf(LOG_ERROR, "rcvbuf setsockopt reader %s\n", strerror(errno));
+	exit(EXIT_FAILURE);
+    }
+    if (!logged) {
+	if (getsockopt(s, SOL_SOCKET, SO_RCVBUF, &effective, &len) == 0)
+	    log_printf(LOG_VERBOSE, "socket receive buffer requested %d bytes (%s), kernel reports %d bytes\n", size, how, effective);
+	logged = true;
+    }
+    return;
+}
+
 void setup_input_network(void) {
     struct sockaddr_in cast_group;
     struct ip_mreq mreq;
-    int i = 0, yes = 1;
+    int i = 0, k = 0, yes = 1;
 
     socket_count = 0;
 
 	    while (i<(radar_count/5)) {
-		if (i>0 && 								     // si
-		    !strcasecmp(radar_definition[(i*5)+1], radar_definition[((i-1)*5)+1]) && // mismo grupo mcast
-		    !strcasecmp(radar_definition[(i*5)+2], radar_definition[((i-1)*5)+2])) { // y mismo puerto
+		in_addr_t group = inet_addr(radar_definition[(i*5)+1]);
+		long port = strtol(radar_definition[(i*5)+2], NULL, 0);
 
-//		    strncpy(radar_destination[i], radar_definition[(i*5)+1, 255);
-		    log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s)\n", i,
+		if ( i >= MAX_RADAR_NUMBER ) {
+		    log_printf(LOG_ERROR, "Max number of defined radars reached (%d), exiting\n", MAX_RADAR_NUMBER);
+		    exit(EXIT_FAILURE);
+		}
+		// ip de origen en binario, para no comparar texto en cada paquete recibido
+		radar_destination[i].source_addr = inet_addr(radar_definition[(i*5)+3]);
+		radar_destination[i].source_any = (radar_destination[i].source_addr == htonl(INADDR_ANY));
+		radar_destination[i].next = -1;
+
+		// se busca en todas las entradas anteriores (no solo en la i-1) un socket ya abierto
+		// para el mismo grupo y puerto: un segundo socket con SO_REUSEADDR haria que el kernel
+		// entregase cada paquete a los dos.
+		for (k=0; k<i; k++) {
+		    if ( (inet_addr(radar_definition[(k*5)+1]) == group) &&        // mismo grupo mcast
+			(strtol(radar_definition[(k*5)+2], NULL, 0) == port) )     // y mismo puerto
+			break;
+		}
+
+		if (k < i) {
+		    int j = 0, last = -1;
+		    bool joined = false;
+		    in_addr_t iface = inet_addr(radar_definition[(i*5)+4]);
+
+		    log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s) same socket as %d]\n", i,
 			radar_definition[i*5], radar_definition[(i*5)+1],
 			radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-			radar_definition[(i*5)+4]);
+			radar_definition[(i*5)+4], k);
 
-		    radar_destination[i].socket = s_reader[socket_count-1];
+		    radar_destination[i].socket = radar_destination[k].socket;
+		    radar_destination[i].socket_index = radar_destination[k].socket_index;
 		    strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
-											     // no te suscribas 
-		    //(para distintas ips de origien pero mismos grupos multicast y puertos, no hace falta volver a suscribirse)
+
+		    // se añade al final de la lista de radares del socket (se respeta el orden
+		    // del fichero de configuracion: gana el primero cuya ip de origen coincida)
+		    for (j = socket_first_radar[radar_destination[i].socket_index]; j != -1; j = radar_destination[j].next) {
+			if (inet_addr(radar_definition[(j*5)+4]) == iface)
+			    joined = true;
+			last = j;
+		    }
+		    radar_destination[last].next = i;
+
+		    // para distintas ips de origen pero mismos grupos multicast y puertos no hace falta
+		    // volver a suscribirse, salvo que el grupo se reciba por otra interfaz
+		    if (!joined && !strncasecmp(source, "mult", 4)) {
+			mreq.imr_interface.s_addr = iface;
+			mreq.imr_multiaddr.s_addr = group;
+			if (setsockopt(radar_destination[i].socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+			    // antes esta interfaz nunca se suscribia, asi que no es motivo para abortar
+			    log_printf(LOG_ERROR, "add_membership setsockopt reader (ifaz %s): %s\n", radar_definition[(i*5)+4], strerror(errno));
+			}
+		    }
 		}  else {									     // else nos suscribimos
 		    if ( (s_reader[socket_count] = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {        
 			log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
@@ -837,24 +926,18 @@ void setup_input_network(void) {
 			radar_definition[(i*5)+2], radar_definition[(i*5)+3],
 			radar_definition[(i*5)+4], s_reader[socket_count]);
 
-		    //strncpy(radar_destination[s_reader[socket_count]].dest_ip, radar_definition[(i*5)+1], 255);
 		    radar_destination[i].socket = s_reader[socket_count];
+		    radar_destination[i].socket_index = socket_count;
+		    socket_first_radar[socket_count] = i;
 		    strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
-
-		    //log_printf(LOG_VERBOSE, "0>%s<\n", radar_destination[i].dest_ip);
-		    //log_printf(LOG_VERBOSE, "1>%s<\n", radar_definition[(i*5)+1]);
 
 		    if (!strncasecmp(source, "mult", 4)) {
 			unsigned char ttl = 32;
-			int recv_buffer_size = 100 * 1024;
 			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
 			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
 			}
-			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_RCVBUF, &recv_buffer_size, sizeof(recv_buffer_size)) < 0) {
-			    log_printf(LOG_ERROR, "rcvbuf setsockopt reader %s\n", strerror(errno));
-			    exit(EXIT_FAILURE);
-			}
+			setup_recv_buffer(s_reader[socket_count]);
 			if ( setsockopt(s_reader[socket_count], IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
 			    log_printf(LOG_ERROR, "ip_multicast_ttl setsockopt reader %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
@@ -883,6 +966,7 @@ void setup_input_network(void) {
 			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader: %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
 			}
+			setup_recv_buffer(s_reader[socket_count]);
 			cast_group.sin_family = AF_INET;
 			cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
 			cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
@@ -902,11 +986,6 @@ void setup_input_network(void) {
 		    socket_count++;
 		}
 		i++;
-		if ( i >= MAX_RADAR_NUMBER ) {
-		    log_printf(LOG_VERBOSE, "Max number of defined radars reached, exiting\n");
-		    exit(-1);
-		}
-
 	    }
 
     return;
@@ -914,7 +993,6 @@ void setup_input_network(void) {
 
 void setup_time(void) {
 struct timeval tv;
-struct tm *t2;
 struct timespec ts;
 double tv_float = 0, ts_float = 0;
 char precision[255];
@@ -933,15 +1011,9 @@ char precision[255];
     snprintf(precision, 254, "synchronization granularity of %dμs\n", (int)floor(fabs(tv_float-ts_float)*1000000.0));
     log_printf(LOG_VERBOSE, "%s", precision);
 
-    if ((t2 = gmtime(&tv.tv_sec)) == NULL) {
-	log_printf(LOG_ERROR, "ERROR gmtime (setup_time): %s\n", strerror(errno));
-	exit(EXIT_FAILURE);
-    }
-    t2->tm_sec = 0; t2->tm_min = 0; t2->tm_hour = 0;
-    if ((midnight_t = mktime(t2))==-1) { //segundos a las 00:00:00 de hoy
-	log_printf(LOG_ERROR, "ERROR mktime (setup_time): %s\n", strerror(errno));
-	exit(EXIT_FAILURE);
-    }
+    /* medianoche UTC de hoy, sin depender de la zona horaria del sistema: mktime()
+       interpreta la fecha como hora local y solo daba la medianoche UTC con TZ=UTC */
+    midnight_t = tv.tv_sec - (tv.tv_sec % 86400); //segundos a las 00:00:00 UTC de hoy
     return;
 }
 
@@ -1415,11 +1487,13 @@ unsigned long count2_plot_malformed = 0;
 	setup_priority(-20);
 
 	s_reader = mem_alloc((radar_count/5)*sizeof(int));
+	socket_first_radar = mem_alloc((radar_count/5)*sizeof(int));
 	radar_counter = mem_alloc((radar_count/5)*sizeof(int));
 	radar_counter_bytes = mem_alloc((radar_count/5)*sizeof(int));
 
 	for(i=0; i<(radar_count/5); i++) {
 	    s_reader[i] = -1;
+	    socket_first_radar[i] = -1;
 	    radar_counter[i] = 0; // plots recibidos por flujo
 	    radar_counter_bytes[i] = 0; // bytes recibidos por flujo
 	}
@@ -1435,6 +1509,7 @@ unsigned long count2_plot_malformed = 0;
 	        ( mode_continuous || timed==0 ||
 	          (timed_t_current.tv_sec <= (timed_t_start.tv_sec + timed)) ) ) {
 	    struct timeval timeout;
+	    bool short_timeout = false; // timeout del select() acortado para cortar a tiempo por "timed"
 	    int select_count;
 	    socklen_t addrlen = sizeof(struct sockaddr_in);
 	    double current_timestamp = 0;
@@ -1478,6 +1553,20 @@ unsigned long count2_plot_malformed = 0;
 
 	    memset(ast_ptr_raw, 0x00, RN_MAX_PACKET_LENGTH);
 	    timeout.tv_sec = SELECT_TIMEOUT; timeout.tv_usec = 0;
+	    if (!mode_continuous && timed > 0) {
+		/* sin trafico, el select() bloquearia SELECT_TIMEOUT segundos mas alla del final de
+		   la grabacion; se acorta hasta el primer instante en que la condicion del while ya
+		   no se cumple (timed_t_start + timed + 1). Primero en segundos (no desbordar un
+		   long de 32 bits con timed grandes) y luego con los microsegundos. */
+		long remaining = (timed_t_start.tv_sec + timed + 1) - timed_t_current.tv_sec;
+		if (remaining <= SELECT_TIMEOUT) {
+		    long remaining_usec = remaining * 1000000L - timed_t_current.tv_usec;
+		    if (remaining_usec < 0) remaining_usec = 0;
+		    timeout.tv_sec = remaining_usec / 1000000L;
+		    timeout.tv_usec = remaining_usec % 1000000L;
+		    short_timeout = true;
+		}
+	    }
 
 	    FD_ZERO(&reader_set);
 	    for (i=0; i<socket_count; i++) {
@@ -1487,6 +1576,7 @@ unsigned long count2_plot_malformed = 0;
 	    select_count = select(s_reader[socket_count - 1] + 1, &reader_set, NULL, NULL, &timeout);
 
 	    gettimeofday(&t, NULL); // for gps & queue timestamp
+	    timed_t_current = t; // para que la condicion del while use la hora de despues del select()
 	    current_time_today = ((t.tv_sec - midnight_t) % 86400) + t.tv_usec / 1000000.0; // segundos desde las 00:00:00
 	    current_timestamp = (t.tv_sec) + (t.tv_usec / 1000000.0); // segundos desde 01-01-1970 a las 00:00:00
 
@@ -1528,26 +1618,13 @@ unsigned long count2_plot_malformed = 0;
 			if (udp_size > 0)
 			    count2_udp_received++;
 
-			for(j=0;(j<radar_count/5); j++) { // se comprueba con la ip de origen
-//			    log_printf(LOG_VERBOSE, "%d %d\n",
-//			        (s_reader[i]!=radar_destination[j].socket),
-//			        (strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])!=0));
-//			    if ( (s_reader[i] == radar_destination[j].socket) ) {
-//			        log_printf(LOG_VERBOSE, "%s %s\n",
-//				    inet_ntoa(cast_group.sin_addr),
-//				    radar_definition[j*5+3]
-//				);
-//			    }
-			    // Si llega por nuestro socket y o bien tiene la misma ip de origen
-			    // o bien la ip de origen se definió en el archivo de configuración
-			    // como 0.0.0.0, se procesa el dato.
-			    if ( (s_reader[i]==radar_destination[j].socket) &&
-			        (
-				    (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) ||
-				    (!strcasecmp("0.0.0.0", radar_definition[j*5+3]))
-				)
-				)
-			        break;
+			// se comprueba la ip de origen solo contra los radares que usan este socket
+			// (en el orden del fichero de configuracion). Si llega con la misma ip de
+			// origen, o la ip de origen se definio como 0.0.0.0, se procesa el dato.
+			for (j = socket_first_radar[i]; j != -1; j = radar_destination[j].next) {
+			    if ( radar_destination[j].source_any ||
+				(radar_destination[j].source_addr == cast_group.sin_addr.s_addr) )
+				break;
 			}
 			
 			/* si no pertenece a ningun radar configurado, se ignora solo este
@@ -1564,7 +1641,7 @@ unsigned long count2_plot_malformed = 0;
 //			    radar_destination[s_reader[i]].dest_ip, 
 //			    inet_ntoa(cast_group.sin_addr), cast_group.sin_port);
 			    //if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
-			    if (j < (radar_count/5)) {
+			    if (j != -1) {
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
 				int salir = 0;
 				
@@ -1693,41 +1770,32 @@ unsigned long count2_plot_malformed = 0;
 					}
 					if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) {
 					    unsigned long timegps;
-					    unsigned char byte;
-					    unsigned char output_ptr[RN_MAX_PACKET_LENGTH];
-					    memcpy(output_ptr, ast_ptr_raw_tmp, ast_size_datablock);
-                                            memset(output_ptr + ast_size_datablock, 0, 10);
+					    unsigned char gps_trailer[10]; // 10 bytes que se añaden a cada datablock
+					    struct iovec iov[2];
 
 					    // 0, 1st, 2nd & 3rd will hold source ip
-					    byte = (cast_group.sin_addr.s_addr >> 24) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 0, &byte, 1);
-					    byte = (cast_group.sin_addr.s_addr >> 16) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 1, &byte, 1);
-					    byte = (cast_group.sin_addr.s_addr >> 8) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 2, &byte, 1);
-					    byte = (cast_group.sin_addr.s_addr) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 3, &byte, 1);
+					    gps_trailer[0] = (cast_group.sin_addr.s_addr >> 24) & 0xFF;
+					    gps_trailer[1] = (cast_group.sin_addr.s_addr >> 16) & 0xFF;
+					    gps_trailer[2] = (cast_group.sin_addr.s_addr >> 8) & 0xFF;
+					    gps_trailer[3] = (cast_group.sin_addr.s_addr) & 0xFF;
 
-                                            // 4, 5 & 9 are still empty
-					    // but: 4th & 5th will hold a copy of ast_size_datablock (or udp_size)
-					    // (9th byte will hold 0xCD as GPS version)
-					    byte = (ast_size_datablock >> 8) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 4, &byte, 1);
-					    byte = (ast_size_datablock) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 5, &byte, 1);
+					    // 4th & 5th hold a copy of ast_size_datablock (or udp_size)
+					    gps_trailer[4] = (ast_size_datablock >> 8) & 0xFF;
+					    gps_trailer[5] = (ast_size_datablock) & 0xFF;
 
 					    // 6th, 7th & 8th will hold timestamp
 					    timegps = current_time_today * 128.0;
-					    byte = (timegps >> 16) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 6, &byte, 1);
-					    byte = (timegps >> 8) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 7, &byte, 1);
-					    byte = (timegps) & 0xFF;
-					    memcpy(output_ptr + ast_size_datablock + 8, &byte, 1);
-					    byte = 0xCD; // GPS watermark
-					    memcpy(output_ptr + ast_size_datablock + 9, &byte, 1);
+					    gps_trailer[6] = (timegps >> 16) & 0xFF;
+					    gps_trailer[7] = (timegps >> 8) & 0xFF;
+					    gps_trailer[8] = (timegps) & 0xFF;
+					    gps_trailer[9] = 0xCD; // GPS watermark (9th byte, GPS version)
 
-					    if ( (write(fd_out_gps, output_ptr, ast_size_datablock+10) ) != (ast_size_datablock+10)) {
+					    // datablock + postbytes en una sola llamada, sin copiarlos a un buffer intermedio
+					    iov[0].iov_base = ast_ptr_raw_tmp;
+					    iov[0].iov_len = ast_size_datablock;
+					    iov[1].iov_base = gps_trailer;
+					    iov[1].iov_len = sizeof(gps_trailer);
+					    if ( (writev(fd_out_gps, iov, 2) ) != (ast_size_datablock+10)) {
 						log_printf(LOG_ERROR, "ERROR write_gps: %s (fd:%d)\n", strerror(errno), fd_out_gps);
 					    }
 					}
@@ -1751,6 +1819,9 @@ unsigned long count2_plot_malformed = 0;
 		    }
 		    i++;
 		}
+	    } else if ( select_count == 0 && short_timeout ) {
+		/* no son SELECT_TIMEOUT segundos sin datos, solo se ha acortado la espera para
+		   terminar a tiempo por "timed": no hay que reconectar */
 	    } else if ( select_count == 0 ) {
 		log_printf(LOG_VERBOSE, "%d sec(s) warning\n", SELECT_TIMEOUT);
 		if ( dest_localhost ) {
@@ -1822,6 +1893,7 @@ unsigned long count2_plot_malformed = 0;
 	for(i=0; i<socket_count; i++)
 	    close(s_reader[i]);
 	mem_free(s_reader);
+	mem_free(socket_first_radar);
     }
 
     //{
