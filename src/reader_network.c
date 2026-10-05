@@ -346,9 +346,13 @@ char *dest_file_format_string = NULL;
 	}
     }
     cfg_get_bool(&mode_continuous, "mode_continuous");
-    cfg_get_bool(&abort_fast, "abort_fast");
-    if (abort_fast)
-	log_printf(LOG_VERBOSE, "abort_fast enabled: on SIGTERM/SIGINT exit immediately, without compressing or uploading the current output file\n");
+    if (cfg_get_bool(&abort_fast, "abort_fast")) {
+	if (abort_fast) {
+	    log_printf(LOG_VERBOSE, "abort_fast enabled: on SIGTERM/SIGINT exit immediately, without compressing or uploading the current output file\n");
+	} else {
+	    log_printf(LOG_VERBOSE, "abort_fast disabled: on SIGTERM/SIGINT close, compress and upload the current output file\n");
+	}
+    }
     if (cfg_get_int(&timed, "timed")) {
         if (timed == 0)
 	    log_printf(LOG_VERBOSE, "recording forever (user interrupt or input file interrupt)\n");
