@@ -1,0 +1,51 @@
+# Plantilla systemd: una instancia de reader_network64 por cada .conf.
+#
+#   /etc/reader_network/<instancia>.conf  ->  reader_network@<instancia>.service
+#
+# Instalacion:
+#   install -m 755 bin/reader_network64 /opt/reader_network/bin/
+#   install -m 644 systemd/reader_network@.service /etc/systemd/system/
+#   mkdir -p /etc/reader_network   # y copiar ahi radar1.conf, radar2.conf...
+#   systemctl daemon-reload
+#   systemctl enable --now reader_network@radar1 reader_network@radar2
+#
+# Requisitos del .conf: mode_daemon = false (systemd ya lo gestiona; con
+# daemon(1,0) el proceso se desvincula y systemd lo daria por muerto) y
+# dest_file distinto en cada instancia.
+
+[Unit]
+Description=reader_network (%i)
+Wants=network-online.target
+After=network-online.target
+# Nunca dejar de relanzar, por muchos fallos seguidos que haya
+# (en systemd < 230 esta clave se llama StartLimitInterval y va en [Service]).
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/tmp
+ExecStart=/usr/local/bin/reader_network64 /etc/reader_network.d/%i.conf
+# always y no on-failure: tambien se relanza si termina con codigo 0
+# (p.ej. un .conf sin mode_continuous que corta por "timed").
+# "systemctl stop" no dispara el reinicio.
+Restart=always
+RestartSec=5
+
+# Parada ordenada: SIGTERM cierra, comprime y sube el fichero en curso.
+# El tiempo debe cubrir bzip2 + subida FTP (con abort_fast = true sale al instante).
+TimeoutStopSec=300
+
+# Solo se avisa al proceso principal. Con el valor por defecto (control-group)
+# systemd mataria tambien los hijos de rotacion de mode_continuous que estan
+# comprimiendo/subiendo un fichero ya cerrado, y se perderia esa subida.
+KillMode=process
+
+# Los mensajes normales (arranque, stats) van a stdout y se descartan; los
+# errores van a stderr y se quedan en el journal (StandardError por defecto).
+StandardOutput=null
+
+# Sockets multicast (uno por grupo:puerto) + ficheros + curl
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
