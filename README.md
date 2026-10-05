@@ -40,6 +40,13 @@ manual paso a paso. El detalle completo de cada clave está comentado en
   al patrón cron + solape + recorte posterior (`filtertime_s`/`joingps_s`)
   para grabaciones 24/7 sin huecos ni duplicados.
 
+**Apagado** (`abort_fast`): por defecto, con SIGTERM/SIGINT el proceso cierra,
+comprime y sube el fichero en curso antes de salir. Con `abort_fast = true`
+sale inmediatamente con `EXIT_FAILURE`, sin comprimir ni subir por FTP el
+fichero que se estaba grabando (queda en disco tal cual). Los hijos de
+rotación de `mode_continuous` que ya procesan un fichero cerrado no se ven
+afectados.
+
 **Otros modos**:
 - `mode_daemon`: si es `true`, hace fork a segundo plano (`daemon(1,0)`
   en Linux) y cierra la salida estándar.

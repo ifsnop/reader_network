@@ -1,4 +1,8 @@
 0.84
+- ADD abort_fast: con true, SIGTERM/SIGINT terminan el proceso al instante
+ con EXIT_FAILURE, sin comprimir ni subir por FTP el fichero en curso (por
+ defecto false: cierre ordenado como hasta ahora). Los hijos de rotación
+ de mode_continuous no se ven afectados.
 - BUG: si el mismo grupo:puerto aparecía en entradas no consecutivas de
  radar_definition se abría un segundo socket; el kernel entregaba cada
  paquete a los dos (se grababa dos veces si la ip de origen encajaba con

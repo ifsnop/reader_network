@@ -44,6 +44,8 @@ bool mode_daemon = false;
 bool mode_scrm = false;
 bool mode_continuous = false;
 volatile sig_atomic_t shutdown_requested = 0;
+bool abort_fast = false; // SIGTERM/SIGINT: salir ya, sin comprimir ni subir el fichero en curso
+volatile sig_atomic_t is_rotation_child = 0; // el hijo de rotacion nunca aborta: procesa un fichero ya cerrado
 time_t next_rotation_t = 0; // proximo corte absoluto (epoch), solo con mode_continuous
 long timed = 0;
 long timed_stats_interval = 0;
@@ -344,6 +346,9 @@ char *dest_file_format_string = NULL;
 	}
     }
     cfg_get_bool(&mode_continuous, "mode_continuous");
+    cfg_get_bool(&abort_fast, "abort_fast");
+    if (abort_fast)
+	log_printf(LOG_VERBOSE, "abort_fast enabled: on SIGTERM/SIGINT exit immediately, without compressing or uploading the current output file\n");
     if (cfg_get_int(&timed, "timed")) {
         if (timed == 0)
 	    log_printf(LOG_VERBOSE, "recording forever (user interrupt or input file interrupt)\n");
@@ -1116,6 +1121,10 @@ void free_config(void) {
 }
 
 static void handle_shutdown(int sig) {
+    /* _exit() y no exit(): en un manejador de señal solo es seguro lo
+       async-signal-safe; exit() ejecuta atexit()/flush de stdio. */
+    if (abort_fast && !is_rotation_child)
+	_exit(EXIT_FAILURE);
     shutdown_requested = 1;
 }
 
@@ -1528,6 +1537,7 @@ unsigned long count2_plot_malformed = 0;
 		pid_t pid = fork();
 		if (pid == 0) {
 		    /* hijo: procesa en background la ventana que se acaba de cerrar */
+		    is_rotation_child = 1; // abort_fast no debe cortar la compresion/subida de un fichero ya cerrado
 		    close_output_file();
 		    if (dest_ftp_count > 0) send_output_file();
 		    _exit(0);
