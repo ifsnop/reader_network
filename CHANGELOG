@@ -9,6 +9,10 @@
  exactamente 256 radares el proceso salía con error. Ahora se valida al
  leer la configuración (5 cadenas por radar, máximo 256), también en
  broadcast.
+- BUG: con mode_continuous, "REMAINING SECS" de las stats
+ (timed_stats_interval) se calculaba desde el inicio de la ventana y no
+ desde el corte alineado; ahora es el tiempo hasta el próximo cierre y
+ rotación del fichero.
 - BUG: en modo no continuo, sin tráfico, el corte por "timed" podía
  llegar hasta 20s tarde; ahora termina a su hora.
 - BUG: midnight_t (fechado gps y alineación de rotaciones) se calculaba

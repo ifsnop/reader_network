@@ -1539,7 +1539,6 @@ unsigned long count2_plot_malformed = 0;
 		    if (dest_file_final_ast != NULL) { mem_free(dest_file_final_ast); dest_file_final_ast = NULL; }
 		    if (dest_file_final_gps != NULL) { mem_free(dest_file_final_gps); dest_file_final_gps = NULL; }
 		    setup_output_file();
-		    timed_t_start = timed_t_current; // solo cosmetico, para el display de stats existente
 		    /* recalcular el siguiente corte desde el origen fijo (midnight_t), no sumando
 		       "timed" al anterior: así se autocorrige si el proceso se ha saltado algún
 		       corte (p.ej. tras una suspensión del sistema) en vez de arrastrar el desfase. */
@@ -1850,6 +1849,7 @@ unsigned long count2_plot_malformed = 0;
 		float secs = t.tv_sec + t.tv_usec/1000000.0 - // tiempo del ultimo dato recibido
 		  (timed_t_Xsecs.tv_sec + timed_t_Xsecs.tv_usec / 1000000.0); // tiempo del ultimo stat volcado 
 		float total_bw = 0.0; int total_bytes = 0, total_packets = 0;
+		long remaining_secs;
 
 		log_printf(LOG_VERBOSE," # name\t\t\tcount\tbw(b/s)\tbytes\tsecs(%3.2f)\n", secs);
 
@@ -1862,7 +1862,12 @@ unsigned long count2_plot_malformed = 0;
 		    radar_counter[i] = 0;
 		    radar_counter_bytes[i] = 0;
 		}
-		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d (REMAINING SECS: %ld)     \n", total_packets, total_bw, total_bytes, (timed_t_start.tv_sec + timed - timed_t_current.tv_sec));
+		/* en mode_continuous lo que queda es hasta el proximo corte absoluto (rotacion
+		   del fichero), no hasta timed_t_start+timed (que solo vale para el modo normal) */
+		remaining_secs = mode_continuous ?
+		    (long)(next_rotation_t - timed_t_current.tv_sec) :
+		    (long)(timed_t_start.tv_sec + timed - timed_t_current.tv_sec);
+		log_printf(LOG_VERBOSE, "XX]TOTAL\t\t%d\t%03.1f\t%d (REMAINING SECS: %ld)     \n", total_packets, total_bw, total_bytes, remaining_secs);
 		//for(i=0;i<(radar_count/5)+2;i++) { printf("\033[1A"); }
 		timed_t_Xsecs.tv_sec = t.tv_sec;
 		timed_t_Xsecs.tv_usec = t.tv_usec;
