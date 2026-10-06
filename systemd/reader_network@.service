@@ -12,6 +12,10 @@
 # Requisitos del .conf: mode_daemon = false (systemd ya lo gestiona; con
 # daemon(1,0) el proceso se desvincula y systemd lo daria por muerto) y
 # dest_file distinto en cada instancia.
+#
+# Oneline para relanzar todos los servicios despues de un cambio de version:
+# for i in $(find /etc/reader_network.d/ -type f -name "*.conf"); do systemctl restart reader_network@$(basename -s .conf $i); done
+#
 
 [Unit]
 Description=reader_network (%i)
@@ -43,6 +47,7 @@ KillMode=process
 # Los mensajes normales (arranque, stats) van a stdout y se descartan; los
 # errores van a stderr y se quedan en el journal (StandardError por defecto).
 StandardOutput=null
+StandardError=journal
 
 # Sockets multicast (uno por grupo:puerto) + ficheros + curl
 LimitNOFILE=65536
