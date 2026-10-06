@@ -449,7 +449,8 @@ char *dest_file_format_string = NULL;
 	    log_printf(LOG_ERROR, "mode_continuous requires dest_file_timestamp=true (otherwise rotation would overwrite the same file)\n");
 	    exit(EXIT_FAILURE);
 	}
-	log_printf(LOG_VERBOSE, "mode_continuous enabled: rotating output file every %ld secs (aligned to absolute clock), running until stopped by SIGTERM/SIGINT\n", timed);
+	/* LOG_ERROR (stderr): es el unico nivel que llega al journal/syslog cuando stdout va a null */
+	log_printf(LOG_ERROR, "mode_continuous enabled: rotating output file every %ld secs (aligned to absolute clock), running until stopped by SIGTERM/SIGINT\n", timed);
     }
 
     cfg_close();
@@ -524,7 +525,7 @@ struct tm *t2 = NULL;
 	    } else {
 	        sprintf(dest_file_final_ast, "%s.%s", dest_file, (dest_file_extension != NULL ? dest_file_extension : "ast") );
 	    }
-	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_ast);
+	    log_printf(mode_continuous ? LOG_ERROR : LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_ast);
 	    if ( (fd_out_ast = open(dest_file_final_ast, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
 		log_printf(LOG_ERROR, "ERROR open(%s): %s\n", dest_file_final_ast, strerror(errno)); exit(EXIT_FAILURE);
@@ -556,7 +557,7 @@ struct tm *t2 = NULL;
 	    } else {
 		sprintf(dest_file_final_gps, "%s.%s", dest_file, (dest_file_extension != NULL ? dest_file_extension : "gps") );
 	    }
-	    log_printf(LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_gps);
+	    log_printf(mode_continuous ? LOG_ERROR : LOG_NORMAL, "output data to file (2):%s\n", dest_file_final_gps);
 	    if ( (fd_out_gps = open(dest_file_final_gps, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR 
 		| S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) == -1) {
 		log_printf(LOG_ERROR, "ERROR open(%s): %s\n", dest_file_final_gps, strerror(errno)); exit(EXIT_FAILURE);
@@ -622,6 +623,12 @@ int res=0;
 	    }
 	}
     }
+    /* LOG_ERROR (stderr): es el unico nivel que llega al journal/syslog cuando stdout va a null.
+       Se avisa de cada fichero cerrado, comprimido o no. */
+    if ((dest_file_format & DEST_FILE_FORMAT_AST) == DEST_FILE_FORMAT_AST)
+	log_printf(LOG_ERROR, "output file closed: %s%s\n", dest_file_final_ast, (dest_file_compress ? ".bz2" : ""));
+    if ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS)
+	log_printf(LOG_ERROR, "output file closed: %s%s\n", dest_file_final_gps, (dest_file_compress ? ".bz2" : ""));
     return;
 }
 

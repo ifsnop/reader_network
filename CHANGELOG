@@ -1,4 +1,8 @@
 0.84
+- CAMBIO: cada fichero de salida cerrado ("output file closed: ...") y, con
+ mode_continuous, el arranque y cada fichero nuevo abierto se registran con
+ nivel LOG_ERROR (stderr), el unico nivel que llega al journal/syslog con
+ stdout descartado.
 - ADD abort_fast: con true, SIGTERM/SIGINT terminan el proceso al instante
  con EXIT_FAILURE, sin comprimir ni subir por FTP el fichero en curso (por
  defecto false: cierre ordenado como hasta ahora). Los hijos de rotación
