@@ -8,11 +8,18 @@
 #   decode    igual que base pero con dest_localhost=true (decodifica y reenvia)
 #   noise     base + 3000 pkt/s desde una ip de origen no configurada al flujo 0
 #   scrm      20 pkt/s por flujo, mode_scrm=true, cada paquete se repite 1,5 s despues
-#   malformed 20 pkt/s por flujo, en el segundo 5 llega un datablock de tamaño 0
+#   malformed 20 pkt/s por flujo, en el segundo 5 llegan al flujo 0 un datablock de
+#             tamaño 0, uno valido (SAC=4) + otro (SAC=3) que declara mas bytes de los
+#             que trae el paquete, y uno valido (SAC=4) + 2 bytes sueltos: se deben
+#             grabar los dos SAC=4 y ningun SAC=3, y contar 3 malformed
 #   fdleak    sin trafico durante 35 s con dest_localhost=true (cuenta descriptores)
 #   dupgroup  base + una entrada final que repite el grupo:puerto del flujo 0 (no
 #             consecutiva) con ip de origen 0.0.0.0: si se abre un segundo socket
 #             para el mismo grupo, cada paquete del flujo 0 se graba dos veces
+#   spread    como base, pero los envios de cada ronda se reparten de forma uniforme
+#             entre los flujos (radares no sincronizados): casi un paquete por
+#             vuelta del bucle, el peor caso para el coste fijo por vuelta
+#   spreaddecode  spread con dest_localhost=true
 #   reload    20 pkt/s por flujo, mode_continuous con rotacion cada 20 s; se graban
 #             los flujos 0..99 y, 2 s despues de un corte, se recarga con SIGHUP:
 #             primero un .conf con error de sintaxis (se rechaza), luego 0..149 y
@@ -22,7 +29,8 @@
 #             comprueba check_reload.py (no se compara con analyze.py)
 #
 # Deja en <dir_trabajo>/<escenario>-<binario>/ la configuracion, el log del
-# lector, meta.json (estado, descriptores, errores de buffer UDP del kernel)
+# lector, meta.json (estado, descriptores, errores de buffer UDP del kernel,
+# CPU del lector y datablocks contados como malformed)
 # y metrics.json (perdidas/duplicados por flujo, calculado por analyze.py).
 set -u
 
@@ -32,7 +40,7 @@ WORK=$(readlink -f "$3")
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 FLOWS=150 RATE=50 RECORDS=4 DURATION=20
-LOCALHOST=false SCRM=false NOISE=0 DUP=0 MALFORMED=-1 DUPGROUP=false RELOAD=false
+LOCALHOST=false SCRM=false NOISE=0 DUP=0 MALFORMED=-1 DUPGROUP=false RELOAD=false SPREAD=false
 case "$SCEN" in
     base) ;;
     decode) LOCALHOST=true ;;
@@ -42,6 +50,8 @@ case "$SCEN" in
     fdleak) RATE=0 LOCALHOST=true DURATION=35 ;;
     dupgroup) DUPGROUP=true ;;
     reload) RATE=20 RECORDS=1 DURATION=50 RELOAD=true ;;
+    spread) SPREAD=true ;;
+    spreaddecode) SPREAD=true LOCALHOST=true ;;
     *) echo "escenario desconocido: $SCEN" >&2; exit 2 ;;
 esac
 
@@ -121,7 +131,7 @@ ERR_START=$(udp_rcvbuf_errors)
 if [ "$RATE" != "0" ]; then
     python3 "$HERE/sender.py" --flows $FLOWS --rate $RATE --records $RECORDS \
         --duration $DURATION --dup-delay $DUP --noise-rate $NOISE \
-        --malformed-at $MALFORMED --summary "$RUN/sent.json"
+        --malformed-at $MALFORMED $([ "$SPREAD" = true ] && echo --spread) --summary "$RUN/sent.json"
 else
     sleep $DURATION
 fi
@@ -130,6 +140,8 @@ sleep 2
 
 FD_END=$(nfds $PID)
 ERR_END=$(udp_rcvbuf_errors)
+# CPU del lector (utime+stime, sin los hijos de rotacion), en segundos
+CPU=$(LC_ALL=C awk -v hz="$(getconf CLK_TCK)" '{ printf "%.2f", ($14 + $15) / hz }' "/proc/$PID/stat" 2>/dev/null)
 STATUS=ok
 if ! kill -0 $PID 2>/dev/null; then
     STATUS=died
@@ -146,9 +158,11 @@ else
 fi
 wait $PID 2>/dev/null
 
-printf '{"scenario":"%s","binary":"%s","status":"%s","fd_start":%s,"fd_end":%s,"udp_rcvbuf_errors":%s}\n' \
+# datablocks descartados por tamaño invalido (linea final de estadisticas)
+MALFORMED=$(sed -n 's/.*stats malformed\[\([0-9]*\)\].*/\1/p' "$RUN/reader.log" | tail -1)
+printf '{"scenario":"%s","binary":"%s","status":"%s","fd_start":%s,"fd_end":%s,"udp_rcvbuf_errors":%s,"cpu_s":%s,"malformed_counted":%s}\n' \
     "$SCEN" "$(basename "$BIN")" "$STATUS" "${FD_START:-0}" "${FD_END:-0}" \
-    "$((ERR_END - ERR_START))" > "$RUN/meta.json"
+    "$((ERR_END - ERR_START))" "${CPU:-null}" "${MALFORMED:-0}" > "$RUN/meta.json"
 if [ "$RELOAD" = true ] && [ -f "$RUN/sent.json" ]; then
     sleep 2 # subida (file://) del ultimo fichero rotado, en un hijo
     python3 -B "$HERE/check_reload.py" --summary "$RUN/sent.json" --log "$RUN/reader.log" \

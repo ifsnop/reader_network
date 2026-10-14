@@ -93,7 +93,9 @@ struct radar_destination_s {
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
 int *socket_first_radar = NULL; // por socket (indice de s_reader[]), primer radar que lo usa (-1 = ninguno)
-int s_reader_maxfd = -1; // descriptor mas alto de s_reader[] (nfds del select(); con la recarga no van en orden)
+/* por socket (indice de s_reader[]), lo que se le pasa a poll(); lo rellena setup_input_network().
+   poll() y no select(): con select() un descriptor >= FD_SETSIZE (1024) escribiria fuera del fd_set */
+struct pollfd s_reader_poll[MAX_RADAR_NUMBER];
 long source_recv_buffer_size = 212992; // SO_RCVBUF de cada socket de entrada (net.core.rmem_max por defecto en linux)
 
 /* recarga de configuracion con SIGHUP (solo mode_continuous): el .conf se lee y valida al
@@ -983,6 +985,11 @@ static int open_input_socket(int i) {
 	log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
 	return -1;
     }
+    /* no bloqueante: el bucle principal vacia cada socket listo hasta EAGAIN */
+    if (fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK) < 0) {
+	log_printf(LOG_ERROR, "fcntl O_NONBLOCK reader %s\n", strerror(errno));
+	close(s); return -1;
+    }
     if (!strncasecmp(source, "mult", 4)) {
 	unsigned char ttl = 32;
 	if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
@@ -1058,7 +1065,6 @@ void setup_input_network(struct input_pool_s *pool) {
     int reused = 0, opened = 0, closed = 0;
 
     socket_count = 0;
-    s_reader_maxfd = -1;
 
 	    while (i<(radar_count/5)) {
 		in_addr_t group = inet_addr(radar_definition[(i*5)+1]);
@@ -1174,8 +1180,6 @@ void setup_input_network(struct input_pool_s *pool) {
 		    socket_first_radar[socket_count] = i;
 		    socket_pool[socket_count] = p;
 		    strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
-		    if (fd > s_reader_maxfd)
-			s_reader_maxfd = fd;
 		    // log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
 		    // radar_definition[i*5 + 1], radar_definition[i*5 + 2], radar_definition[i*5+3] );
 		    socket_count++;
@@ -1216,6 +1220,12 @@ void setup_input_network(struct input_pool_s *pool) {
 	    }
 	}
 	log_printf(LOG_ERROR, "reload: %d input sockets (%d kept open, %d opened, %d closed)\n", socket_count, reused, opened, closed);
+    }
+
+    for (k=0; k<socket_count; k++) {
+	s_reader_poll[k].fd = s_reader[k];
+	s_reader_poll[k].events = POLLIN;
+	s_reader_poll[k].revents = 0;
     }
 
     return;
@@ -1905,7 +1915,8 @@ unsigned long count2_plot_malformed = 0;
 
 	setup_input_network(NULL);
 
-	ast_ptr_raw = (unsigned char *) mem_alloc(RN_MAX_PACKET_LENGTH);
+	/* RN_DECODE_PAD de mas para los bytes a cero tras el paquete al descodificar */
+	ast_ptr_raw = (unsigned char *) mem_alloc(RN_MAX_PACKET_LENGTH + RN_DECODE_PAD);
 	gettimeofday(&timed_t_current, NULL);
 	timed_t_Xsecs.tv_sec = timed_t_current.tv_sec;
 	timed_t_Xsecs.tv_usec = timed_t_current.tv_usec;
@@ -1914,12 +1925,11 @@ unsigned long count2_plot_malformed = 0;
 	        ( mode_continuous || timed==0 ||
 	          (timed_t_current.tv_sec <= (timed_t_start.tv_sec + timed)) ) ) {
 	    struct timeval timeout;
-	    bool short_timeout = false; // timeout del select() acortado para cortar a tiempo por "timed"
-	    int select_count;
+	    bool short_timeout = false; // timeout del poll() acortado para cortar a tiempo por "timed"
+	    int poll_count, poll_errno;
 	    socklen_t addrlen = sizeof(struct sockaddr_in);
 	    double current_timestamp = 0;
 	    struct sockaddr_in cast_group;
-	    fd_set reader_set;
 
 	    gettimeofday(&timed_t_current, NULL);
 
@@ -1970,10 +1980,11 @@ unsigned long count2_plot_malformed = 0;
 		}
 	    }
 
-	    memset(ast_ptr_raw, 0x00, RN_MAX_PACKET_LENGTH);
+	    /* el buffer de recepcion no se limpia en cada vuelta (eran 64 KB por vuelta): solo
+	       se leen los udp_size bytes que da recvfrom() (ver ast_ptr_raw_end) */
 	    timeout.tv_sec = SELECT_TIMEOUT; timeout.tv_usec = 0;
 	    if (!mode_continuous && timed > 0) {
-		/* sin trafico, el select() bloquearia SELECT_TIMEOUT segundos mas alla del final de
+		/* sin trafico, el poll() bloquearia SELECT_TIMEOUT segundos mas alla del final de
 		   la grabacion; se acorta hasta el primer instante en que la condicion del while ya
 		   no se cumple (timed_t_start + timed + 1). Primero en segundos (no desbordar un
 		   long de 32 bits con timed grandes) y luego con los microsegundos. */
@@ -1987,15 +1998,12 @@ unsigned long count2_plot_malformed = 0;
 		}
 	    }
 
-	    FD_ZERO(&reader_set);
-	    for (i=0; i<socket_count; i++) {
-		FD_SET(s_reader[i], &reader_set);
-	    }
-
-	    select_count = select(s_reader_maxfd + 1, &reader_set, NULL, NULL, &timeout);
+	    /* timeout en ms, redondeando hacia arriba para no volver antes de tiempo */
+	    poll_count = poll(s_reader_poll, socket_count, timeout.tv_sec * 1000 + (timeout.tv_usec + 999) / 1000);
+	    poll_errno = errno; // lo que sigue (purga de scrm) puede cambiar errno
 
 	    gettimeofday(&t, NULL); // for gps & queue timestamp
-	    timed_t_current = t; // para que la condicion del while use la hora de despues del select()
+	    timed_t_current = t; // para que la condicion del while use la hora de despues del poll()
 	    current_time_today = ((t.tv_sec - midnight_t) % 86400) + t.tv_usec / 1000000.0; // segundos desde las 00:00:00
 	    current_timestamp = (t.tv_sec) + (t.tv_usec / 1000000.0); // segundos desde 01-01-1970 a las 00:00:00
 
@@ -2023,23 +2031,42 @@ unsigned long count2_plot_malformed = 0;
 		}
 	    }
 
-	    if ( select_count > 0 ) {
+	    if ( poll_count > 0 ) {
 		i=0;
 		while (i<socket_count) {
-		    if (FD_ISSET(s_reader[i], &reader_set)) {
+		    int n;
+		    /* con error (POLLERR...) tambien se lee: el error lo da recvfrom(), como con select() */
+		    if (!(s_reader_poll[i].revents & (POLLIN | POLLERR | POLLHUP | POLLNVAL))) {
+			i++;
+			continue;
+		    }
+		    /* se vacia el socket (no bloqueante) en vez de leer un solo paquete por vuelta,
+		       con un tope para no desatender al resto de sockets */
+		    for (n = 0; n < RN_MAX_DRAIN; n++) {
 			int udp_size=0; bool record = true, is_processed = false;
 			memset(&cast_group, 0, sizeof(cast_group));
 			addrlen = sizeof(struct sockaddr);
 			if ((udp_size = recvfrom(s_reader[i], ast_ptr_raw, RN_MAX_PACKET_LENGTH, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
-			    if (errno == EINTR) { // señal (p.ej. SIGHUP) entre el select() y el recvfrom(): se lee en la siguiente vuelta
-				i++;
-				continue;
-			    }
+			    /* vacio, o una señal (p.ej. SIGHUP): lo que quede se lee en la siguiente vuelta */
+			    if (errno == EAGAIN || errno == EINTR
+#if defined(EWOULDBLOCK) && (EWOULDBLOCK != EAGAIN)
+				|| errno == EWOULDBLOCK
+#endif
+				)
+				break;
 			    log_printf(LOG_ERROR, "ERROR recvfrom: %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
 			}
+			if (n > 0) {
+			    /* los paquetes que siguen en el socket se fechan al leerlos, no con la hora del poll() */
+			    gettimeofday(&t, NULL);
+			    current_time_today = ((t.tv_sec - midnight_t) % 86400) + t.tv_usec / 1000000.0;
+			    current_timestamp = (t.tv_sec) + (t.tv_usec / 1000000.0);
+			}
 			if (udp_size > 0)
 			    count2_udp_received++;
+			if (dest_localhost) // lo que lean los descodificadores tras el ultimo datablock son ceros, no otro paquete
+			    memset(ast_ptr_raw + udp_size, 0x00, RN_DECODE_PAD);
 
 			// se comprueba la ip de origen solo contra los radares que usan este socket
 			// (en el orden del fichero de configuracion). Si llega con la misma ip de
@@ -2066,6 +2093,7 @@ unsigned long count2_plot_malformed = 0;
 			    //if (!strcasecmp(inet_ntoa(cast_group.sin_addr), radar_definition[j*5+3])) { // filtrando por ip origen
 			    if (j != -1) {
 				unsigned char *ast_ptr_raw_tmp = ast_ptr_raw;
+				unsigned char *ast_ptr_raw_end = ast_ptr_raw + udp_size; // el buffer no se limpia: nunca leer desde aqui
 				int salir = 0;
 				
 //				for(k = j; k<socket_count; k++) {
@@ -2086,7 +2114,8 @@ unsigned long count2_plot_malformed = 0;
 				    ((dest_file_format & DEST_FILE_FORMAT_GPS) == DEST_FILE_FORMAT_GPS) ) {
 				    // solo si se descodifica tenemos que tomar precauciones con el ast
 				    // cat 10 del smr de barajas y con scr mal configurados
-				    ast_size_datablock = (ast_ptr_raw[1]<<8) + ast_ptr_raw[2];
+				    // (con menos de 3 bytes no hay cabecera CAT+LEN: tamaño 0, malformado)
+				    ast_size_datablock = (udp_size >= 3) ? (ast_ptr_raw[1]<<8) + ast_ptr_raw[2] : 0;
 				} else {
 				    ast_size_datablock = udp_size;
 				}
@@ -2099,10 +2128,19 @@ unsigned long count2_plot_malformed = 0;
 				
 				do {
 				    unsigned int crc = 0;
-				    if (ast_size_datablock < 3) {
-					/* datablock invalido (menor que la cabecera CAT+LEN): con
-					   tamaño 0 el puntero no avanzaria y el bucle no terminaria */
+				    if (ast_size_datablock < 3 || ast_size_datablock > ast_ptr_raw_end - ast_ptr_raw_tmp) {
+					/* datablock invalido: menor que la cabecera CAT+LEN (con tamaño 0 el
+					   puntero no avanzaria y el bucle no terminaria) o mayor que lo que queda
+					   del paquete (se leerian bytes de otro paquete, el buffer no se limpia).
+					   Se descarta el resto del paquete; los datablocks anteriores ya se grabaron */
 					count2_plot_malformed++;
+					if (count2_plot_malformed <= RN_MALFORMED_LOG_MAX) {
+					    log_printf(LOG_ERROR, "malformed datablock from %s (%s): cat(%d) size(%d), %ld bytes left in the udp packet(%d), rest of the packet discarded%s\n",
+						inet_ntoa(cast_group.sin_addr), radar_definition[j*5],
+						(ast_ptr_raw_end > ast_ptr_raw_tmp) ? ast_ptr_raw_tmp[0] : -1,
+						ast_size_datablock, (long) (ast_ptr_raw_end - ast_ptr_raw_tmp), udp_size,
+						(count2_plot_malformed == RN_MALFORMED_LOG_MAX) ? " (no more malformed datablocks will be logged, only counted)" : "");
+					}
 					break;
 				    }
 				    count2_plot_processed++; // smr barajas mete varios plots que hay que desmontar para fechar
@@ -2225,8 +2263,10 @@ unsigned long count2_plot_malformed = 0;
 				    }
 				    ast_ptr_raw_tmp += ast_size_datablock;
 				    // realmente, si ast_size_datablock < udp_size
-				    if (ast_ptr_raw_tmp < (ast_ptr_raw+udp_size)) {
-					ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ast_ptr_raw_tmp[2];
+				    if (ast_ptr_raw_tmp < ast_ptr_raw_end) {
+					// si quedan 1 o 2 bytes no cabe la cabecera: tamaño 0, malformado
+					ast_size_datablock = (ast_ptr_raw_end - ast_ptr_raw_tmp >= 3) ?
+					    (ast_ptr_raw_tmp[1]<<8) + ast_ptr_raw_tmp[2] : 0;
 				    } else {
 					salir=1;
 				    }
@@ -2242,10 +2282,10 @@ unsigned long count2_plot_malformed = 0;
 		    }
 		    i++;
 		}
-	    } else if ( select_count == 0 && short_timeout ) {
+	    } else if ( poll_count == 0 && short_timeout ) {
 		/* no son SELECT_TIMEOUT segundos sin datos, solo se ha acortado la espera para
 		   terminar a tiempo por "timed": no hay que reconectar */
-	    } else if ( select_count == 0 ) {
+	    } else if ( poll_count == 0 ) {
 		log_printf(LOG_VERBOSE, "%d sec(s) warning\n", SELECT_TIMEOUT);
 		if ( dest_localhost ) {
 		    close(s_output_multicast); // si no, se pierde un descriptor en cada reconexion
@@ -2255,14 +2295,14 @@ unsigned long count2_plot_malformed = 0;
 		    close(s_reader[i]);
 		}
 		socket_count = 0; setup_input_network(NULL);
-	    } else if ( errno == EINTR ) {
-		/* select() interrumpido por una señal (p.ej. nuestro propio
+	    } else if ( poll_errno == EINTR ) {
+		/* poll() interrumpido por una señal (p.ej. nuestro propio
 		   SIGTERM/SIGINT de apagado ordenado): no es un error fatal,
 		   simplemente se vuelve a evaluar la condición del while,
 		   que detectará shutdown_requested y saldrá por el camino
 		   normal de cierre (comprimir+subir la última ventana). */
 	    } else {
-		log_printf(LOG_ERROR, "socket error: %s\n", strerror(errno));
+		log_printf(LOG_ERROR, "socket error: %s\n", strerror(poll_errno));
 		exit(EXIT_FAILURE);
 	    }
 
@@ -2336,7 +2376,7 @@ unsigned long count2_plot_malformed = 0;
         count2_udp_received, count2_plot_processed, count2_plot_ignored,
         count2_plot_filtered, count2_plot_unique, count2_plot_duped);
     if (count2_plot_malformed > 0)
-	log_printf(LOG_NORMAL, "stats malformed[%ld] (datablocks with size < 3 discarded)\n", count2_plot_malformed);
+	log_printf(LOG_NORMAL, "stats malformed[%ld] (datablocks with size < 3 or beyond the end of the packet, discarded)\n", count2_plot_malformed);
 
     if (dest_localhost) { // if sending decoded asterix, tell clients that we are closing!
 	struct datablock_plot dbp;

@@ -136,7 +136,7 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   hace `fork()`; el hijo se queda con la copia (copy-on-write) del
   fichero recién cerrado y hace `close_output_file()` +
   `send_output_file()` tal cual ya existían, sin bloquear al padre, que
-  sigue leyendo `select()`/`recvfrom()` sin interrupción — así no se
+  sigue leyendo `poll()`/`recvfrom()` sin interrupción — así no se
   pierden paquetes UDP durante la rotación. Los hijos de rotación ya
   terminados se cosechan con `waitpid(-1, NULL, WNOHANG)` en cada vuelta
   del bucle — **importante**: NO se usa `signal(SIGCHLD, SIG_IGN)` para
@@ -163,7 +163,7 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   7200s (2h) por defecto — un fichero infinito no tiene sentido en este
   modo.
 - Funciona igual con la fuente en silencio total: el chequeo de rotación
-  está antes del `select()` (que tiene timeout fijo de 10s,
+  está antes del `poll()` (que tiene timeout fijo de 10s,
   `SELECT_TIMEOUT`), así que el bucle sigue iterando y rotando aunque no
   llegue ningún paquete.
 - El único estado nuevo que se reserva por rotación
@@ -212,8 +212,9 @@ parar la captura. Solo se recargan `radar_definition` y `dest_ftp_uri`; sin
   un socket nuevo no se puede abrir, ese sensor se queda sin grabar (log),
   no muere el proceso. Con `pool == NULL` (arranque y reconexión por
   `SELECT_TIMEOUT`) se comporta como siempre.
-- Como los descriptores ya no van en orden, `select()` usa `s_reader_maxfd`
-  (calculado en `setup_input_network()`), no el del último socket.
+- `setup_input_network()` rellena al final `s_reader_poll[]` (lo que se pasa
+  a `poll()`) en los tres casos (arranque, reconexión y recarga); quien
+  abra o cierre un socket de entrada fuera de ahí tiene que actualizarlo.
 - `s_reader`, `socket_first_radar`, `radar_counter*` se reservan con
   `MAX_RADAR_NUMBER` para que una recarga pueda añadir radares.
 - **Aviso de claves no recargables**: al arrancar se guarda el valor *tal
@@ -243,18 +244,24 @@ tests/load/run_load.sh <binario> <escenario> <dir_trabajo>   # un solo caso
 
 Escenarios: `base`, `decode` (dest_localhost), `noise` (ip de origen no
 configurada), `scrm` (duplicados retrasados 1,5 s), `malformed`
-(datablock de tamaño 0), `fdleak` (35 s sin tráfico), `dupgroup` (una
+(datablock de tamaño 0, otro que declara más bytes de los que trae el
+paquete y 2 bytes sueltos tras un datablock válido), `fdleak` (35 s sin
+tráfico), `dupgroup` (una
 entrada final repite el grupo:puerto del flujo 0 con origen `0.0.0.0`;
 con un socket por entrada, cada paquete del flujo 0 se graba dos veces),
 `reload` (recarga con SIGHUP en `mode_continuous`, ver sección anterior; no
 está en la lista por defecto de `compare.sh` porque el binario anterior
-muere con SIGHUP).
+muere con SIGHUP), `spread` y `spreaddecode` (como `base`/`decode`, con los
+envíos repartidos de forma uniforme; tampoco están en la lista por
+defecto).
 La configuración se genera en cada ejecución y el hash de
 `asterix_versions` se fuerza con la variable de entorno del mismo
 nombre, así que no depende de la máquina.
 Además de las pérdidas, recoge el delta de `RcvbufErrors` de
-`/proc/net/snmp` (descartes del kernel por buffer lleno) y el número de
-descriptores abiertos del lector al principio y al final.
+`/proc/net/snmp` (descartes del kernel por buffer lleno), el número de
+descriptores abiertos del lector al principio y al final, el CPU que ha
+usado (`utime+stime`, sin los hijos) y los datablocks grabados/contados
+como `malformed`.
 
 Guardar el binario "antes" (`cp bin/reader_network64 ...`) **antes** de
 tocar el código, porque `build.sh` sobrescribe `bin/`.
@@ -271,6 +278,17 @@ socket y `writev()` en gps), `dupgroup` pasó de 1000 duplicados grabados a
 0, sin cambios en el resto de escenarios (0 % de pérdidas en ambos
 binarios).
 
+Ojo con el patrón de envío: el emisor por defecto manda los 150 flujos a la
+vez en ráfagas, así que cada `poll()` devuelve muchos sockets y hay pocas
+vueltas por segundo; con `--spread` (escenarios `spread`/`spreaddecode`)
+cada paquete despierta el bucle por separado, como con radares reales. El
+mismo tráfico (7.500 pkt/s) cuesta 0,65 s de CPU en `base` y ~5,5 s en
+`spread`: cualquier coste por vuelta solo se ve en `spread`. Medidas en
+`spread` al quitar el `memset` por vuelta, vaciar los sockets y pasar a
+`poll()` (TODO 4-6): 5,67 -> 5,47 -> 5,70 -> 5,23 s; lo que queda es el
+coste de `poll()` sobre todos los sockets en cada vuelta (TODO 20).
+Entre ejecuciones la CPU varía en torno a ±2 %.
+
 ## Conclusiones de esta sesión: el código y cómo trabajar aquí
 
 ### Sobre el código
@@ -286,11 +304,11 @@ binarios).
   explícito en el sitio que corresponda, nunca `SIG_IGN` global.
 - **No había ningún manejador de señales en todo el proyecto antes de
   esta sesión** (ni SIGTERM, SIGINT, SIGALRM). En cuanto se instala uno,
-  cualquier syscall bloqueante (`select()`, `recvfrom()`...) puede
+  cualquier syscall bloqueante (`poll()`, `select()`, `recvfrom()`...) puede
   devolver `EINTR`, y el patrón de error habitual en este código es
   "cualquier error de socket es fatal, `exit(EXIT_FAILURE)`" — hay que
   revisar esos puntos y añadir un caso especial para `EINTR` (ver el de
-  `select()` en el bucle principal), o el propio manejador de apagado
+  `poll()` en el bucle principal), o el propio manejador de apagado
   ordenado provoca una salida sucia en vez de limpia.
 - **La configuración vive en variables globales sueltas**, no en un
   struct — no hay problema en añadir claves nuevas leyéndolas con
@@ -327,11 +345,21 @@ binarios).
 - **Cualquier campo de longitud leído del propio paquete hay que validarlo
   antes de usarlo para avanzar un puntero**: un tamaño 0 dejaba el
   `do/while` de datablocks sin salida y paraba la captura de todos los
-  flujos.
+  flujos. Hoy se descarta (y cuenta como `malformed`) cualquier datablock
+  con tamaño < 3 o mayor que lo que queda del paquete.
+- **El buffer de recepción (`ast_ptr_raw`) ya no se limpia en cada vuelta**
+  (era un `memset` de 64 KB): fuera de los `udp_size` bytes que devuelve
+  `recvfrom()` hay restos de paquetes anteriores. No leer nunca más allá
+  de `ast_ptr_raw_end`; la única excepción son los `RN_DECODE_PAD` bytes
+  que se ponen a cero tras el paquete con `dest_localhost`, porque los
+  descodificadores de `asterix.c` pueden leer algo más allá del último
+  datablock.
+- **Los sockets de entrada son no bloqueantes** (`O_NONBLOCK` en
+  `open_input_socket()`): cada socket listo se vacía hasta `EAGAIN`, con un
+  tope de `RN_MAX_DRAIN` (64) paquetes por vuelta. Un `recvfrom()` que
+  devuelve `EAGAIN`/`EINTR` no es un error.
 - **Problemas pendientes**: están detallados en `TODO.md` (ubicación,
-  problema, propuesta y cómo verificar cada uno). Ojo con el orden: el
-  `memset` de 64 KB por vuelta no se puede quitar antes de validar que el
-  tamaño de cada datablock no supera los bytes restantes del paquete.
+  problema, propuesta y cómo verificar cada uno).
 
 ### Sobre la forma de trabajar en este proyecto
 

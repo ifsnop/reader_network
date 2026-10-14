@@ -51,7 +51,12 @@ def main():
     ap.add_argument("--noise-rate", type=float, default=0.0,
                     help="paquetes/s desde una ip de origen NO configurada (127.0.0.2) al grupo del flujo 0")
     ap.add_argument("--malformed-at", type=float, default=-1.0,
-                    help="segundo en que se envia un datablock con tamaño 0 al flujo 0")
+                    help="segundo en que se envian al flujo 0 un datablock con tamaño 0, uno "
+                         "valido (SAC=4) seguido de otro (SAC=3) que declara mas bytes de los que "
+                         "trae, y uno valido (SAC=4) seguido de 2 bytes sueltos")
+    ap.add_argument("--spread", action="store_true",
+                    help="repartir los envios de cada ronda de forma uniforme entre los flujos "
+                         "(como radares reales, no sincronizados) en vez de mandarlos todos de golpe")
     ap.add_argument("--summary", required=True)
     args = ap.parse_args()
 
@@ -76,6 +81,10 @@ def main():
             time.sleep(next_t - now)
             continue
         for f in range(args.flows):
+            if args.spread:
+                delay = next_t + f * tick / args.flows - time.time()
+                if delay > 0:
+                    time.sleep(delay)
             pkt = datablock(f, sent[f], args.records)
             s.sendto(pkt, (groups[f], args.port))
             if args.dup_delay > 0:
@@ -93,6 +102,11 @@ def main():
                 noise_acc -= 1.0
         if args.malformed_at >= 0 and not malformed_sent and now - start >= args.malformed_at:
             s.sendto(b"\x30\x00\x00" + b"\x00" * 8, (groups[0], args.port))
+            # el SAC=3 declara 200 bytes y solo trae los de un registro: no se debe grabar
+            oversize = bytearray(datablock(0, 0, 1, sac=3))
+            oversize[1:3] = struct.pack(">H", 200)
+            s.sendto(datablock(0, 0, 1, sac=4) + bytes(oversize), (groups[0], args.port))
+            s.sendto(datablock(0, 1, 1, sac=4) + b"\x30\x00", (groups[0], args.port))
             malformed_sent = True
         next_t += tick
 

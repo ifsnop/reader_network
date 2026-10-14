@@ -1,4 +1,23 @@
 0.84
+- BUG: un datablock que declaraba más bytes de los que quedan en el
+ paquete UDP se leía más allá del paquete y se grababa relleno con ceros.
+ Ahora se descarta el resto del paquete y cuenta como malformed (también 1
+ o 2 bytes sueltos al final); los datablocks anteriores sí se graban. Los
+ 10 primeros se registran en el log con ip de origen, radar, cat y
+ tamaños, por si algún emisor real envía tamaños inconsistentes.
+- CAMBIO: el buffer de recepción ya no se pone a cero en cada vuelta del
+ bucle (64 KB); con dest_localhost solo 4 KB tras cada paquete, para los
+ descodificadores. -3,5 % de CPU con tráfico repartido.
+- CAMBIO: sockets de entrada no bloqueantes; cada socket listo se vacía
+ hasta EAGAIN (máximo 64 paquetes por vuelta) en vez de leer uno por
+ vuelta. -36 % de CPU con un flujo con mucho tráfico (escenario noise).
+- BUG: select() -> poll(). Con un descriptor >= 1024 (FD_SETSIZE)
+ select() escribía fuera del fd_set (con glibc moderna, abort). -8 % de
+ CPU con tráfico repartido.
+- ADD tests/load: escenarios spread y spreaddecode (emisor con --spread,
+ envíos repartidos como radares no sincronizados), CPU del lector y
+ datablocks malformed grabados/contados en el informe, y escenario
+ malformed con un datablock sobredimensionado y bytes sueltos.
 - ADD recarga de configuración con SIGHUP (systemctl reload) en
  mode_continuous: el .conf se relee y valida al recibir la señal y
  radar_definition y dest_ftp_uri se aplican en el próximo corte de fichero

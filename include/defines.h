@@ -45,6 +45,10 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define UNICAST_PLOTS_PORT 4001
 
 #define RN_MAX_PACKET_LENGTH 65532
+// bytes a cero tras el final de cada paquete recibido cuando se descodifica (dest_localhost):
+// los descodificadores de asterix.c pueden leer algo mas alla del ultimo datablock
+#define RN_DECODE_PAD 4096
+#define RN_MALFORMED_LOG_MAX 10 // datablocks malformados que se registran en el log (el resto solo se cuentan)
 
 #define MAX_RADAR_NUMBER 256
 #define MAX_SEGMENT_NUMBER 3200
@@ -54,6 +58,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #define UPDATE_TIME_RRD 300.0
 
 #define SELECT_TIMEOUT 10
+#define RN_MAX_DRAIN 64 // paquetes que se leen como mucho de cada socket listo por vuelta del bucle
 
 #define SCRM_MAX_QUEUE_SIZE 2500 // tamaño inicial, crece si el trafico lo necesita
 #define SCRM_MAX_QUEUE_SIZE_LIMIT 1048576 // tope de crecimiento (unos 80 MB en el peor caso)

@@ -17,7 +17,8 @@ def main():
     work, bins, scenarios = sys.argv[1], sys.argv[2:4], sys.argv[4:]
     cols = ["escenario", "binario", "estado", "pkt/s enviados", "perdidos %",
             "flujos con perdida", "peor flujo %", "flujo0 % / resto %",
-            "duplicados grabados", "fds inicio->fin", "RcvbufErrors"]
+            "duplicados grabados", "malformed grabados/contados", "fds inicio->fin",
+            "RcvbufErrors", "CPU s"]
     print("| " + " | ".join(cols) + " |")
     print("|" + "---|" * len(cols))
     for s in scenarios:
@@ -28,12 +29,13 @@ def main():
                 row = [m["achieved_pkt_s"], m["lost_pct"], "%d/150" % m["flows_with_loss"],
                        m["worst_flow_loss_pct"],
                        "%s / %s" % (m["flow0_loss_pct"], m["other_flows_loss_pct"]),
-                       m["dup_written"]]
+                       m["dup_written"],
+                       "%s/%s" % (m.get("malformed_written", "-"), meta.get("malformed_counted", "-"))]
             else:
-                row = ["-"] * 6
+                row = ["-"] * 7
             print("| " + " | ".join(str(x) for x in [s, b, meta.get("status", "?")] + row + [
                 "%s->%s" % (meta.get("fd_start", "?"), meta.get("fd_end", "?")),
-                meta.get("udp_rcvbuf_errors", "?")]) + " |")
+                meta.get("udp_rcvbuf_errors", "?"), meta.get("cpu_s", "?")]) + " |")
 
 
 if __name__ == "__main__":

@@ -47,11 +47,13 @@ compatibilidad con distribuciones Linux muy antiguas.
     interfaces (entradas con el mismo grupo:puerto e interfaz distinta):
     al reabrirlo hay que repetir todas esas suscripciones, no solo la de
     la primera entrada.
-  - `select()` ya usa como `nfds` el descriptor más alto real
-    (`s_reader_maxfd`, desde la recarga con SIGHUP), pero solo se calcula
-    en `setup_input_network()`: si se reabre un socket suelto hay que
-    actualizarlo también. Para reaprovechar código, ver el "pool" de
-    sockets de `setup_input_network()` que usa la recarga.
+  - El bucle espera con `poll()` sobre `s_reader_poll[]`, que solo se
+    rellena al final de `setup_input_network()`: si se reabre un socket
+    suelto hay que actualizar su entrada (`s_reader_poll[idx].fd`). El
+    socket nuevo tiene que ser no bloqueante, como los de
+    `open_input_socket()` (el bucle vacía cada socket hasta `EAGAIN`).
+    Para reaprovechar código, ver el "pool" de sockets de
+    `setup_input_network()` que usa la recarga.
 - **Verificar**: escenario nuevo en `tests/load/` en el que un flujo deja
   de emitir un rato y vuelve mientras el resto sigue; comprobar en el log
   que solo se reconecta ese socket y que el flujo se recupera.
@@ -77,59 +79,31 @@ compatibilidad con distribuciones Linux muy antiguas.
   - Complementario: documentar el uso con un supervisor (systemd
     `Restart=on-failure`).
 
-### 4. Datablocks cuyo tamaño supera los bytes restantes del paquete
-
-- **Dónde**: bucle de datablocks (`do { ... } while (salir==0)`),
-  `ast_size_datablock = (ast_ptr_raw[1]<<8) + ast_ptr_raw[2];`
-  (línea 1666) y `ast_size_datablock = (ast_ptr_raw_tmp[1]<<8) + ...`
-  (línea 1806).
-- **Problema**: en 0.83 se descartan los tamaños menores que 3, pero si
-  el tamaño declarado es mayor que lo que queda del paquete UDP, el
-  código lee más allá de `udp_size` y graba bytes que no pertenecen al
-  paquete. Hoy esos bytes son ceros gracias al `memset` de 64 KB que se
-  hace en cada vuelta (línea 1554); **si se quita ese `memset`
-  (punto 5), se grabarían restos de paquetes anteriores**.
-- **Propuesta**: comprobar `ast_ptr_raw_tmp + ast_size_datablock <= ast_ptr_raw + udp_size`
-  y decidir la política (descartar el resto del paquete y contarlo como
-  `malformed`, o truncar). Hay que hacerlo **antes** del punto 5.
-  Ojo con el comentario del código sobre el "cat 10 del smr de barajas y
-  scr mal configurados": puede haber emisores reales que envíen tamaños
-  inconsistentes; revisar con grabaciones reales antes de elegir.
-
 ---
 
 ## Prioridad media: rendimiento con muchos flujos
 
-### 5. Coste fijo en cada vuelta del bucle
+### 20. Coste de `poll()` por vuelta con muchos sockets
 
-- **Dónde**: bucle principal, líneas 1554-1576 y bloque
-  `if ( select_count > 0 )`.
-- **Problema**: en cada vuelta se hace:
-  - `memset` de `RN_MAX_PACKET_LENGTH` (64 KB) sobre `ast_ptr_raw`
-    (línea 1554), innecesario porque `recvfrom()` devuelve el tamaño.
-    A 5.000 vueltas/s son unos 320 MB/s de escritura en memoria.
-  - `FD_ZERO` + `FD_SET` de todos los sockets (línea 1573), `select()`
-    (O(descriptor máximo) en el kernel) y `FD_ISSET` de todos los sockets.
-  - Un solo `recvfrom()` por socket listo y vuelta: con tráfico alto se
-    repite todo lo anterior por cada paquete.
-- **Propuesta** (en este orden, midiendo cada paso con `tests/load/`):
-  1. Resolver antes el punto 4 y quitar el `memset`.
-  2. Vaciar cada socket listo con `recvfrom(..., MSG_DONTWAIT)` hasta
-     `EAGAIN`, con un tope por socket (p.ej. 64 paquetes) para no
-     desatender al resto.
-  3. Ver punto 6.
-
-### 6. `select()` y el límite de `FD_SETSIZE`
-
-- **Dónde**: línea 1576.
-- **Problema**: `select()` no admite descriptores ≥ `FD_SETSIZE` (1024);
-  `FD_SET` con un descriptor mayor escribe fuera del `fd_set` (corrupción
-  de memoria, no un error controlado). Con hasta 255 radares no se llega
-  hoy, pero cualquier fuga de descriptores (como la del socket de salida
-  corregida en 0.83) acerca el límite, sobre todo en `mode_continuous`.
-- **Propuesta**: pasar a `poll()`, disponible en cualquier distribución
-  antigua. No usar `epoll`/`recvmmsg` salvo con guardas de preprocesador
-  (Linux ≥ 2.6 / ≥ 2.6.33), por el requisito de compatibilidad.
+- **Dónde**: `poll(s_reader_poll, socket_count, ...)` en el bucle
+  principal.
+- **Problema**: con tráfico repartido en el tiempo (radares reales, no
+  sincronizados; escenario `spread` de `tests/load/`) casi cada paquete
+  despierta el bucle por separado, y cada vuelta cuesta O(número de
+  sockets) en el kernel: `poll()` registra y retira el proceso en la cola
+  de espera de los 150 sockets aunque solo uno tenga datos. Con 150 flujos
+  y 7.500 pkt/s el lector gasta ~5,2 s de CPU en 20 s (~26 % de un
+  núcleo), unos 35 us por vuelta; el mismo tráfico en ráfagas (`base`)
+  gasta 0,65 s. Quitar el `memset` (-3,5 %) y pasar de `select()` a
+  `poll()` (-8 %) apenas lo mueven: el coste está en el kernel.
+- **Propuesta**: `epoll` (Linux >= 2.6, glibc >= 2.3.2), con guarda de
+  preprocesador y `poll()` como alternativa en sistemas sin él (requisito
+  de compatibilidad). Con `epoll_wait()` el coste por vuelta depende de
+  los sockets listos, no de los configurados. El conjunto de `epoll` hay
+  que mantenerlo en `setup_input_network()` (arranque, reconexión y
+  recarga: añadir los sockets nuevos y quitar los cerrados).
+- **Verificar**: `spread` y `spreaddecode` contra el binario anterior
+  (CPU) y el resto de escenarios sin pérdidas.
 
 ---
 
@@ -137,16 +111,17 @@ compatibilidad con distribuciones Linux muy antiguas.
 
 ### 11. Corte de rotación en `mode_continuous` no es atómico por paquete
 
-- **Dónde**: chequeo de rotación (`src/reader_network.c:1527-1552`),
-  `select()`+`recvfrom()` (líneas 1576-1615) y los `write()`/`writev()` a
-  `fd_out_ast`/`fd_out_gps` (líneas 1767 y 1798).
+- **Dónde**: chequeo de rotación (bloque `if (mode_continuous &&
+  timed_t_current.tv_sec >= next_rotation_t)`), `poll()`+`recvfrom()` y
+  los `write()`/`writev()` a `fd_out_ast`/`fd_out_gps` del bucle principal.
 - **Problema**: la decisión de rotar se toma una vez por vuelta del
   bucle, **antes** de leer los paquetes pendientes, y se basa en la hora
   de proceso (`gettimeofday` al principio de la vuelta), no en la hora
   real de llegada de cada paquete (no se usa `SO_TIMESTAMP` ni nada del
-  kernel). Además solo se hace **un** `recvfrom()` por socket y vuelta
-  (no se vacía el buffer del kernel). Esto abre dos ventanas de carrera,
-  ambas acotadas a lo que tarda un `select()`+`recvfrom()` (normalmente
+  kernel). Hasta 0.84 además solo se hacía **un** `recvfrom()` por socket
+  y vuelta (hoy se vacía hasta `EAGAIN`, ver el caso 2). Esto abre dos
+  ventanas de carrera, ambas acotadas a lo que tarda un
+  `poll()`+`recvfrom()` (normalmente
   microsegundos, sin esperas artificiales en el bucle):
   1. Un paquete que llega justo **después** del corte pero se lee en una
      vuelta cuyo chequeo de rotación ya se había hecho (con
@@ -166,12 +141,11 @@ compatibilidad con distribuciones Linux muy antiguas.
   número de flujos.
 - **Decisión (2026-09-28)**: no se aborda por ahora, prioridad baja. Si
   se retoma:
-  - El caso 2 se resolvería vaciando cada socket con
-    `recvfrom(..., MSG_DONTWAIT)` hasta `EAGAIN` justo antes de rotar
-    (relacionado con el punto 5, "vaciar cada socket listo"), con
-    cuidado de no retrasar la rotación indefinidamente si el tráfico
-    nunca da un hueco (habría que decidir si acotar ese drenaje con un
-    tiempo máximo).
+  - El caso 2 está casi resuelto desde que el bucle vacía cada socket
+    listo hasta `EAGAIN` (punto 5, en "Resueltos"): lo encolado en el
+    instante del corte se lee en la misma pasada, antes de rotar. Solo
+    queda si un socket tiene más de `RN_MAX_DRAIN` (64) paquetes
+    encolados justo en el corte.
   - El caso 1 no se puede eliminar solo con drenaje: haría falta el
     timestamp real de llegada del paquete (p.ej. `SO_TIMESTAMP`) para
     decidir a qué fichero pertenece cada paquete por su hora real, no
@@ -184,17 +158,6 @@ compatibilidad con distribuciones Linux muy antiguas.
   que sincronice el envío de paquetes con los instantes de rotación
   configurados y compare, tras descomprimir, la hora de cada paquete
   contra el nombre/rango de su fichero.
-
-### 12. `EINTR` en `recvfrom()`
-
-- **Dónde**: líneas 1614-1616.
-- **Problema**: desde 0.82 hay manejadores de SIGTERM/SIGINT, y cualquier
-  error de `recvfrom()` es fatal (`exit(EXIT_FAILURE)`), incluido
-  `EINTR`. Es poco probable porque `select()` ya indicó que hay datos,
-  pero si ocurre se sale sin cierre ordenado (no se comprime ni se sube la
-  última ventana). El caso de `select()` ya se corrigió en 0.82.
-- **Propuesta**: tratar `EINTR` (y `EAGAIN` si se pasa a `MSG_DONTWAIT`,
-  punto 5) como "no hay paquete" y seguir.
 
 ### 18. Otras utilidades siguen calculando horas con `mktime()` (hora local)
 
@@ -241,6 +204,9 @@ compatibilidad con distribuciones Linux muy antiguas.
   contador `ignored`.
 - **Propuesta**: emisor en C (o varios procesos Python en paralelo) para
   poder saturar, y medir también la latencia por flujo, no solo pérdidas.
+  Desde 0.84 el emisor tiene `--spread` (escenarios `spread` y
+  `spreaddecode`), que reparte los envíos como radares no sincronizados:
+  es el caso que más CPU cuesta al lector (ver el punto 20).
 
 ### 17. Escenario para el punto 1
 
@@ -276,10 +242,42 @@ compatibilidad con distribuciones Linux muy antiguas.
 - **10. Comprobación del máximo de radares.** `parse_config()` valida, para
   multicast y broadcast, que haya 5 cadenas por radar y como mucho
   `MAX_RADAR_NUMBER` (256) radares. Con 256 ya arranca.
+- **4. Datablocks cuyo tamaño supera los bytes restantes del paquete.**
+  Se descarta el resto del paquete y cuenta como `malformed` cualquier
+  datablock con tamaño < 3 o mayor que lo que queda del paquete (también
+  si quedan 1 o 2 bytes sueltos, que no llegan a cabecera). Los
+  datablocks anteriores del mismo paquete sí se graban. Los 10 primeros se
+  registran en el log (ip de origen, radar, cat, tamaño y bytes
+  restantes), para detectar emisores reales con tamaños inconsistentes
+  (el SMR del comentario del código); antes sus bytes sobrantes se
+  grababan rellenos con ceros. Escenario `malformed` ampliado: el
+  datablock sobredimensionado pasa de grabarse a no grabarse.
+- **5. Coste fijo en cada vuelta del bucle.**
+  - Sin el `memset` de 64 KB por vuelta (posible tras el punto 4). Con
+    `dest_localhost` se ponen a cero solo `RN_DECODE_PAD` (4 KB) tras cada
+    paquete, porque los descodificadores pueden leer algo más allá del
+    último datablock. Ahorro medido: -3,5 % de CPU con tráfico repartido
+    (`spread`), nada visible con ráfagas (`base`): había pocas vueltas por
+    segundo.
+  - Sockets no bloqueantes y vaciado de cada socket listo hasta `EAGAIN`
+    (tope `RN_MAX_DRAIN`, 64). Con un socket con mucho tráfico (`noise`)
+    -36 % de CPU (1,37 -> 0,87 s); con un paquete por socket cuesta un
+    `recvfrom()` extra que devuelve `EAGAIN` (+4-10 %).
+  - El coste que queda es el de `poll()` sobre todos los sockets en cada
+    vuelta: ver el punto 20.
+- **6. `select()` y el límite de `FD_SETSIZE`.** Se usa `poll()`
+  (`s_reader_poll[]`, lo rellena `setup_input_network()`), sin límite de
+  descriptor. Probado lanzando el lector con 1100 descriptores ya
+  abiertos: con `select()` glibc aborta ("bit out of range 0 - FD_SETSIZE
+  on fd_set"; sin `_FORTIFY_SOURCE` sería corrupción de memoria), con
+  `poll()` graba todo. También -8 % de CPU en `spread`.
+- **12. `EINTR` en `recvfrom()`.** Se corrigió con la recarga por SIGHUP
+  (deja de leer ese socket en esa vuelta) y ahora va junto con `EAGAIN` en
+  el vaciado.
 - **13. Corte por `timed` hasta 20 s tarde con la fuente en silencio.** El
-  timeout del `select()` se acorta hasta el final de la grabación (sin
-  disparar la reconexión) y `timed_t_current` se actualiza después del
-  `select()`.
+  timeout del `select()` (hoy `poll()`) se acorta hasta el final de la
+  grabación (sin disparar la reconexión) y `timed_t_current` se actualiza
+  después del `select()`.
 - **14. `midnight_t` dependía de la zona horaria.** Ahora es
   `tv_sec - tv_sec % 86400`: medianoche UTC siempre. El resto de
   utilidades, en el punto 18.

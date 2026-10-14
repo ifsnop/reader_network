@@ -31,6 +31,7 @@ def main():
     flows = summ["flows"]
     seen = [collections.Counter() for _ in range(flows)]
     noise_written = 0
+    malformed_written = valid_before_malformed = 0 # SAC=3 / SAC=4 del escenario malformed
     try:
         for db in read_gps(args.file):
             if db[0] != 48 or len(db) < 14:
@@ -39,6 +40,10 @@ def main():
             seq = (db[6] << 16) | (db[7] << 8) | db[8]
             if sac == 2:
                 noise_written += 1
+            elif sac == 3:
+                malformed_written += 1
+            elif sac == 4:
+                valid_before_malformed += 1
             elif sac == 1 and sic < flows:
                 seen[sic][seq] += 1
     except FileNotFoundError:
@@ -71,6 +76,8 @@ def main():
         "flow0_loss_pct": round(loss_per_flow[0], 1) if flows else 0.0,
         "other_flows_loss_pct": round(sum(loss_per_flow[1:]) / (flows - 1), 1) if flows > 1 else 0.0,
         "noise_written": noise_written,
+        "malformed_written": malformed_written,
+        "valid_before_malformed": valid_before_malformed,
     }))
 
 
