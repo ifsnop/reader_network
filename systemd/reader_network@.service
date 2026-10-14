@@ -13,6 +13,13 @@
 # daemon(1,0) el proceso se desvincula y systemd lo daria por muerto) y
 # dest_file distinto en cada instancia.
 #
+# Cambios de sensores (radar_definition) o de dest_ftp_uri sin reiniciar
+# (solo con mode_continuous = true): editar el .conf y
+#   systemctl reload reader_network@radar1
+# El .conf se valida al momento (si tiene errores se sigue con el actual; ver
+# el journal) y se aplica en el proximo corte de fichero. El resto de claves
+# necesitan restart.
+#
 # Oneline para relanzar todos los servicios despues de un cambio de version:
 # for i in $(find /etc/reader_network.d/ -type f -name "*.conf"); do systemctl restart reader_network@$(basename -s .conf $i); done
 #
@@ -29,6 +36,8 @@ StartLimitIntervalSec=0
 Type=simple
 WorkingDirectory=/tmp
 ExecStart=/usr/local/bin/reader_network64 /etc/reader_network.d/%i.conf
+# SIGHUP: relee radar_definition y dest_ftp_uri y los aplica en el proximo corte
+ExecReload=/bin/kill -HUP $MAINPID
 # always y no on-failure: tambien se relanza si termina con codigo 0
 # (p.ej. un .conf sin mode_continuous que corta por "timed").
 # "systemctl stop" no dispara el reinicio.

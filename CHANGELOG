@@ -1,4 +1,19 @@
 0.84
+- ADD recarga de configuración con SIGHUP (systemctl reload) en
+ mode_continuous: el .conf se relee y valida al recibir la señal y
+ radar_definition y dest_ftp_uri se aplican en el próximo corte de fichero
+ (el fichero cerrado en ese corte ya se sube a los dest_ftp_uri nuevos).
+ Los sensores que siguen conservan su socket abierto (por grupo:puerto) y
+ sus suscripciones, sin perder datos; los quitados se cierran y los nuevos
+ se abren. Un .conf inválido no se aplica (se sigue con el actual) y las
+ demás claves cambiadas se ignoran con un aviso de que requieren reinicio.
+ La unidad systemd incluye ExecReload. Nuevo escenario tests/load "reload".
+- CAMBIO: SIGHUP ya no termina el proceso; sin mode_continuous se ignora.
+- CAMBIO: radar_definition valida también las ips (grupo, origen e interfaz
+ en multicast) y el puerto (1-65535); antes una ip mal escrita no daba
+ error y ese sensor simplemente no grababa nada.
+- BUG: select() usaba el descriptor del último socket como máximo; ahora
+ usa el mayor de todos (con la recarga no van en orden).
 - CAMBIO: cada fichero de salida cerrado ("output file closed: ...") y, con
  mode_continuous, el arranque y cada fichero nuevo abierto se registran con
  nivel LOG_ERROR (stderr), el unico nivel que llega al journal/syslog con

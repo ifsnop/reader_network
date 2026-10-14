@@ -47,10 +47,11 @@ compatibilidad con distribuciones Linux muy antiguas.
     interfaces (entradas con el mismo grupo:puerto e interfaz distinta):
     al reabrirlo hay que repetir todas esas suscripciones, no solo la de
     la primera entrada.
-  - `select()` usa `s_reader[socket_count - 1] + 1` como `nfds`
-    (línea 1576), suponiendo que el último socket tiene el descriptor más
-    alto; al reabrir un socket suelto eso deja de ser cierto. Calcular el
-    máximo real, o resolverlo junto con el paso a `poll()` (punto 6).
+  - `select()` ya usa como `nfds` el descriptor más alto real
+    (`s_reader_maxfd`, desde la recarga con SIGHUP), pero solo se calcula
+    en `setup_input_network()`: si se reabre un socket suelto hay que
+    actualizarlo también. Para reaprovechar código, ver el "pool" de
+    sockets de `setup_input_network()` que usa la recarga.
 - **Verificar**: escenario nuevo en `tests/load/` en el que un flujo deja
   de emitir un rato y vuelve mientras el resto sigue; comprobar en el log
   que solo se reconecta ese socket y que el flujo se recupera.
@@ -126,7 +127,6 @@ compatibilidad con distribuciones Linux muy antiguas.
   de memoria, no un error controlado). Con hasta 255 radares no se llega
   hoy, pero cualquier fuga de descriptores (como la del socket de salida
   corregida en 0.83) acerca el límite, sobre todo en `mode_continuous`.
-  Además `nfds` se calcula con el último socket (ver punto 1).
 - **Propuesta**: pasar a `poll()`, disponible en cualquier distribución
   antigua. No usar `epoll`/`recvmmsg` salvo con guardas de preprocesador
   (Linux ≥ 2.6 / ≥ 2.6.33), por el requisito de compatibilidad.

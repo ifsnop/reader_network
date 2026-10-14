@@ -93,7 +93,39 @@ struct radar_destination_s {
 
 struct radar_destination_s radar_destination[MAX_RADAR_NUMBER];
 int *socket_first_radar = NULL; // por socket (indice de s_reader[]), primer radar que lo usa (-1 = ninguno)
+int s_reader_maxfd = -1; // descriptor mas alto de s_reader[] (nfds del select(); con la recarga no van en orden)
 long source_recv_buffer_size = 212992; // SO_RCVBUF de cada socket de entrada (net.core.rmem_max por defecto en linux)
+
+/* recarga de configuracion con SIGHUP (solo mode_continuous): el .conf se lee y valida al
+   recibir la señal, y radar_definition/dest_ftp_uri nuevos se aplican en el proximo corte */
+char *conf_path = NULL; // fichero de configuracion de la linea de comandos
+volatile sig_atomic_t reload_requested = 0;
+bool reload_pending = false;
+char **pending_radar_definition = NULL, **pending_ftp_uri = NULL;
+int pending_radar_count = 0, pending_ftp_count = 0;
+
+/* sockets de entrada de la configuracion anterior, que setup_input_network() reutiliza
+   (por grupo:puerto) al aplicar una recarga, para no perder datos de los sensores que siguen */
+struct input_pool_s {
+    int count; // sockets en el pool
+    int fd[MAX_RADAR_NUMBER]; // descriptor (-1 = ya reutilizado)
+    int first[MAX_RADAR_NUMBER]; // primer radar de la configuracion anterior que lo usaba
+    int next[MAX_RADAR_NUMBER]; // radar_destination[].next de la configuracion anterior
+    char **def; // radar_definition anterior
+};
+
+/* claves que no se recargan con SIGHUP: se guarda su valor tal cual esta en el .conf al
+   arrancar (no la global, que parse_config() a veces modifica) para avisar si cambian */
+#define CFG_RAW_VALUE_SIZE 512
+static const char *fixed_keys[] = {
+    "enabled", "mode_daemon", "timed_stats_interval", "mode_scrm", "dest_debug",
+    "dest_screen_crc", "asterix_versions", "source", "source_file", "source_file_gps_version",
+    "source_recv_buffer_size", "mode_continuous", "abort_fast", "timed", "dest_free_space",
+    "dest_localhost", "dest_file_region", "dest_file_extension", "dest_file",
+    "dest_file_timestamp", "dest_file_nodirectory", "dest_file_compress", "dest_file_format",
+    "dest_filter_selection", NULL
+};
+static char fixed_keys_value[sizeof(fixed_keys)/sizeof(fixed_keys[0])][CFG_RAW_VALUE_SIZE];
 
 void setup_asterix_versions() {
     int read_size = 0, i;
@@ -159,6 +191,73 @@ void setup_asterix_versions() {
 	log_printf(LOG_ERROR, "asterix_versions close error\n"); exit(EXIT_FAILURE);
     }
     return;
+}
+
+static void free_str_array(char **array, int count) {
+    int i;
+    for (i=0; i<count; i++)
+	mem_free(array[i]);
+    if (array != NULL) mem_free(array);
+}
+
+/* valor de una clave del .conf abierto, como texto ("<unset>" si no esta) */
+static void cfg_raw_value(const char *name, char *buf, size_t size) {
+    bool b = false;
+    long n = 0;
+    char *str = NULL, **array = NULL;
+    int count = 0, i;
+
+    if (cfg_get_bool(&b, name)) {
+	snprintf(buf, size, "%s", b ? "true" : "false");
+    } else if (cfg_get_int(&n, name)) {
+	snprintf(buf, size, "%ld", n);
+    } else if (cfg_get_str(&str, name)) {
+	snprintf(buf, size, "\"%s\"", str);
+	mem_free(str);
+    } else if (cfg_get_str_array(&array, &count, name)) {
+	size_t len = 0;
+	buf[0] = '\0';
+	for (i=0; i<count && len < size; i++)
+	    len += snprintf(buf + len, size - len, "%s\"%s\"", (i ? "," : ""), array[i]);
+	free_str_array(array, count);
+    } else {
+	snprintf(buf, size, "<unset>");
+    }
+    return;
+}
+
+static bool valid_ipv4(const char *s) {
+    return (inet_addr(s) != INADDR_NONE) || !strcmp(s, "255.255.255.255");
+}
+
+/* comprueba radar_definition (al arrancar y al recargar con SIGHUP); registra el motivo si no vale */
+static bool validate_radar_definition(char **def, int count) {
+    int i;
+
+    if (count < 5 || (count % 5) != 0) {
+	log_printf(LOG_ERROR, "radar_definition needs 5 strings per radar (name, group, port, source ip, interface ip), found %d strings\n", count);
+	return false;
+    }
+    if ((count/5) > MAX_RADAR_NUMBER) {
+	log_printf(LOG_ERROR, "maximum number of radars in radar_definition exceeded (%d > %d)\n", count/5, MAX_RADAR_NUMBER);
+	return false;
+    }
+    for (i=0; i<count/5; i++) {
+	char *end = NULL;
+	long port = strtol(def[(i*5)+2], &end, 0);
+
+	if (!valid_ipv4(def[(i*5)+1]) || !valid_ipv4(def[(i*5)+3]) ||
+	    (!strncasecmp(source, "mult", 4) && !valid_ipv4(def[(i*5)+4])) ) {
+	    log_printf(LOG_ERROR, "radar_definition entry %d (%s): invalid ip address (%s, %s, %s)\n", i, def[i*5],
+		def[(i*5)+1], def[(i*5)+3], def[(i*5)+4]);
+	    return false;
+	}
+	if (end == def[(i*5)+2] || *end != '\0' || port < 1 || port > 65535) {
+	    log_printf(LOG_ERROR, "radar_definition entry %d (%s): invalid port (%s)\n", i, def[i*5], def[(i*5)+2]);
+	    return false;
+	}
+    }
+    return true;
 }
 
 void parse_config(char *conf_file) {
@@ -322,14 +421,8 @@ char *dest_file_format_string = NULL;
 	    log_printf(LOG_ERROR, "radar_definition entry missing\n");
 	    exit(EXIT_FAILURE);
 	}
-	if (radar_count < 5 || (radar_count % 5) != 0) {
-	    log_printf(LOG_ERROR, "radar_definition needs 5 strings per radar (name, group, port, source ip, interface ip), found %d strings\n", radar_count);
+	if (!validate_radar_definition(radar_definition, radar_count))
 	    exit(EXIT_FAILURE);
-	}
-	if ((radar_count/5) > MAX_RADAR_NUMBER) {
-	    log_printf(LOG_ERROR, "maximum number of radars in radar_definition exceeded (%d > %d)\n", radar_count/5, MAX_RADAR_NUMBER);
-	    exit(EXIT_FAILURE);
-	}
 	if (!strncasecmp(source, "mult", 4))
 	    log_printf(LOG_VERBOSE, "reading from multicast\n");
 	else
@@ -451,6 +544,12 @@ char *dest_file_format_string = NULL;
 	}
 	/* LOG_ERROR (stderr): es el unico nivel que llega al journal/syslog cuando stdout va a null */
 	log_printf(LOG_ERROR, "mode_continuous enabled: rotating output file every %ld secs (aligned to absolute clock), running until stopped by SIGTERM/SIGINT\n", timed);
+    }
+
+    {
+	int i;
+	for (i=0; fixed_keys[i] != NULL; i++)
+	    cfg_raw_value(fixed_keys[i], fixed_keys_value[i], CFG_RAW_VALUE_SIZE);
     }
 
     cfg_close();
@@ -870,16 +969,98 @@ void setup_recv_buffer(int s) {
     return;
 }
 
-void setup_input_network(void) {
+/* Abre, configura y suscribe el socket de entrada de la entrada i de radar_definition.
+   Devuelve el descriptor, o -1 (ya registrado en el log) si algo falla. */
+static int open_input_socket(int i) {
     struct sockaddr_in cast_group;
     struct ip_mreq mreq;
-    int i = 0, k = 0, yes = 1;
+    int s = -1, yes = 1;
+
+    if ( (s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+	log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
+	return -1;
+    }
+    if (!strncasecmp(source, "mult", 4)) {
+	unsigned char ttl = 32;
+	if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+	    log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
+	    close(s); return -1;
+	}
+	setup_recv_buffer(s);
+	if ( setsockopt(s, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
+	    log_printf(LOG_ERROR, "ip_multicast_ttl setsockopt reader %s\n", strerror(errno));
+	    close(s); return -1;
+	}
+
+	memset(&cast_group, 0, sizeof(cast_group));
+	cast_group.sin_family = AF_INET;
+	// segun documentacion, si es SOLARIS cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
+	// resto cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]);
+	//cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
+	cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]); //htonl(INADDR_ANY);
+	cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //multicast group port
+	if ( bind(s, (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
+	    log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
+	    close(s); return -1;
+	}
+
+	mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
+	mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
+	if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+	    log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
+	    close(s); return -1;
+	}
+    } else if (!strncasecmp(source, "broa", 4)) {
+	if ( setsockopt(s, SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+	    log_printf(LOG_ERROR, "reuseaddr setsockopt reader: %s\n", strerror(errno));
+	    close(s); return -1;
+	}
+	setup_recv_buffer(s);
+	cast_group.sin_family = AF_INET;
+	cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
+	cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
+	memset(&cast_group.sin_zero, 0, sizeof(cast_group.sin_zero));
+	if ( bind(s, (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
+	    // error happens when suscribing broadcast addresses
+	    // suscribing 214.25.250.255 for 214.25.250.10 &
+	    //            214.25.250.255 for 214.25.250.11
+	    // returns an "Address already in use", so comment this code.
+	    // problem is that SO_BROADCAST ignores SO_REUSEADDR
+	    //log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
+	    //exit(EXIT_FAILURE);
+	}
+    }
+    return s;
+}
+
+/* true si el socket p del pool tenia el grupo suscrito en la interfaz iface */
+static bool pool_has_iface(struct input_pool_s *pool, int p, in_addr_t iface) {
+    int j;
+    for (j = pool->first[p]; j != -1; j = pool->next[j])
+	if (inet_addr(pool->def[(j*5)+4]) == iface)
+	    return true;
+    return false;
+}
+
+/* Con pool == NULL (arranque y reconexion) abre un socket por cada grupo:puerto distinto y
+   cualquier fallo es fatal. Con pool (recarga con SIGHUP) reutiliza, sin cerrarlo, el socket
+   de la configuracion anterior con el mismo grupo:puerto (no se pierde lo que ya tiene
+   encolado ni hay que volver a suscribirse), ajusta sus suscripciones a las interfaces
+   nuevas y cierra los que ya no se usan; si falla al abrir uno nuevo, solo ese sensor se
+   queda sin grabar. */
+void setup_input_network(struct input_pool_s *pool) {
+    struct ip_mreq mreq;
+    int i = 0, k = 0, p = 0;
+    int socket_pool[MAX_RADAR_NUMBER]; // por socket, posicion del pool de la que se reutilizo (-1 = nuevo)
+    int reused = 0, opened = 0, closed = 0;
 
     socket_count = 0;
+    s_reader_maxfd = -1;
 
 	    while (i<(radar_count/5)) {
 		in_addr_t group = inet_addr(radar_definition[(i*5)+1]);
 		long port = strtol(radar_definition[(i*5)+2], NULL, 0);
+		in_addr_t iface = inet_addr(radar_definition[(i*5)+4]);
 
 		if ( i >= MAX_RADAR_NUMBER ) {
 		    log_printf(LOG_ERROR, "Max number of defined radars reached (%d), exiting\n", MAX_RADAR_NUMBER);
@@ -889,12 +1070,15 @@ void setup_input_network(void) {
 		radar_destination[i].source_addr = inet_addr(radar_definition[(i*5)+3]);
 		radar_destination[i].source_any = (radar_destination[i].source_addr == htonl(INADDR_ANY));
 		radar_destination[i].next = -1;
+		radar_destination[i].socket = -1;
+		radar_destination[i].socket_index = -1;
 
 		// se busca en todas las entradas anteriores (no solo en la i-1) un socket ya abierto
 		// para el mismo grupo y puerto: un segundo socket con SO_REUSEADDR haria que el kernel
 		// entregase cada paquete a los dos.
 		for (k=0; k<i; k++) {
-		    if ( (inet_addr(radar_definition[(k*5)+1]) == group) &&        // mismo grupo mcast
+		    if ( (radar_destination[k].socket_index != -1) &&                 // (sin socket si no se pudo abrir en una recarga)
+			(inet_addr(radar_definition[(k*5)+1]) == group) &&        // mismo grupo mcast
 			(strtol(radar_definition[(k*5)+2], NULL, 0) == port) )     // y mismo puerto
 			break;
 		}
@@ -902,7 +1086,6 @@ void setup_input_network(void) {
 		if (k < i) {
 		    int j = 0, last = -1;
 		    bool joined = false;
-		    in_addr_t iface = inet_addr(radar_definition[(i*5)+4]);
 
 		    log_printf(LOG_VERBOSE, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s) same socket as %d]\n", i,
 			radar_definition[i*5], radar_definition[(i*5)+1],
@@ -922,6 +1105,12 @@ void setup_input_network(void) {
 		    }
 		    radar_destination[last].next = i;
 
+		    // un socket reutilizado de la configuracion anterior puede tener ya el grupo
+		    // suscrito en esta interfaz (volver a pedirlo daria EADDRINUSE)
+		    if (socket_pool[radar_destination[i].socket_index] != -1 &&
+			pool_has_iface(pool, socket_pool[radar_destination[i].socket_index], iface))
+			joined = true;
+
 		    // para distintas ips de origen pero mismos grupos multicast y puertos no hace falta
 		    // volver a suscribirse, salvo que el grupo se reciba por otra interfaz
 		    if (!joined && !strncasecmp(source, "mult", 4)) {
@@ -933,76 +1122,98 @@ void setup_input_network(void) {
 			}
 		    }
 		}  else {									     // else nos suscribimos
-		    if ( (s_reader[socket_count] = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {        
-			log_printf(LOG_ERROR, "socket reader (%d) %s\n", socket_count, strerror(errno));
-			exit(EXIT_FAILURE);
+		    int fd = -1;
+
+		    p = -1;
+		    if (pool != NULL) {
+			for (p=0; p<pool->count; p++) {
+			    if ( (pool->fd[p] != -1) &&
+				(inet_addr(pool->def[(pool->first[p]*5)+1]) == group) &&
+				(strtol(pool->def[(pool->first[p]*5)+2], NULL, 0) == port) )
+				break;
+			}
+			if (p == pool->count)
+			    p = -1;
 		    }
-		    log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s) socket(%d)\n", i,
+
+		    if (p != -1) {
+			fd = pool->fd[p];
+			pool->fd[p] = -1;
+			reused++;
+			if (!strncasecmp(source, "mult", 4) && !pool_has_iface(pool, p, iface)) {
+			    mreq.imr_interface.s_addr = iface;
+			    mreq.imr_multiaddr.s_addr = group;
+			    if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+				log_printf(LOG_ERROR, "add_membership setsockopt reader (ifaz %s): %s\n", radar_definition[(i*5)+4], strerror(errno));
+			    }
+			}
+		    } else {
+			if ( (fd = open_input_socket(i)) == -1 ) {
+			    if (pool == NULL)
+				exit(EXIT_FAILURE);
+			    log_printf(LOG_ERROR, "%d] desc(%s) dest(%s:%s) src(%s) ifaz(%s) NOT RECORDED: cannot open its socket\n", i,
+				radar_definition[i*5], radar_definition[(i*5)+1],
+				radar_definition[(i*5)+2], radar_definition[(i*5)+3],
+				radar_definition[(i*5)+4]);
+			    i++;
+			    continue;
+			}
+			opened++;
+		    }
+		    s_reader[socket_count] = fd;
+		    log_printf(LOG_VERBOSE, "%d]*desc(%s) dest(%s:%s) src(%s) ifaz(%s) socket(%d)%s\n", i,
 			radar_definition[i*5], radar_definition[(i*5)+1],
 			radar_definition[(i*5)+2], radar_definition[(i*5)+3],
-			radar_definition[(i*5)+4], s_reader[socket_count]);
+			radar_definition[(i*5)+4], s_reader[socket_count], (p != -1 ? " kept open" : ""));
 
 		    radar_destination[i].socket = s_reader[socket_count];
 		    radar_destination[i].socket_index = socket_count;
 		    socket_first_radar[socket_count] = i;
+		    socket_pool[socket_count] = p;
 		    strncpy(radar_destination[i].dest_ip, radar_definition[(i*5)+1], 255);
-
-		    if (!strncasecmp(source, "mult", 4)) {
-			unsigned char ttl = 32;
-			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
-			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader %s\n", strerror(errno));
-			    exit(EXIT_FAILURE);
-			}
-			setup_recv_buffer(s_reader[socket_count]);
-			if ( setsockopt(s_reader[socket_count], IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
-			    log_printf(LOG_ERROR, "ip_multicast_ttl setsockopt reader %s\n", strerror(errno));
-			    exit(EXIT_FAILURE);
-			}
-
-			memset(&cast_group, 0, sizeof(cast_group));
-			cast_group.sin_family = AF_INET;
-			// segun documentacion, si es SOLARIS cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
-			// resto cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]);
-			//cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
-			cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]); //htonl(INADDR_ANY);
-			cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //multicast group port
-			if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
-			    log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
-			    exit(EXIT_FAILURE);
-			}
-
-			mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
-			mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
-			if (setsockopt(s_reader[socket_count], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-			    log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
-			    exit(EXIT_FAILURE);
-			}
-		    } else if (!strncasecmp(source, "broa", 4)) {
-			if ( setsockopt(s_reader[socket_count], SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
-			    log_printf(LOG_ERROR, "reuseaddr setsockopt reader: %s\n", strerror(errno));
-			    exit(EXIT_FAILURE);
-			}
-			setup_recv_buffer(s_reader[socket_count]);
-			cast_group.sin_family = AF_INET;
-			cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
-			cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
-			memset(&cast_group.sin_zero, 0, sizeof(cast_group.sin_zero));
-			if ( bind(s_reader[socket_count], (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
-			    // error happens when suscribing broadcast addresses
-			    // suscribing 214.25.250.255 for 214.25.250.10 &
-			    //            214.25.250.255 for 214.25.250.11
-			    // returns an "Address already in use", so comment this code.
-			    // problem is that SO_BROADCAST ignores SO_REUSEADDR
-			    //log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
-			    //exit(EXIT_FAILURE);
-			}
-		    }
+		    if (fd > s_reader_maxfd)
+			s_reader_maxfd = fd;
 		    // log_printf(LOG_VERBOSE, "[%d] %d/%d/%d %s:%s %s\n", s_reader[socket_count], socket_count, i, radar_count/5, 
 		    // radar_definition[i*5 + 1], radar_definition[i*5 + 2], radar_definition[i*5+3] );
 		    socket_count++;
 		}
 		i++;
 	    }
+
+    if (pool != NULL) {
+	// en los sockets reutilizados, se deja el grupo en las interfaces que ya no usa ningun radar
+	for (k=0; k<socket_count; k++) {
+	    int j, jj;
+	    if (socket_pool[k] == -1 || strncasecmp(source, "mult", 4))
+		continue;
+	    for (j = pool->first[socket_pool[k]]; j != -1; j = pool->next[j]) {
+		in_addr_t iface = inet_addr(pool->def[(j*5)+4]);
+		bool seen = false, used = false;
+		for (jj = pool->first[socket_pool[k]]; jj != j; jj = pool->next[jj]) // interfaz repetida, ya tratada
+		    if (inet_addr(pool->def[(jj*5)+4]) == iface)
+			seen = true;
+		for (jj = socket_first_radar[k]; jj != -1; jj = radar_destination[jj].next)
+		    if (inet_addr(radar_definition[(jj*5)+4]) == iface)
+			used = true;
+		if (!seen && !used) {
+		    mreq.imr_interface.s_addr = iface;
+		    mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[(socket_first_radar[k]*5)+1]);
+		    if (setsockopt(s_reader[k], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+			log_printf(LOG_ERROR, "drop_membership setsockopt reader (ifaz %s): %s\n", pool->def[(j*5)+4], strerror(errno));
+		    }
+		}
+	    }
+	}
+	// sockets de grupos:puertos que ya no estan en la configuracion
+	for (p=0; p<pool->count; p++) {
+	    if (pool->fd[p] != -1) {
+		close(pool->fd[p]);
+		pool->fd[p] = -1;
+		closed++;
+	    }
+	}
+	log_printf(LOG_ERROR, "reload: %d input sockets (%d kept open, %d opened, %d closed)\n", socket_count, reused, opened, closed);
+    }
 
     return;
 }
@@ -1128,7 +1339,157 @@ void free_config(void) {
     for(i=0; i<asterix_versions_count; i++)
         mem_free(asterix_versions[i]);
     if (asterix_versions != NULL) mem_free(asterix_versions);
+    free_str_array(pending_radar_definition, pending_radar_count);
+    free_str_array(pending_ftp_uri, pending_ftp_count);
+    if (conf_path != NULL) mem_free(conf_path);
     return;
+}
+
+/* SIGHUP: relee el .conf y deja radar_definition y dest_ftp_uri pendientes de aplicar en el
+   proximo corte. Si el fichero no vale se mantiene todo como estaba (configuracion actual y
+   la pendiente que ya hubiera). Nunca termina el proceso. */
+static void read_pending_config(void) {
+    char **def = NULL, **ftp = NULL;
+    int def_count = 0, ftp_count = 0, i;
+    char value[CFG_RAW_VALUE_SIZE];
+    struct tm *tm_next = NULL;
+
+    log_printf(LOG_ERROR, "SIGHUP received: reloading %s\n", conf_path);
+    if (!cfg_open(conf_path)) {
+	log_printf(LOG_ERROR, "reload rejected: cannot read or parse %s, keeping current configuration\n", conf_path);
+	cfg_close();
+	return;
+    }
+    if (!cfg_get_str_array(&def, &def_count, "radar_definition")) {
+	log_printf(LOG_ERROR, "reload rejected: radar_definition entry missing, keeping current configuration\n");
+	cfg_close();
+	return;
+    }
+    if (!validate_radar_definition(def, def_count)) {
+	log_printf(LOG_ERROR, "reload rejected: invalid radar_definition, keeping current configuration\n");
+	free_str_array(def, def_count);
+	cfg_close();
+	return;
+    }
+    // como al arrancar, dest_ftp_uri solo se usa si hay dest_file (y sin ella no se sube nada)
+    if (dest_file != NULL && cfg_get_str_array(&ftp, &ftp_count, "dest_ftp_uri")) {
+	for (i=0; i<ftp_count; i++) {
+	    if (strlen(ftp[i]) == 0) {
+		log_printf(LOG_ERROR, "reload rejected: empty uri in dest_ftp_uri, keeping current configuration\n");
+		free_str_array(def, def_count);
+		free_str_array(ftp, ftp_count);
+		cfg_close();
+		return;
+	    }
+	}
+    }
+    for (i=0; fixed_keys[i] != NULL; i++) {
+	cfg_raw_value(fixed_keys[i], value, sizeof(value));
+	if (strcmp(value, fixed_keys_value[i]))
+	    log_printf(LOG_ERROR, "reload: '%s' changed (%s -> %s) but requires a restart, ignored\n",
+		fixed_keys[i], fixed_keys_value[i], value);
+    }
+    cfg_close();
+
+    if (reload_pending)
+	log_printf(LOG_ERROR, "reload: replacing the previous pending configuration, not applied yet\n");
+    free_str_array(pending_radar_definition, pending_radar_count);
+    free_str_array(pending_ftp_uri, pending_ftp_count);
+    pending_radar_definition = def; pending_radar_count = def_count;
+    pending_ftp_uri = ftp; pending_ftp_count = ftp_count;
+    reload_pending = true;
+
+    tm_next = gmtime(&next_rotation_t);
+    log_printf(LOG_ERROR, "reload accepted: %d radars, %d ftp uris, to be applied at next rotation (%02d:%02d:%02d UTC)\n",
+	def_count/5, ftp_count, (tm_next ? tm_next->tm_hour : 0), (tm_next ? tm_next->tm_min : 0), (tm_next ? tm_next->tm_sec : 0));
+    return;
+}
+
+/* true si la entrada i de def (5 cadenas) esta tal cual en other */
+static bool radar_entry_in(char **def, int i, char **other, int other_count) {
+    int j, f;
+    for (j=0; j<other_count/5; j++) {
+	for (f=0; f<5; f++)
+	    if (strcmp(def[(i*5)+f], other[(j*5)+f]))
+		break;
+	if (f == 5)
+	    return true;
+    }
+    return false;
+}
+
+/* aplica la configuracion pendiente de un SIGHUP; se llama en el corte, antes del fork()
+   de la rotacion, asi que el fichero que se cierra ya se sube a los dest_ftp_uri nuevos */
+static void apply_pending_config(void) {
+    struct input_pool_s *pool = NULL;
+    char **old_def = radar_definition;
+    int old_count = radar_count, added = 0, removed = 0, i;
+
+    for (i=0; i<old_count/5; i++) {
+	if (!radar_entry_in(old_def, i, pending_radar_definition, pending_radar_count)) {
+	    log_printf(LOG_ERROR, "reload: removed radar %s %s:%s src(%s) ifaz(%s)\n", old_def[i*5],
+		old_def[(i*5)+1], old_def[(i*5)+2], old_def[(i*5)+3], old_def[(i*5)+4]);
+	    removed++;
+	}
+    }
+    for (i=0; i<pending_radar_count/5; i++) {
+	if (!radar_entry_in(pending_radar_definition, i, old_def, old_count)) {
+	    log_printf(LOG_ERROR, "reload: added radar %s %s:%s src(%s) ifaz(%s)\n", pending_radar_definition[i*5],
+		pending_radar_definition[(i*5)+1], pending_radar_definition[(i*5)+2],
+		pending_radar_definition[(i*5)+3], pending_radar_definition[(i*5)+4]);
+	    added++;
+	}
+    }
+
+    pool = (struct input_pool_s *) mem_alloc(sizeof(struct input_pool_s));
+    pool->count = socket_count;
+    pool->def = old_def;
+    for (i=0; i<socket_count; i++) {
+	pool->fd[i] = s_reader[i];
+	pool->first[i] = socket_first_radar[i];
+    }
+    for (i=0; i<old_count/5; i++)
+	pool->next[i] = radar_destination[i].next;
+
+    radar_definition = pending_radar_definition;
+    radar_count = pending_radar_count;
+    pending_radar_definition = NULL; pending_radar_count = 0;
+    memset(radar_destination, 0, sizeof(struct radar_destination_s)*MAX_RADAR_NUMBER);
+    for (i=0; i<MAX_RADAR_NUMBER; i++) {
+	s_reader[i] = -1;
+	socket_first_radar[i] = -1;
+	radar_counter[i] = 0; // los indices de radar cambian
+	radar_counter_bytes[i] = 0;
+    }
+    setup_input_network(pool);
+    mem_free(pool);
+    free_str_array(old_def, old_count);
+
+    if (dest_file != NULL) {
+	bool ftp_changed = (dest_ftp_count != pending_ftp_count);
+	for (i=0; !ftp_changed && i<dest_ftp_count; i++)
+	    ftp_changed = (strcmp(dest_ftp_uri[i], pending_ftp_uri[i]) != 0);
+	if (ftp_changed) {
+	    for (i=0; i<dest_ftp_count; i++)
+		log_printf(LOG_ERROR, "reload: ftp uri (old) %s\n", dest_ftp_uri[i]);
+	    for (i=0; i<pending_ftp_count; i++)
+		log_printf(LOG_ERROR, "reload: ftp uri (new) %s\n", pending_ftp_uri[i]);
+	}
+	free_str_array(dest_ftp_uri, dest_ftp_count);
+	dest_ftp_uri = pending_ftp_uri; dest_ftp_count = pending_ftp_count;
+    } else {
+	free_str_array(pending_ftp_uri, pending_ftp_count);
+    }
+    pending_ftp_uri = NULL; pending_ftp_count = 0;
+    reload_pending = false;
+
+    log_printf(LOG_ERROR, "reload applied: %d radars (%d added, %d removed), %d input sockets, %d ftp uris\n",
+	radar_count/5, added, removed, socket_count, dest_ftp_count);
+    return;
+}
+
+static void handle_reload(int sig) {
+    reload_requested = 1;
 }
 
 static void handle_shutdown(int sig) {
@@ -1178,8 +1539,12 @@ unsigned long count2_plot_malformed = 0;
 	exit(EXIT_SUCCESS);
     }
     parse_config(argv[1]);
+    conf_path = (char *) mem_alloc(strlen(argv[1]) + 1);
+    strcpy(conf_path, argv[1]);
     signal(SIGTERM, handle_shutdown);
     signal(SIGINT, handle_shutdown);
+    /* SIGHUP relee la configuracion (solo mode_continuous); antes terminaba el proceso */
+    signal(SIGHUP, handle_reload);
     /* OJO: no usar signal(SIGCHLD, SIG_IGN) aqui. system() (usado en mkdir y
        bzip2, en setup_output_file()/close_output_file()) necesita hacer su
        propio wait() sobre el hijo que lanza para poder devolver su codigo de
@@ -1506,19 +1871,20 @@ unsigned long count2_plot_malformed = 0;
 	int i=0,j=0;
 	setup_priority(-20);
 
-	s_reader = mem_alloc((radar_count/5)*sizeof(int));
-	socket_first_radar = mem_alloc((radar_count/5)*sizeof(int));
-	radar_counter = mem_alloc((radar_count/5)*sizeof(int));
-	radar_counter_bytes = mem_alloc((radar_count/5)*sizeof(int));
+	/* tamaño maximo y no radar_count/5: una recarga con SIGHUP puede añadir radares */
+	s_reader = mem_alloc(MAX_RADAR_NUMBER*sizeof(int));
+	socket_first_radar = mem_alloc(MAX_RADAR_NUMBER*sizeof(int));
+	radar_counter = mem_alloc(MAX_RADAR_NUMBER*sizeof(int));
+	radar_counter_bytes = mem_alloc(MAX_RADAR_NUMBER*sizeof(int));
 
-	for(i=0; i<(radar_count/5); i++) {
+	for(i=0; i<MAX_RADAR_NUMBER; i++) {
 	    s_reader[i] = -1;
 	    socket_first_radar[i] = -1;
 	    radar_counter[i] = 0; // plots recibidos por flujo
 	    radar_counter_bytes[i] = 0; // bytes recibidos por flujo
 	}
 
-	setup_input_network();
+	setup_input_network(NULL);
 
 	ast_ptr_raw = (unsigned char *) mem_alloc(RN_MAX_PACKET_LENGTH);
 	gettimeofday(&timed_t_current, NULL);
@@ -1544,8 +1910,22 @@ unsigned long count2_plot_malformed = 0;
 		while (waitpid(-1, NULL, WNOHANG) > 0) ;
 	    }
 
+	    if (reload_requested) {
+		reload_requested = 0;
+		if (mode_continuous)
+		    read_pending_config();
+		else
+		    log_printf(LOG_ERROR, "SIGHUP received: configuration reload is only supported with mode_continuous, ignored\n");
+	    }
+
 	    if (mode_continuous && timed_t_current.tv_sec >= next_rotation_t) {
-		pid_t pid = fork();
+		pid_t pid;
+		/* la configuracion de un SIGHUP se aplica en el corte y antes del fork(): el fichero
+		   que se cierra ya se sube a los dest_ftp_uri nuevos y lo que se lea desde aqui va al
+		   fichero nuevo con los sensores nuevos */
+		if (reload_pending)
+		    apply_pending_config();
+		pid = fork();
 		if (pid == 0) {
 		    /* hijo: procesa en background la ventana que se acaba de cerrar */
 		    is_rotation_child = 1; // abort_fast no debe cortar la compresion/subida de un fichero ya cerrado
@@ -1593,7 +1973,7 @@ unsigned long count2_plot_malformed = 0;
 		FD_SET(s_reader[i], &reader_set);
 	    }
 
-	    select_count = select(s_reader[socket_count - 1] + 1, &reader_set, NULL, NULL, &timeout);
+	    select_count = select(s_reader_maxfd + 1, &reader_set, NULL, NULL, &timeout);
 
 	    gettimeofday(&t, NULL); // for gps & queue timestamp
 	    timed_t_current = t; // para que la condicion del while use la hora de despues del select()
@@ -1632,6 +2012,10 @@ unsigned long count2_plot_malformed = 0;
 			memset(&cast_group, 0, sizeof(cast_group));
 			addrlen = sizeof(struct sockaddr);
 			if ((udp_size = recvfrom(s_reader[i], ast_ptr_raw, RN_MAX_PACKET_LENGTH, 0, (struct sockaddr *) &cast_group, &addrlen)) < 0) {
+			    if (errno == EINTR) { // señal (p.ej. SIGHUP) entre el select() y el recvfrom(): se lee en la siguiente vuelta
+				i++;
+				continue;
+			    }
 			    log_printf(LOG_ERROR, "ERROR recvfrom: %s\n", strerror(errno));
 			    exit(EXIT_FAILURE);
 			}
@@ -1851,7 +2235,7 @@ unsigned long count2_plot_malformed = 0;
 		for( i=0; i<socket_count; i++ ) {
 		    close(s_reader[i]);
 		}
-		socket_count = 0; setup_input_network();
+		socket_count = 0; setup_input_network(NULL);
 	    } else if ( errno == EINTR ) {
 		/* select() interrumpido por una señal (p.ej. nuestro propio
 		   SIGTERM/SIGINT de apagado ordenado): no es un error fatal,

@@ -177,6 +177,47 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
   cruzando varias rotaciones: cero duplicados escritos, cero paquetes
   perdidos.
 
+## Recarga de configuración con SIGHUP (`mode_continuous`)
+
+`kill -HUP` (o `systemctl reload reader_network@X`, la unidad tiene
+`ExecReload`) relee el `.conf` sin parar la captura. Solo se recargan
+`radar_definition` y `dest_ftp_uri`; sin `mode_continuous` SIGHUP se ignora
+(antes mataba el proceso).
+
+- **Dos fases**: al recibir la señal (`read_pending_config()`, desde el
+  bucle principal; el manejador solo pone `reload_requested`) se lee y
+  valida el `.conf` y se guarda como *pendiente*; se aplica en el próximo
+  corte (`apply_pending_config()`, en el bloque de rotación **antes del
+  `fork()`**), así cada fichero tiene un conjunto de sensores homogéneo y
+  el fichero que se cierra en ese corte ya se sube a los FTP nuevos. Un
+  `.conf` inválido no toca nada (ni la config actual ni el pendiente
+  anterior); varios SIGHUP antes del corte: gana el último. Nada en este
+  camino puede hacer `exit()`.
+- **Sockets reutilizados por grupo:puerto**: `setup_input_network(pool)`
+  recibe los sockets de la config anterior y reutiliza el descriptor si el
+  grupo:puerto sigue, sin cerrarlo (se conserva lo encolado y la
+  suscripción IGMP); solo ajusta suscripciones por interfaz
+  (`IP_ADD/DROP_MEMBERSHIP`), cierra los que sobran y abre los nuevos. Si
+  un socket nuevo no se puede abrir, ese sensor se queda sin grabar (log),
+  no muere el proceso. Con `pool == NULL` (arranque y reconexión por
+  `SELECT_TIMEOUT`) se comporta como siempre.
+- Como los descriptores ya no van en orden, `select()` usa `s_reader_maxfd`
+  (calculado en `setup_input_network()`), no el del último socket.
+- `s_reader`, `socket_first_radar`, `radar_counter*` se reservan con
+  `MAX_RADAR_NUMBER` para que una recarga pueda añadir radares.
+- **Aviso de claves no recargables**: al arrancar se guarda el valor *tal
+  cual está en el `.conf`* de cada clave de `fixed_keys[]` (no la global:
+  `parse_config()` cambia algunas, p.ej. `timed` → 7200) y en la recarga se
+  compara. Si se añade una clave nueva a `parse_config()`, añadirla a
+  `fixed_keys[]` (o hacerla recargable).
+- `validate_radar_definition()` es común a arranque (fatal) y recarga
+  (rechazo): 5 cadenas por radar, máx. 256, ips y puerto válidos.
+- Prueba: escenario `reload` de `tests/load/` (comprobado por
+  `check_reload.py`, usa `file://` como `dest_ftp_uri` porque el curl de
+  `3rdparty/` lo soporta). Las suscripciones en varias interfaces no se
+  pueden probar en loopback: se verificaron a mano con `lo` + `eth0`
+  mirando `/proc/net/igmp`.
+
 ## Prueba de carga (`tests/load/`)
 
 Compara dos binarios con muchos flujos multicast en loopback (150 por
@@ -193,7 +234,10 @@ Escenarios: `base`, `decode` (dest_localhost), `noise` (ip de origen no
 configurada), `scrm` (duplicados retrasados 1,5 s), `malformed`
 (datablock de tamaño 0), `fdleak` (35 s sin tráfico), `dupgroup` (una
 entrada final repite el grupo:puerto del flujo 0 con origen `0.0.0.0`;
-con un socket por entrada, cada paquete del flujo 0 se graba dos veces).
+con un socket por entrada, cada paquete del flujo 0 se graba dos veces),
+`reload` (recarga con SIGHUP en `mode_continuous`, ver sección anterior; no
+está en la lista por defecto de `compare.sh` porque el binario anterior
+muere con SIGHUP).
 La configuración se genera en cada ejecución y el hash de
 `asterix_versions` se fuerza con la variable de entorno del mismo
 nombre, así que no depende de la máquina.
