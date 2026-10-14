@@ -99,6 +99,7 @@ long source_recv_buffer_size = 212992; // SO_RCVBUF de cada socket de entrada (n
 /* recarga de configuracion con SIGHUP (solo mode_continuous): el .conf se lee y valida al
    recibir la señal, y radar_definition/dest_ftp_uri nuevos se aplican en el proximo corte */
 char *conf_path = NULL; // fichero de configuracion de la linea de comandos
+bool config_check = false; // "-t": solo validar el .conf y salir (ExecReload de la unidad systemd)
 volatile sig_atomic_t reload_requested = 0;
 bool reload_pending = false;
 char **pending_radar_definition = NULL, **pending_ftp_uri = NULL;
@@ -264,7 +265,7 @@ void parse_config(char *conf_file) {
 char *dest_file_format_string = NULL;
 
     if (!cfg_open(conf_file)) {
-	log_printf(LOG_ERROR, "please create reader_network.conf or check for duplicate entry\n");
+	log_printf(LOG_ERROR, "cannot read %s: please create it or check for syntax errors/duplicate entries\n", conf_file);
 	exit(EXIT_FAILURE);
     }
     cfg_get_bool(&enabled, "enabled");
@@ -275,7 +276,7 @@ char *dest_file_format_string = NULL;
 
     cfg_get_bool(&mode_daemon, "mode_daemon");
     cfg_get_int(&timed_stats_interval, "timed_stats_interval");
-    if (mode_daemon) {
+    if (mode_daemon && !config_check) {
 #if defined(__sun)
 	long retcode; int fd = 0;
 #endif
@@ -383,7 +384,7 @@ char *dest_file_format_string = NULL;
     }
     
     if (!cfg_get_str(&source, "source")) {
-	log_printf(LOG_VERBOSE, "source must be file, multicast or broadcast\n");
+	log_printf(LOG_ERROR, "source must be file, multicast or broadcast\n");
 	exit(EXIT_FAILURE);
     }
     if (!strncasecmp(source, "file", 4)) {
@@ -542,8 +543,10 @@ char *dest_file_format_string = NULL;
 	    log_printf(LOG_ERROR, "mode_continuous requires dest_file_timestamp=true (otherwise rotation would overwrite the same file)\n");
 	    exit(EXIT_FAILURE);
 	}
-	/* LOG_ERROR (stderr): es el unico nivel que llega al journal/syslog cuando stdout va a null */
-	log_printf(LOG_ERROR, "mode_continuous enabled: rotating output file every %ld secs (aligned to absolute clock), running until stopped by SIGTERM/SIGINT\n", timed);
+	/* LOG_ERROR (stderr): es el unico nivel que llega al journal/syslog cuando stdout va a null
+	   (no con -t: en cada "systemctl reload" pareceria un arranque) */
+	if (!config_check)
+	    log_printf(LOG_ERROR, "mode_continuous enabled: rotating output file every %ld secs (aligned to absolute clock), running until stopped by SIGTERM/SIGINT\n", timed);
     }
 
     {
@@ -1528,8 +1531,16 @@ unsigned long count2_plot_malformed = 0;
     printf("reader_network_%s" COPYRIGHT_NOTICE, ARCH, VERSION);
     startup();
     memset(full_tod, 0x00, MAX_RADAR_NUMBER*TTOD_WIDTH);
+    /* -t <config_file>: valida el .conf igual que al arrancar y sale (0 = valido), sin
+       grabar ni tocar al proceso que este corriendo; la unidad systemd lo ejecuta en
+       ExecReload antes del SIGHUP, para que "systemctl reload" falle si el .conf no vale */
+    if ( argc==3 && !strcmp(argv[1], "-t") ) {
+	config_check = true;
+	argv++;
+	argc--;
+    }
     if ( argc!=2 ) {
-	log_printf(LOG_ERROR, "usage: %s <config_file>\n\n", argv[0]);
+	log_printf(LOG_ERROR, "usage: %s [-t] <config_file>\n\n", argv[0]);
 	exit(EXIT_FAILURE);
     }
     setup_asterix_versions();
@@ -1539,6 +1550,14 @@ unsigned long count2_plot_malformed = 0;
 	exit(EXIT_SUCCESS);
     }
     parse_config(argv[1]);
+    if (config_check) {
+	/* LOG_ERROR (stderr): es lo que llega al journal; stdout va a null en la unidad */
+	if (!mode_continuous)
+	    log_printf(LOG_ERROR, "warning: mode_continuous is not enabled in %s: a running reader_network ignores SIGHUP (reload)\n", argv[1]);
+	log_printf(LOG_ERROR, "configuration ok: %s\n", argv[1]);
+	free_config();
+	exit(EXIT_SUCCESS);
+    }
     conf_path = (char *) mem_alloc(strlen(argv[1]) + 1);
     strcpy(conf_path, argv[1]);
     signal(SIGTERM, handle_shutdown);

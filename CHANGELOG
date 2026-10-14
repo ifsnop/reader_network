@@ -7,7 +7,15 @@
  sus suscripciones, sin perder datos; los quitados se cierran y los nuevos
  se abren. Un .conf inválido no se aplica (se sigue con el actual) y las
  demás claves cambiadas se ignoran con un aviso de que requieren reinicio.
- La unidad systemd incluye ExecReload. Nuevo escenario tests/load "reload".
+ Nuevo escenario tests/load "reload".
+- ADD "reader_network64 -t <config_file>": valida el .conf igual que al
+ arrancar (sin daemon ni grabar) y sale con 0 si es válido o 1 con el
+ motivo en stderr. La unidad systemd lo usa en ExecReload antes de mandar
+ SIGHUP, así "systemctl reload" falla si el .conf no vale (el proceso ni
+ se entera) y el motivo queda en el journal.
+- CAMBIO: el error de cfg_open() indica el fichero ("cannot read <conf>")
+ y "source must be file, multicast or broadcast" sale por stderr
+ (LOG_ERROR), antes iba a stdout y con la unidad systemd se perdía.
 - CAMBIO: SIGHUP ya no termina el proceso; sin mode_continuous se ignora.
 - CAMBIO: radar_definition valida también las ips (grupo, origen e interfaz
  en multicast) y el puerto (1-65535); antes una ip mal escrita no daba

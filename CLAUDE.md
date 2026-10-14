@@ -179,10 +179,21 @@ la red indefinidamente hasta recibir `SIGTERM`/`SIGINT`. Puntos clave:
 
 ## Recarga de configuración con SIGHUP (`mode_continuous`)
 
-`kill -HUP` (o `systemctl reload reader_network@X`, la unidad tiene
-`ExecReload`) relee el `.conf` sin parar la captura. Solo se recargan
-`radar_definition` y `dest_ftp_uri`; sin `mode_continuous` SIGHUP se ignora
-(antes mataba el proceso).
+`kill -HUP` (o `systemctl reload reader_network@X`) relee el `.conf` sin
+parar la captura. Solo se recargan `radar_definition` y `dest_ftp_uri`; sin
+`mode_continuous` SIGHUP se ignora (antes mataba el proceso).
+
+- **`systemctl reload` síncrono con el resultado**: un `ExecReload=kill -HUP`
+  solo es asíncrono y el reload siempre "sale bien" aunque el proceso rechace
+  el `.conf`. Por eso la unidad hace primero
+  `ExecReload=reader_network64 -t <conf>` (valida como al arrancar, sin
+  `daemon()` ni grabar, sale 0/1) y luego `kill -HUP`: si `-t` falla,
+  systemd no ejecuta el segundo, `systemctl reload` devuelve error, el
+  motivo queda en el journal y el servicio sigue `active` con el mismo PID.
+  Se descartó `Type=notify-reload` (systemd >= 253, no está en RHEL 8/9 ni
+  Debian 12) porque además no puede devolver error. Con `-t` no se loguea
+  la línea "mode_continuous enabled" (parecería un arranque en el journal).
+  Verificado con una copia de la unidad en `systemctl --user` (systemd 255).
 
 - **Dos fases**: al recibir la señal (`read_pending_config()`, desde el
   bucle principal; el manejador solo pone `reload_requested`) se lee y
