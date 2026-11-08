@@ -1,4 +1,10 @@
 0.84
+- CAMBIO: gps_stream.h separa la salida (gs_writer) de la entrada, para
+ que varias entradas puedan escribir en la misma salida en orden
+ (joingps_s), añade gs_emit() para escribir bytes cualesquiera (solo el
+ datablock, texto), la copia de la cabecera es opcional y la lectura del
+ SAC/SIC (gs_get_sacsic) pasa a ser común. Sin cambios en la salida ni en
+ la velocidad de filtertime_s, filtercat_s y filtersacsic_s.
 - ADD filtersacsic_s admite cualquier número de parejas SAC/SIC (antes una
  o dos) con la misma regla que filtercat_s: todas positivas (solo pasan
  esos sensores) o todas negativas (se quitan esos). Mapa de bits por

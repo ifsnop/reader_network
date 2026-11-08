@@ -28,25 +28,6 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 
 #define DEBUG 0
 
-/* Devuelve 1 y el SAC/SIC del primer registro del datablock si este trae
- * I0xx/010 (bit 0x80 del primer byte del FSPEC; es el FRN 1 en las
- * categorías habituales). El FSPEC y el SAC/SIC tienen que caber en el
- * datablock. */
-static int get_sacsic(const unsigned char *db, size_t db_bytes, unsigned char *sac, unsigned char *sic) {
-    size_t o = 3;
-    if ( db_bytes < 6 || 0 == (db[3] & 0x80) )
-	return 0;
-    while ( db[o] & 1 ) { // FX: el FSPEC sigue en el byte siguiente
-	if ( ++o + 2 >= db_bytes )
-	    return 0;
-    }
-    if ( o + 2 >= db_bytes )
-	return 0;
-    *sac = db[o + 1];
-    *sic = db[o + 2];
-    return 1;
-}
-
 int main(int argc, char *argv[]) {
     int pre_bytes = 0, post_bytes = 0, header_bytes = 0;
     int i, negative = -1;
@@ -102,7 +83,7 @@ int main(int argc, char *argv[]) {
     while ( NULL != (db = gs_next(&gs, &db_bytes)) ) {
 	unsigned char db_sac = 0, db_sic = 0;
 	if ( DEBUG ) print_bytes(db, db_bytes);
-	if ( get_sacsic(db, db_bytes, &db_sac, &db_sic) ) {
+	if ( gs_get_sacsic(db, db_bytes, &db_sac, &db_sic) ) {
 	    int key = (db_sac << 8) | db_sic;
 	    int in_list = (sel[key >> 3] >> (key & 7)) & 1;
 	    if ( DEBUG ) fprintf(stderr, "db_sac %d db_sic %d in_list %d\n", db_sac, db_sic, in_list);
