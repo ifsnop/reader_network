@@ -289,6 +289,31 @@ mismo tráfico (7.500 pkt/s) cuesta 0,65 s de CPU en `base` y ~5,5 s en
 coste de `poll()` sobre todos los sockets en cada vuelta (TODO 20).
 Entre ejecuciones la CPU varía en torno a ±2 %.
 
+## Utilidades `*_s` de `src/utils` y `gps_stream.h`
+
+`filtertime_s`, `filtercat_s`, `filtersacsic_s`, `joingps_s`, `cleanast_s` y
+`listersacsic_s` leen y escriben con `src/utils/gps_stream.h` (incluido desde
+cada `.c`, sin tocar `build.sh`; incluirlo el primero porque define
+`_FILE_OFFSET_BITS`). Las demás utilidades de `src/utils` siguen con
+`fread`/`fwrite` por registro. Al migrar otra: comparar con `cmp` contra el
+binario anterior y medir (ver la sección siguiente).
+
+- **Escrituras pequeñas = millones de syscalls.** Escribir cada tramo de
+  registros aceptados con su propio `write()` hacía `filtercat_s` más lento
+  que el stdio antiguo (con categorías intercaladas los tramos son de pocos
+  registros). Por eso los tramos < 256 KB se copian a un buffer de 1 MiB.
+- **Al medir escribiendo a disco, truncar la salida fuera del tiempo
+  medido** (`: > out; sync` antes de lanzar). Si cada ejecución sobrescribe
+  el fichero de 1,4 GB de la anterior, el truncado y la escritura de las
+  páginas sucias entran en la medida y llegaron a dar el nuevo binario como
+  más lento cuando no lo era. Escribir a disco en esta VM es muy ruidoso.
+- Las salidas de prueba de 1,5-3 GB llenan el disco enseguida: comparar
+  por `md5sum` de stdout en vez de escribir ficheros.
+- Reglas de los filtros: o todo positivo (solo pasan esos) o todo negativo
+  (se quitan esos); el signo se lee del texto (`-0` es negativo); un sensor
+  es siempre una pareja SAC/SIC exacta con el mismo signo en los dos
+  números (`0 -118` se acepta como `-0 -118`).
+
 ## Ficheros `.gps` sintéticos (`tests/gps/gen_gps.py`)
 
 Genera un `.gps` con el formato de `reader_network` (cabecera 0xCD y trailer
