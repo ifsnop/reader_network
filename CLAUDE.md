@@ -296,9 +296,14 @@ de 10 bytes con la hora en 1/128 s) para probar las utilidades de
 `src/utils` sin grabaciones reales. Las horas son monótonas y cruzan la
 medianoche (por defecto de 23:55 a 24 h 15 min después, 100 registros/s,
 ~1,5 GB). La semilla es fija, así que con los mismos argumentos el fichero
-es idéntico. Opciones: `--rate`, `--start`, `--hours`, `--pre`, `--header` y
-`--seed`; ver `-h`. Los datablocks no son ASTERIX válido (solo categoría y
-longitud), así que no sirven para los descodificadores.
+es idéntico. Opciones: `--rate`, `--start`, `--hours`, `--pre`, `--header`,
+`--seed`, `--cats 48,34,...` (categorías al azar de la lista) y
+`--sensors 0:118,20:5,...` (cada datablock empieza con un FSPEC con el bit
+0x80, de 1 o 2 bytes, y un SAC/SIC de la lista, como lo leen
+`filtersacsic*`); ver `-h`. Sin `--cats`/`--sensors` el fichero es el mismo
+que antes de existir esas opciones. Los datablocks no son ASTERIX válido
+(solo categoría, longitud y, con `--sensors`, el SAC/SIC), así que no
+sirven para los descodificadores.
 
 Para comparar un binario antes y después de un cambio: `cmp` de las salidas
 en varias ventanas, con `TZ=UTC` si el binario antiguo usa `mktime()`, y

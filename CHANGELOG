@@ -1,7 +1,8 @@
 0.84
 - ADD tests/gps/gen_gps.py: generador de ficheros .gps sintéticos (horas
  monótonas que cruzan la medianoche, semilla fija) para probar y medir
- las utilidades de src/utils.
+ las utilidades de src/utils. Con --cats y --sensors mezcla categorías y
+ sensores (SAC/SIC) elegidos al azar de una lista.
 - BUG: filtertime_s descartaba la fracción del último segundo del rango
  (end_time HH:MM terminaba en HH:MM:59,000), así que al encadenar
  ventanas consecutivas (00:00-00:59 y 01:00-01:59) se perdía casi 1 s de
