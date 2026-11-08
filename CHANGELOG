@@ -1,4 +1,8 @@
 0.84
+- CAMBIO: cleanast_s usa gps_stream.h (lectura por bloques y salida con
+ buffer): de 1,08 s a 0,25 s con un .gps de 1,5 GB en cache, misma
+ salida. Si el último registro tiene el trailer truncado, ahora se
+ descarta también su datablock (antes se escribía).
 - CAMBIO: gps_stream.h separa la salida (gs_writer) de la entrada, para
  que varias entradas puedan escribir en la misma salida en orden
  (joingps_s), añade gs_emit() para escribir bytes cualesquiera (solo el
