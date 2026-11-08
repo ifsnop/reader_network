@@ -33,9 +33,6 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
-#define __USE_XOPEN
-#define _GNU_SOURCE
-#include <time.h>
 #include "defines.h"
 
 #define DEBUG 0
@@ -56,6 +53,24 @@ void print_bytes(unsigned char* p, ssize_t count) {
 	    fprintf(stderr, "%02X", p[i]);
     fprintf(stderr, "]\n");
     return;
+}
+
+/* "HH:MM" (hora de 1 o 2 cifras, minutos de 2) -> segundos desde las
+ * 00:00 UTC, que es la referencia del fechado gps. Devuelve -1 si el
+ * formato no es exactamente ese o la hora no es válida. No se usa
+ * strptime()+mktime(): mktime() interpreta la hora como local y el rango
+ * salía desplazado si la máquina no estaba en UTC. */
+static long parse_hhmm(const char *s) {
+    int h = 0, m = 0, i = 0;
+    if ( s[i] < '0' || s[i] > '9' ) return -1;
+    h = s[i++] - '0';
+    if ( s[i] >= '0' && s[i] <= '9' ) h = h * 10 + (s[i++] - '0');
+    if ( s[i++] != ':' ) return -1;
+    if ( s[i] < '0' || s[i] > '9' || s[i+1] < '0' || s[i+1] > '9' ) return -1;
+    m = (s[i] - '0') * 10 + (s[i+1] - '0');
+    if ( s[i+2] != '\0' ) return -1;
+    if ( h > 23 || m > 59 ) return -1;
+    return h * 3600L + m * 60L;
 }
 
 void print_separator() {
@@ -112,11 +127,7 @@ int main(int argc, char *argv[]) {
 
     int skip_midnight = 0;
 
-    struct tm start_date_tm;
-    struct tm end_date_tm;
-    char start_date_str[256], end_date_str[256];
-    time_t start_date_timet;
-    time_t end_date_timet;
+    long start_s, end_s;
 
     if( argc != 8 ) {
 	printf("filtertime_s%s" COPYRIGHT_NOTICE, ARCH, VERSION);
@@ -130,33 +141,18 @@ int main(int argc, char *argv[]) {
     pre_bytes = atoi(argv[4]);
     post_bytes = atoi(argv[5]);
 
-    // inicializamos
-    memset(start_date_str, 0, 256);
-    memset(end_date_str, 0, 256);
-    memset(&start_date_tm, 0, sizeof(struct tm));
-    memset(&end_date_tm, 0, sizeof(struct tm));
-
-    // formateamos la fecha de entrada en un string
-    snprintf(start_date_str, 20, "1970-01-01 %s:00", argv[6]);
-    snprintf(end_date_str, 20, "1970-01-01 %s:59", argv[7]);
-
-    // usamos strptime para pasar de string a struct tm
-    strptime(start_date_str, "%Y-%m-%d %H:%M:%S", &start_date_tm);
-    strptime(end_date_str, "%Y-%m-%d %H:%M:%S", &end_date_tm);
-
-    start_date_timet = mktime(&start_date_tm);
-    end_date_timet = mktime(&end_date_tm);
-
-    if ( (time_t) -1 == start_date_timet ) {
-	fprintf(stderr, "error in start_time (%s)\n", strerror(errno)); exit(1);
+    // segundos desde las 00:00 UTC; end incluye hasta el segundo :59
+    if ( (start_s = parse_hhmm(argv[6])) < 0 ) {
+	fprintf(stderr, "error in start_time (%s), expected HH:MM\n", argv[6]); exit(1);
     }
-
-    if ( (time_t) -1 == end_date_timet ) {
-	fprintf(stderr, "error in end_time (%s)\n", strerror(errno)); exit(1);
+    if ( (end_s = parse_hhmm(argv[7])) < 0 ) {
+	fprintf(stderr, "error in end_time (%s), expected HH:MM\n", argv[7]); exit(1);
     }
+    end_s += 59;
 
-    fprintf(stderr, "start_date(%s=>%ld)/end_date(%s=>%ld)\n",
-	start_date_str, start_date_timet, end_date_str, end_date_timet);
+    fprintf(stderr, "start_date(1970-01-01 %02ld:%02ld:%02ld=>%ld)/end_date(1970-01-01 %02ld:%02ld:%02ld=>%ld)\n",
+	start_s / 3600, start_s / 60 % 60, start_s % 60, start_s,
+	end_s / 3600, end_s / 60 % 60, end_s % 60, end_s);
 
     if ( post_bytes != 10 ) {
 	fprintf(stderr, "error post bytes must be 10\n"); exit(1);
@@ -168,8 +164,8 @@ int main(int argc, char *argv[]) {
     // la hora gps (24 bits, < 2^24) cabe exacta en un float, así que
     // comparar raw contra t*128 en enteros equivale a comparar raw/128.0
     // contra t como se hacía antes
-    start128 = (long) start_date_timet * 128;
-    end128 = (long) end_date_timet * 128;
+    start128 = start_s * 128;
+    end128 = end_s * 128;
 
     if ( !strcmp(argv[1], "-") ) {
 	fin = 0;

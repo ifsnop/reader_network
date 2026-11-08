@@ -162,18 +162,13 @@ compatibilidad con distribuciones Linux muy antiguas.
 ### 18. Otras utilidades siguen calculando horas con `mktime()` (hora local)
 
 - **Dónde**: `src/utils/reader_file.c:83` (`t3 = mktime(t2)`, medianoche
-  del día), `src/utils/filtertime_s.c:149-150` (convierte las horas de
-  inicio/fin del filtro con `mktime()` y las compara con la hora gps, que
-  son segundos desde las 00:00 UTC) y `src/reader_rrd3.c:436`
-  (deshabilitado en `build.sh`).
+  del día) y `src/reader_rrd3.c:436` (deshabilitado en `build.sh`).
+  `filtertime_s` ya está corregido (0.84).
 - **Problema**: el mismo que se corrigió en `reader_network` en 0.84
   (punto 14): `mktime()` interpreta la fecha como hora local, así que solo
-  dan el resultado correcto si el sistema está en UTC. En `filtertime_s`
-  el rango filtrado saldría desplazado el desfase de la zona horaria.
+  dan el resultado correcto si el sistema está en UTC.
 - **Propuesta**: calcular en UTC. Para la medianoche,
-  `tv_sec - tv_sec % 86400`. Para `filtertime_s`, pasar `HH:MM:SS`
-  directamente a segundos del día (`h*3600 + m*60 + s`) en vez de
-  `strptime()` + `mktime()`.
+  `tv_sec - tv_sec % 86400`.
 
 ### 19. SIGTERM/SIGINT no interrumpen la compresión/subida final
 

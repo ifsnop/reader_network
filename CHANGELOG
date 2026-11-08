@@ -1,4 +1,10 @@
 0.84
+- BUG: filtertime_s convertía start_time/end_time con mktime() (hora
+ local): si la máquina no estaba en UTC el rango salía desplazado. Ahora
+ se calculan como segundos desde las 00:00 UTC. Solo se acepta HH:MM
+ (hora de 1 o 2 cifras); antes "HH:MM:SS" y "HH" funcionaban por
+ accidente y "24:00", "23:60" o "ab" daban un rango erróneo sin avisar.
+ Ahora todo eso termina con error.
 - CAMBIO: filtertime_s lee la entrada en bloques de 4 MiB y parsea los
  registros dentro del buffer (antes 3 fread + 3 fwrite por registro) y
  escribe los registros aceptados consecutivos con un solo write(). Al
