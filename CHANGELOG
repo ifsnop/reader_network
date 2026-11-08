@@ -1,4 +1,12 @@
 0.84
+- CAMBIO: listersacsic_s usa gps_stream.h y formatea las líneas sin
+ printf(): de 1,53 s a 0,37 s con un .gps de 1,5 GB en cache, misma
+ salida. Ya no lee fuera del datablock si el FSPEC no cabe (imprimía
+ basura).
+- ADD listersacsic_s -c: una línea por sensor con el número de
+ datablocks, en el formato de "sort | uniq -c" y en orden numérico de
+ SAC y SIC (igual que "sort -n -k1,1 -k2,2 | uniq -c"). 0,30 s frente a
+ 5,14 s del listado con sort | uniq -c.
 - CAMBIO: cleanast_s usa gps_stream.h (lectura por bloques y salida con
  buffer): de 1,08 s a 0,25 s con un .gps de 1,5 GB en cache, misma
  salida. Si el último registro tiene el trailer truncado, ahora se
