@@ -1,4 +1,9 @@
 0.84
+- BUG: filtertime_s descartaba la fracción del último segundo del rango
+ (end_time HH:MM terminaba en HH:MM:59,000), así que al encadenar
+ ventanas consecutivas (00:00-00:59 y 01:00-01:59) se perdía casi 1 s de
+ datos en cada borde (99 registros a 100 registros/s). Ahora end_time
+ incluye el segundo :59 entero y las ventanas encajan byte a byte.
 - BUG: filtertime_s convertía start_time/end_time con mktime() (hora
  local): si la máquina no estaba en UTC el rango salía desplazado. Ahora
  se calculan como segundos desde las 00:00 UTC. Solo se acepta HH:MM

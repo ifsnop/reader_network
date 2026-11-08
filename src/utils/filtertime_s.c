@@ -161,11 +161,13 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "error headerbytes and prebytes must be >= 0\n"); exit(1);
     }
 
-    // la hora gps (24 bits, < 2^24) cabe exacta en un float, así que
-    // comparar raw contra t*128 en enteros equivale a comparar raw/128.0
-    // contra t como se hacía antes
+    // en unidades de 1/128 s. end128 es el último instante del segundo :59
+    // (HH:MM:59 + 127/128): con end128 = end_s*128 se descartaban los
+    // registros de HH:MM:59,008 a HH:MM:59,992 y, al encadenar ventanas
+    // consecutivas (00:00-00:59 y 01:00-01:59), se perdía casi 1 s de datos
+    // en cada borde. Así las ventanas encajan sin huecos ni solapes.
     start128 = start_s * 128;
-    end128 = end_s * 128;
+    end128 = (end_s + 1) * 128 - 1;
 
     if ( !strcmp(argv[1], "-") ) {
 	fin = 0;
