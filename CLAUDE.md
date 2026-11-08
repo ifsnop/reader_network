@@ -289,6 +289,23 @@ mismo tráfico (7.500 pkt/s) cuesta 0,65 s de CPU en `base` y ~5,5 s en
 coste de `poll()` sobre todos los sockets en cada vuelta (TODO 20).
 Entre ejecuciones la CPU varía en torno a ±2 %.
 
+## Ficheros `.gps` sintéticos (`tests/gps/gen_gps.py`)
+
+Genera un `.gps` con el formato de `reader_network` (cabecera 0xCD y trailer
+de 10 bytes con la hora en 1/128 s) para probar las utilidades de
+`src/utils` sin grabaciones reales. Las horas son monótonas y cruzan la
+medianoche (por defecto de 23:55 a 24 h 15 min después, 100 registros/s,
+~1,5 GB). La semilla es fija, así que con los mismos argumentos el fichero
+es idéntico. Opciones: `--rate`, `--start`, `--hours`, `--pre`, `--header` y
+`--seed`; ver `-h`. Los datablocks no son ASTERIX válido (solo categoría y
+longitud), así que no sirven para los descodificadores.
+
+Para comparar un binario antes y después de un cambio: `cmp` de las salidas
+en varias ventanas, con `TZ=UTC` si el binario antiguo usa `mktime()`, y
+`/usr/bin/time` con el fichero fuera de la caché (se puede sacar sin root
+con `os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)`). Así se midió
+`filtertime_s` en 0.84 (CHANGELOG).
+
 ## Conclusiones de esta sesión: el código y cómo trabajar aquí
 
 ### Sobre el código
