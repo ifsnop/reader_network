@@ -1,4 +1,18 @@
 0.84
+- CAMBIO: filtertime_s lee la entrada en bloques de 4 MiB y parsea los
+ registros dentro del buffer (antes 3 fread + 3 fwrite por registro) y
+ escribe los registros aceptados consecutivos con un solo write(). Al
+ pasar de end_time deja de leer si la entrada es un fichero; con stdin
+ lee y descarta el resto sin parsear, para no matar con SIGPIPE al
+ proceso de delante (bzcat, otro filtro). La salida es la misma byte a
+ byte. Con un .gps de 1,5 GB (24 h) y fichero fuera de cache: ventana
+ 00:00-01:00 de 1,70 s a 0,08 s, 12:00-13:00 de 1,70 s a 0,94 s, día
+ completo de 1,83 s a 1,72 s; CPU de 5 a 10 veces menor. Con un .bz2 no
+ cambia nada (bzcat es el cuello de botella). "readed" pasa a ser los
+ bytes realmente leídos.
+- BUG: filtertime_s con un datablock de tamaño < 3 leía con un tamaño
+ negativo y desbordaba su buffer; ahora termina con error indicando el
+ offset. Ficheros > 2 GiB también en el binario de 32 bits.
 - BUG: un datablock que declaraba más bytes de los que quedan en el
  paquete UDP se leía más allá del paquete y se grababa relleno con ceros.
  Ahora se descarta el resto del paquete y cuenta como malformed (también 1
