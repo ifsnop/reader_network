@@ -21,203 +21,98 @@ You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-/*#include <unistd.h>*/
-#include <sys/types.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
+/* incluir el primero: define _FILE_OFFSET_BITS antes de los includes del
+ * sistema */
+#include "gps_stream.h"
 #include "defines.h"
 
 #define DEBUG 0
 
-void print_bytes(unsigned char* p, ssize_t count) {
-    ssize_t i = 0;
-    fprintf(stderr, "%zu [", count);
-    for(i = 0; i < count; i++)
-	if ( (i + 1) < count )
-	    fprintf(stderr, "%02X ", p[i]);
-	else
-	    fprintf(stderr, "%02X", p[i]);
-    fprintf(stderr, "]\n");
-    return;
-}
-
-void print_separator() {
-    fprintf(stderr, "==============================================\n");
-    return;
-}
-
-ssize_t read_bytes(unsigned char *p, ssize_t count, FILE * f) {
-
-    if ( 0 == count )
+/* Devuelve 1 y el SAC/SIC del primer registro del datablock si este trae
+ * I0xx/010 (bit 0x80 del primer byte del FSPEC; es el FRN 1 en las
+ * categorías habituales). El FSPEC y el SAC/SIC tienen que caber en el
+ * datablock. */
+static int get_sacsic(const unsigned char *db, size_t db_bytes, unsigned char *sac, unsigned char *sic) {
+    size_t o = 3;
+    if ( db_bytes < 6 || 0 == (db[3] & 0x80) )
 	return 0;
-
-    ssize_t rcount = 0;
-    if ( 0 == (rcount = fread(p, 1, count, f)) ) {
-	if ( feof(f) ) {
-	    // fprintf(stderr, "end of input file\n");
-	} else {
-	    fprintf(stderr, "error reading header (%s)\n", strerror(errno)); exit(1);
-	}
+    while ( db[o] & 1 ) { // FX: el FSPEC sigue en el byte siguiente
+	if ( ++o + 2 >= db_bytes )
+	    return 0;
     }
-    return rcount;
-}
-
-ssize_t write_bytes(unsigned char *p, ssize_t count, FILE * f) {
-
-    if ( 0 == count )
+    if ( o + 2 >= db_bytes )
 	return 0;
-
-    ssize_t wcount = 0;
-    if ( 0 == (wcount = fwrite(p, 1, count, f)) ) {
-	fprintf(stderr, "error writing output (%s)", strerror(errno));
-	exit(EXIT_FAILURE);
-    }
-    return wcount;
+    *sac = db[o + 1];
+    *sic = db[o + 2];
+    return 1;
 }
 
 int main(int argc, char *argv[]) {
-    int pre_bytes = 0, post_bytes = 0, header_bytes = 0, db_bytes = 0, sac1 = 0, sic1 = 0, sac2 = 0, sic2 = 0;
-    FILE *fin = NULL, *fout = NULL;
-    // unsigned int lendb, filesize;
+    int pre_bytes = 0, post_bytes = 0, header_bytes = 0;
+    int i, negative = -1;
+    // un bit por sensor (sac<<8 | sic), 8 KB: una sola consulta por
+    // registro, sea cual sea el número de parejas
+    unsigned char sel[65536 / 8];
+    gps_stream gs;
+    unsigned char *db;
+    size_t db_bytes;
 
-    unsigned char *ptr = NULL, *pre_ptr = NULL, *post_ptr = NULL;
-    ssize_t BUFFER_SIZE = 1024*1024;
-
-    ssize_t rcount = 0, count = 0, wcount = 0;
-
-    if( argc != 8 && argc != 10) {
-	printf("filtercat_s%s" COPYRIGHT_NOTICE, ARCH, VERSION);
-	printf("filtercat_s%s in_filename.gps out_filename.gps headerbytes prebytes postbytes sac sic [sac sic]\n", ARCH);
-	printf("positive sac sic: include asterix from sensor with this sac sic\n");
-	printf("negative sac sic: exclude asterix from sensor with this sac sic\n\n");
+    if( argc < 8 || 0 != (argc - 6) % 2 ) {
+	printf("filtersacsic_s%s" COPYRIGHT_NOTICE, ARCH, VERSION);
+	printf("filtersacsic_s%s in_filename.gps out_filename.gps headerbytes prebytes postbytes sac sic [sac sic ...]\n", ARCH);
+	printf("positive sac sic: include only asterix from sensors with these sac sic\n");
+	printf("negative sac sic (-sac -sic): exclude asterix from sensors with these sac sic\n");
+	printf("all pairs must have the same sign (\"0 -sic\" is accepted as \"-0 -sic\")\n");
+	printf("asterix without sac sic is always excluded\n\n");
 	exit(EXIT_SUCCESS);
     }
 
     header_bytes = atoi(argv[3]);
     pre_bytes = atoi(argv[4]);
     post_bytes = atoi(argv[5]);
-    sac1 = atoi(argv[6]);
-    sic1 = atoi(argv[7]);
-    if (argc == 10 ) {
-	sac2 = atoi(argv[8]);
-	sic2 = atoi(argv[9]);
+
+    memset(sel, 0, sizeof(sel));
+    for ( i = 6; i + 1 < argc; i += 2 ) {
+	int neg_sac, neg_sic, neg, key;
+	int s = gs_parse_signed(argv[i], 255, &neg_sac);
+	int c = gs_parse_signed(argv[i + 1], 255, &neg_sic);
+	if ( s < 0 || c < 0 ) {
+	    fprintf(stderr, "error in sac sic (%s %s), expected 0..255 or -0..-255\n", argv[i], argv[i + 1]); exit(1);
+	}
+	// los dos con el mismo signo; "0 -sic" se acepta como "-0 -sic"
+	// (antes era la forma de excluir un sensor con SAC 0)
+	if ( neg_sac == neg_sic ) {
+	    neg = neg_sac;
+	} else if ( 0 == s && !neg_sac && neg_sic ) {
+	    neg = 1;
+	} else {
+	    fprintf(stderr, "error in sac sic (%s %s), both must have the same sign\n", argv[i], argv[i + 1]); exit(1);
+	}
+	if ( -1 == negative ) {
+	    negative = neg;
+	} else if ( negative != neg ) {
+	    fprintf(stderr, "error sac sic pairs must be all positive (include) or all negative (exclude)\n"); exit(1);
+	}
+	key = (s << 8) | c;
+	sel[key >> 3] |= 1 << (key & 7);
     }
 
-    if ( !strcmp(argv[1], "-") ) {
-	if ( NULL == (fin = fdopen(dup(fileno(stdin)), "rb")) ) {
-	    fprintf(stderr, "error input file (%s)\n", strerror(errno)); exit(1);
-	}
-    } else {
-	if ( NULL == (fin = fopen(argv[1], "rb")) ) {
-	    fprintf(stderr, "error input file (%s)\n", strerror(errno)); exit(1);
-	}
-    }
+    gs_open(&gs, argv[1], argv[2], header_bytes, pre_bytes, post_bytes);
 
-    if ( !strcmp(argv[2], "-") ) {
-	fout = stdout;
-    } else {
-	if ( NULL == (fout = fopen(argv[2], "wb")) ) {
-	    fprintf(stderr, "error output file (%s)\n", strerror(errno)); exit(1);
-	}
-    }
-
-    if ( 0 != header_bytes ) {
-	ptr = calloc(1, header_bytes);
-	if ( header_bytes != (count = read_bytes(ptr, header_bytes, fin)) ) {
-	    fprintf(stderr, "error reading header header_bytes(%d) count(%zu)\n", header_bytes, count);
-	    exit(EXIT_FAILURE);
-	}
-	write_bytes(ptr, header_bytes, fout);
-	wcount += header_bytes;
-	rcount += header_bytes;
-	if ( DEBUG ) print_bytes(ptr, header_bytes);
-	free(ptr);
-    }
-    if ( DEBUG ) print_separator();
-
-    ptr = calloc(1, BUFFER_SIZE);
-    pre_ptr = calloc(1, pre_bytes);
-    post_ptr = calloc(1, post_bytes);
-
-    for(;;) {
+    while ( NULL != (db = gs_next(&gs, &db_bytes)) ) {
 	unsigned char db_sac = 0, db_sic = 0;
-	int fspeclength = 0;
-	if ( 0 != pre_bytes  && (pre_bytes == read_bytes(pre_ptr, pre_bytes, fin)) ) {
-	    if ( DEBUG ) print_bytes(pre_ptr, pre_bytes);
+	if ( DEBUG ) print_bytes(db, db_bytes);
+	if ( get_sacsic(db, db_bytes, &db_sac, &db_sic) ) {
+	    int key = (db_sac << 8) | db_sic;
+	    int in_list = (sel[key >> 3] >> (key & 7)) & 1;
+	    if ( DEBUG ) fprintf(stderr, "db_sac %d db_sic %d in_list %d\n", db_sac, db_sic, in_list);
+	    // positivas: pasa si está en la lista; negativas: si no está
+	    if ( in_list != negative )
+		gs_keep(&gs);
 	}
-
-	if ( 3 != read_bytes(ptr, 3, fin) ) {
-	    break;
-	}
-	db_bytes = ((ptr[1] & 0xff) <<8) + (ptr[2] & 0xff);
-	if ( (db_bytes - 3) != read_bytes(ptr + 3, db_bytes - 3, fin) ) {
-	    break;
-	}
-	if ( DEBUG ) print_bytes(ptr, db_bytes);
-
-	if ( 0 != post_bytes && (post_bytes == read_bytes(post_ptr, post_bytes, fin)) ) {
-	    if ( DEBUG ) print_bytes(post_ptr, post_bytes);
-	}
-
-	// get fspec size
-	if ((ptr[3] & 128) == 128) { // if sac/sic defined
-	    while((ptr[3+fspeclength] & 1) == 1) fspeclength++;
-	    db_sac = ptr[3 + fspeclength + 1];
-	    db_sic = ptr[3 + fspeclength + 2];
-	    if ( DEBUG ) {
-		print_bytes(&db_sac, 1);
-		print_bytes(&db_sic, 1);
-	    }
-
-	    if ( DEBUG ) {
-	        if ( argc == 8 )  // solo nos han pasado una pareja de sac sic
-	            fprintf(stderr, "sac1 %d sic1 %d db_sac %d db_sic %d\n", sac1, sic1, db_sac, db_sic);
-	        else // nos han pasado dos parejas de sac/sic
-	            fprintf(stderr, "sac1 %d sic1 %d sac2 %d sic2 %d db_sac %d db_sic %d\n", sac1, sic1, sac2, sic2, db_sac, db_sic);
-	    }
-
-            // con esta implementación, solo se utiliza el segundo par de sac/sic para añadir
-            // si queremos quitar dos parejas, (usando la segunda pareja como negativa) la segunda
-            // no se tiene en cuenta
-
-	    if ( (((0 <= sac1) && (sac1 == db_sac)) && // sac positivo
-		((0 <= sic1) && (sic1 == db_sic)) ) ||
-		( argc == 10 && 0 <= sac2 && sac2 == db_sac && 0 <= sic2 && sic2 == db_sic )
-		) { // sic positivo
-		if ( DEBUG ) fprintf(stderr, "MATCH sac1/sic1 || MATCH sac2/sic2\n");
-		write_bytes(pre_ptr, pre_bytes, fout);
-		write_bytes(ptr, db_bytes, fout);
-		write_bytes(post_ptr, post_bytes, fout);
-		wcount += pre_bytes + db_bytes + post_bytes;
-	    } else if ( ((0 > sac1) && (-sac1 != db_sac)) || // sac negativo
-		((0 > sic1) && (-sic1 != db_sic)) ) { // sic negativo
-		if ( DEBUG ) fprintf(stderr, "MATCH sac1/sic1\n");
-		write_bytes(pre_ptr, pre_bytes, fout);
-		write_bytes(ptr, db_bytes, fout);
-		write_bytes(post_ptr, post_bytes, fout);
-		wcount += pre_bytes + db_bytes + post_bytes;
-	    }
-	}
-
-	rcount += pre_bytes + db_bytes + post_bytes;
 	if ( DEBUG ) print_separator();
+    }
 
-    }
-    fprintf(stderr, "readed(%zu)/written(%zu)\n", rcount, wcount);
-
-    free(ptr);
-    free(pre_ptr);
-    free(post_ptr);
-    if ( fout && (0 != fclose(fout)) ) {
-	fprintf(stderr, "error close fout (%s)\n", strerror(errno)); exit(1);
-    }
-    if ( fin && (0 != fclose(fin)) ) {
-	fprintf(stderr, "error close fin (%s)\n", strerror(errno)); exit(1);
-    }
+    gs_close(&gs);
     exit(EXIT_SUCCESS);
 }

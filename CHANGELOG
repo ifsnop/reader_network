@@ -1,4 +1,18 @@
 0.84
+- ADD filtersacsic_s admite cualquier número de parejas SAC/SIC (antes una
+ o dos) con la misma regla que filtercat_s: todas positivas (solo pasan
+ esos sensores) o todas negativas (se quitan esos). Mapa de bits por
+ SAC/SIC: el número de parejas no cuesta nada. Quitar 2 sensores: de
+ 1,31 s (dos procesos en pipe) a 0,31 s con un .gps de 1,5 GB en cache.
+- BUG: filtersacsic_s leía el signo con atoi, así que "-0 -118" (SAC 0,
+ estaciones españolas) y "0 -118" quitaban cualquier sensor con SIC 118,
+ y una pareja con un solo signo actuaba de comodín ("-20 118" quitaba
+ todo el SAC 20). Ahora cada pareja es un sensor exacto, los dos números
+ llevan el mismo signo ("0 -118" se acepta como "-0 -118") y si no, es
+ un error. Con dos parejas negativas la segunda se ignoraba; mezclar
+ positivas y negativas da error. El FSPEC y el SAC/SIC tienen que caber
+ en el datablock (antes se podía leer más allá); si no, se descarta como
+ los que no traen SAC/SIC. El mensaje de uso decía "filtercat_s".
 - ADD filtercat_s admite varias categorías: "filtercat_s ... -48 -34 -21"
  en una sola ejecución en vez de encadenar tres por pipe (misma salida).
  Todas positivas (solo pasan esas) o todas negativas (se quitan esas);
