@@ -1,4 +1,14 @@
 0.84
+- ADD filtercat_s admite varias categorías: "filtercat_s ... -48 -34 -21"
+ en una sola ejecución en vez de encadenar tres por pipe (misma salida).
+ Todas positivas (solo pasan esas) o todas negativas (se quitan esas);
+ mezclar signos o una categoría fuera de 0-255 da error. El signo se lee
+ del texto: "-0" quita la categoría 0 (antes atoi lo dejaba en "solo la
+ 0"). Usa gps_stream.h y una tabla de 256 entradas, así que el número de
+ categorías no cuesta nada. Con un .gps de 1,5 GB en cache: quitar 1
+ categoría de 1,14 s a 0,27 s; quitar 3, de 1,32 s (tres procesos en
+ pipe, 1,87 s de CPU) a 0,25 s; escribiendo a disco, 2 categorías de
+ 2,20 s a 1,50 s.
 - CAMBIO: src/utils/gps_stream.h reúne la lectura/escritura de ficheros
  .gps de las utilidades filter*_s (lectura por bloques, registros
  parseados dentro del buffer, salida en tramos y drenado de stdin).
