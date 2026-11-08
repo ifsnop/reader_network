@@ -21,39 +21,12 @@ You should have received a copy of the GNU General Public License
 along with reader_network. If not, see <http://www.gnu.org/licenses/>.
 */
 
-/* ficheros > 2 GiB también en el binario de 32 bits (no-op en 64 bits y
- * en libc antiguas que no lo conocen) */
-#define _FILE_OFFSET_BITS 64
-
-#include <stdio.h>
-#include <sys/types.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
+/* incluir el primero: define _FILE_OFFSET_BITS antes de los includes del
+ * sistema */
+#include "gps_stream.h"
 #include "defines.h"
 
 #define DEBUG 0
-
-/* Se lee la entrada en bloques de este tamaño y los registros se parsean
- * dentro del propio buffer (un registro ocupa como máximo
- * pre_bytes + 65535 + post_bytes). Los registros aceptados consecutivos se
- * escriben con un solo write() directamente desde este buffer. */
-#define FT_BUFFER_SIZE (4*1024*1024)
-
-void print_bytes(unsigned char* p, ssize_t count) {
-    ssize_t i = 0;
-    fprintf(stderr, "%zu [", count);
-    for(i = 0; i < count; i++)
-	if ( (i + 1) < count )
-	    fprintf(stderr, "%02X ", p[i]);
-	else
-	    fprintf(stderr, "%02X", p[i]);
-    fprintf(stderr, "]\n");
-    return;
-}
 
 /* "HH:MM" (hora de 1 o 2 cifras, minutos de 2) -> segundos desde las
  * 00:00 UTC, que es la referencia del fechado gps. Devuelve -1 si el
@@ -73,54 +46,11 @@ static long parse_hhmm(const char *s) {
     return h * 3600L + m * 60L;
 }
 
-void print_separator() {
-    fprintf(stderr, "==============================================\n");
-    return;
-}
-
-/* lee hasta count bytes (menos solo en EOF) */
-static size_t read_full(int fd, unsigned char *p, size_t count) {
-    size_t got = 0;
-    while ( got < count ) {
-	ssize_t r = read(fd, p + got, count - got);
-	if ( 0 == r )
-	    break;
-	if ( r < 0 ) {
-	    if ( EINTR == errno )
-		continue;
-	    fprintf(stderr, "error reading input (%s)\n", strerror(errno)); exit(1);
-	}
-	got += r;
-    }
-    return got;
-}
-
-static void write_full(int fd, const unsigned char *p, size_t count) {
-    while ( count > 0 ) {
-	ssize_t w = write(fd, p, count);
-	if ( w < 0 ) {
-	    if ( EINTR == errno )
-		continue;
-	    fprintf(stderr, "error writing output (%s)", strerror(errno));
-	    exit(EXIT_FAILURE);
-	}
-	p += w;
-	count -= w;
-    }
-}
-
-
 int main(int argc, char *argv[]) {
     int pre_bytes = 0, post_bytes = 0, header_bytes = 0;
-    int fin = -1, fout = -1, is_regular = 0;
-    struct stat st;
-
-    unsigned char *buf = NULL;
-    size_t len = 0, pos = 0;          // bytes válidos en buf / siguiente registro
-    size_t run_start = 0, run_len = 0; // tramo de registros aceptados pendiente de escribir
-    int eof = 0;
-
-    long long rcount = 0, wcount = 0;
+    gps_stream gs;
+    unsigned char *db;
+    size_t db_bytes;
 
     // horas en unidades del fechado gps (1/128 s desde las 00:00)
     long start128 = 0, end128 = 0;
@@ -157,9 +87,6 @@ int main(int argc, char *argv[]) {
     if ( post_bytes != 10 ) {
 	fprintf(stderr, "error post bytes must be 10\n"); exit(1);
     }
-    if ( header_bytes < 0 || pre_bytes < 0 ) {
-	fprintf(stderr, "error headerbytes and prebytes must be >= 0\n"); exit(1);
-    }
 
     // en unidades de 1/128 s. end128 es el último instante del segundo :59
     // (HH:MM:59 + 127/128): con end128 = end_s*128 se descartaban los
@@ -169,94 +96,14 @@ int main(int argc, char *argv[]) {
     start128 = start_s * 128;
     end128 = (end_s + 1) * 128 - 1;
 
-    if ( !strcmp(argv[1], "-") ) {
-	fin = 0;
-    } else {
-	if ( (fin = open(argv[1], O_RDONLY)) < 0 ) {
-	    fprintf(stderr, "error input file (%s)\n", strerror(errno)); exit(1);
-	}
-    }
-    is_regular = (0 == fstat(fin, &st)) && S_ISREG(st.st_mode);
-#ifdef POSIX_FADV_SEQUENTIAL
-    if ( is_regular )
-	posix_fadvise(fin, 0, 0, POSIX_FADV_SEQUENTIAL);
-#endif
+    gs_open(&gs, argv[1], argv[2], header_bytes, pre_bytes, post_bytes);
 
-    if ( !strcmp(argv[2], "-") ) {
-	fout = 1;
-    } else {
-	if ( (fout = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0666)) < 0 ) {
-	    fprintf(stderr, "error output file (%s)\n", strerror(errno)); exit(1);
-	}
-    }
-
-    if ( NULL == (buf = malloc(FT_BUFFER_SIZE)) ) {
-	fprintf(stderr, "error malloc (%s)\n", strerror(errno)); exit(1);
-    }
-
-    if ( 0 != header_bytes ) {
-	unsigned char *ptr = malloc(header_bytes);
-	size_t count;
-	if ( NULL == ptr ) {
-	    fprintf(stderr, "error malloc (%s)\n", strerror(errno)); exit(1);
-	}
-	if ( (size_t) header_bytes != (count = read_full(fin, ptr, header_bytes)) ) {
-	    fprintf(stderr, "error reading header header_bytes(%d) count(%zu)\n", header_bytes, count);
-	    exit(EXIT_FAILURE);
-	}
-	write_full(fout, ptr, header_bytes);
-	wcount += header_bytes;
-	rcount += header_bytes;
-	if ( DEBUG ) print_bytes(ptr, header_bytes);
-	free(ptr);
-    }
-    if ( DEBUG ) print_separator();
-
-    for(;;) {
-	size_t avail = len - pos, db_bytes, rec_bytes;
-	unsigned char *rec, *post;
-	long raw;
-
-	// ¿está el registro entero en el buffer? si no, mover la cola al
-	// principio y rellenar (antes hay que escribir el tramo pendiente,
-	// que apunta a este buffer)
-	if ( avail < (size_t) (pre_bytes + 3 + post_bytes) ||
-	    avail < (size_t) pre_bytes + post_bytes +
-		((buf[pos + pre_bytes + 1] << 8) | buf[pos + pre_bytes + 2]) ) {
-	    if ( eof )
-		break; // registro final truncado (o fin exacto): se descarta
-	    if ( run_len ) {
-		write_full(fout, buf + run_start, run_len);
-		run_len = 0;
-	    }
-	    memmove(buf, buf + pos, avail);
-	    len = avail;
-	    pos = 0;
-	    {
-		size_t got = read_full(fin, buf + len, FT_BUFFER_SIZE - len);
-		if ( got < FT_BUFFER_SIZE - len )
-		    eof = 1;
-		len += got;
-	    }
-	    continue;
-	}
-
-	rec = buf + pos;
-	db_bytes = (rec[pre_bytes + 1] << 8) | rec[pre_bytes + 2];
-	if ( db_bytes < 3 ) {
-	    if ( run_len )
-		write_full(fout, buf + run_start, run_len);
-	    fprintf(stderr, "error malformed datablock (size %zu) at offset %lld\n", db_bytes, rcount);
-	    exit(EXIT_FAILURE);
-	}
-	rec_bytes = pre_bytes + db_bytes + post_bytes;
-	post = rec + pre_bytes + db_bytes;
-	raw = (post[post_bytes - 4] << 16) + (post[post_bytes - 3] << 8) + post[post_bytes - 2];
-	pos += rec_bytes;
-	rcount += rec_bytes;
+    while ( NULL != (db = gs_next(&gs, &db_bytes)) ) {
+	unsigned char *post = db + db_bytes;
+	long raw = (post[post_bytes - 4] << 16) + (post[post_bytes - 3] << 8) + post[post_bytes - 2];
 
 	if ( DEBUG ) {
-	    print_bytes(rec + pre_bytes, db_bytes);
+	    print_bytes(db, db_bytes);
 	    printf("%3.3f\n", raw / 128.0);
 	}
 
@@ -281,58 +128,18 @@ int main(int argc, char *argv[]) {
 
 	if ( raw > end128 ) {
 	    if ( DEBUG ) printf("skipping 2\n");
-	    // a partir de aquí no se escribe nada más. Con un fichero
-	    // regular se deja de leer. Con stdin se lee y descarta el resto
-	    // sin parsear, para que el proceso de delante en el pipe (bzcat,
-	    // otro filtro) termine normalmente en vez de morir con SIGPIPE.
-	    /* Para cortar también con stdin, sin drenar (pruebas de
-	     * integración), descomentar la línea siguiente. Los procesos de
-	     * delante en el pipe (bzcat, otro filtro) morirán con SIGPIPE
-	     * (código 141, fallo con "set -o pipefail"); los de detrás solo
-	     * ven EOF y terminan bien. */
-	    /* is_regular = 1; */
-	    if ( !is_regular ) {
-		size_t got;
-		// el drenado reutiliza buf: escribir antes el tramo pendiente
-		if ( run_len ) {
-		    write_full(fout, buf + run_start, run_len);
-		    run_len = 0;
-		}
-		rcount += len - pos;
-		while ( !eof ) {
-		    got = read_full(fin, buf, FT_BUFFER_SIZE);
-		    if ( got < FT_BUFFER_SIZE )
-			eof = 1;
-		    rcount += got;
-		}
-	    }
+	    // a partir de aquí no se escribe nada más: con un fichero se deja
+	    // de leer y con stdin se drena sin parsear (ver gs_stop() en
+	    // gps_stream.h, que tiene la línea a descomentar para cortar
+	    // también con stdin en las pruebas de integración)
+	    gs_stop(&gs);
 	    break;
 	}
 
-	// registro aceptado: se añade al tramo pendiente si es contiguo
-	if ( run_len && run_start + run_len == (size_t) (rec - buf) ) {
-	    run_len += rec_bytes;
-	} else {
-	    if ( run_len )
-		write_full(fout, buf + run_start, run_len);
-	    run_start = rec - buf;
-	    run_len = rec_bytes;
-	}
-	wcount += rec_bytes;
-
+	gs_keep(&gs);
 	if ( DEBUG ) print_separator();
     }
-    if ( run_len )
-	write_full(fout, buf + run_start, run_len);
 
-    fprintf(stderr, "readed(%lld)/written(%lld)\n", rcount, wcount);
-
-    free(buf);
-    if ( 1 != fout && 0 != close(fout) ) {
-	fprintf(stderr, "error close fout (%s)\n", strerror(errno)); exit(1);
-    }
-    if ( 0 != fin && 0 != close(fin) ) {
-	fprintf(stderr, "error close fin (%s)\n", strerror(errno)); exit(1);
-    }
+    gs_close(&gs);
     exit(EXIT_SUCCESS);
 }

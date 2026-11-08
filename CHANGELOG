@@ -1,4 +1,11 @@
 0.84
+- CAMBIO: src/utils/gps_stream.h reúne la lectura/escritura de ficheros
+ .gps de las utilidades filter*_s (lectura por bloques, registros
+ parseados dentro del buffer, salida en tramos y drenado de stdin).
+ filtertime_s pasa a usarla sin cambios en su salida. Los tramos pequeños
+ (filtros que descartan registros sueltos intercalados) se copian a un
+ buffer de salida de 1 MiB en vez de escribirse cada uno con su write(),
+ que con categorías mezcladas era más lento que el stdio anterior.
 - ADD tests/gps/gen_gps.py: generador de ficheros .gps sintéticos (horas
  monótonas que cruzan la medianoche, semilla fija) para probar y medir
  las utilidades de src/utils. Con --cats y --sensors mezcla categorías y
