@@ -1,4 +1,9 @@
 0.84
+- CAMBIO: joingps_s usa gps_stream.h (dos entradas con lectura por
+ bloques escribiendo en la misma salida): de 0,54 s a 0,18 s con dos
+ .gps de 367 MB intercalados en cache, misma salida. Un datablock de
+ tamaño < 3 termina con error; antes, con una entrada inválida (p.ej. un
+ fichero con prebytes) se escribía una salida corrupta sin avisar.
 - CAMBIO: listersacsic_s usa gps_stream.h y formatea las líneas sin
  printf(): de 1,53 s a 0,37 s con un .gps de 1,5 GB en cache, misma
  salida. Ya no lee fuera del datablock si el FSPEC no cabe (imprimía
