@@ -1,4 +1,15 @@
 0.84
+- BUG: reader_network leía las ips de radar_definition con inet_addr(),
+ que toma como octal un octeto que empieza por 0: "239.255.001.010" se
+ suscribía a 239.255.1.8 (otro grupo, sin ningún aviso) y "...008" o
+ "...009" hacían rechazar el .conf. El puerto se leía con strtol(..., 0),
+ así que "05000" era el 2560. Ahora las ips y el puerto se leen siempre en
+ decimal, con o sin ceros a la izquierda (el puerto en hex con "0x" se
+ sigue admitiendo), y la recarga con SIGHUP compara ips y puertos como
+ número: escribir la misma ip con otro formato no quita y añade el radar.
+ Ya no se aceptan las formas cortas de inet_addr ("10.1") ni octetos en
+ hex en las ips. Escenario zeropad en tests/load: 0 % de pérdidas (el
+ binario anterior no arranca con esa configuración).
 - CAMBIO: joingps_s usa gps_stream.h (dos entradas con lectura por
  bloques escribiendo en la misma salida): de 0,54 s a 0,18 s con dos
  .gps de 367 MB intercalados en cache, misma salida. Un datablock de

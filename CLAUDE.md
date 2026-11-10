@@ -253,7 +253,8 @@ con un socket por entrada, cada paquete del flujo 0 se graba dos veces),
 está en la lista por defecto de `compare.sh` porque el binario anterior
 muere con SIGHUP), `spread` y `spreaddecode` (como `base`/`decode`, con los
 envíos repartidos de forma uniforme; tampoco están en la lista por
-defecto).
+defecto) y `zeropad` (como `base`, con las ips y el puerto del `.conf`
+escritos con ceros a la izquierda).
 La configuración se genera en cada ejecución y el hash de
 `asterix_versions` se fuerza con la variable de entorno del mismo
 nombre, así que no depende de la máquina.
@@ -405,6 +406,15 @@ con `os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)`). Así se midió
   `open_input_socket()`): cada socket listo se vacía hasta `EAGAIN`, con un
   tope de `RN_MAX_DRAIN` (64) paquetes por vuelta. Un `recvfrom()` que
   devuelve `EAGAIN`/`EINTR` no es un error.
+- **Las ips y puertos de `radar_definition` se leen con `parse_ipv4()`/
+  `cfg_ip()`/`cfg_port()`, nunca con `inet_addr()`/`inet_aton()` ni
+  `strtol(..., 0)`**: estos toman un número que empieza por 0 como octal
+  (`"010"` = 8), así que una ip con ceros a la izquierda apuntaba a otro
+  grupo/origen sin ningún aviso. Para comparar dos entradas del `.conf`,
+  comparar los valores numéricos, no el texto (`radar_field_equal()`).
+- **Los `.gps` no se pueden concatenar con `cat` para analizarlos**: cada
+  fichero lleva su cabecera de 2200 bytes y `analyze.py` deja de leer en
+  la segunda. Leer cada fichero por separado con `analyze.read_gps()`.
 - **Problemas pendientes**: están detallados en `TODO.md` (ubicación,
   problema, propuesta y cómo verificar cada uno).
 
