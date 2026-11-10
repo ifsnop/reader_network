@@ -229,8 +229,71 @@ static void cfg_raw_value(const char *name, char *buf, size_t size) {
     return;
 }
 
+/* ip v4 del .conf a binario (orden de red): 4 octetos decimales de 1 a 3 cifras (0-255),
+   con o sin ceros a la izquierda ("010.001.002.003" es 10.1.2.3). No se usa inet_addr()
+   ni inet_aton() porque toman un octeto que empieza por 0 como octal: "010" era 8 (otra
+   ip, sin ningun aviso) y "008"/"009" hacian rechazar la ip. Se admiten espacios
+   alrededor, como hacia inet_addr(), pero no sus formas cortas ("10.1") ni octetos en hex. */
+static bool parse_ipv4(const char *s, in_addr_t *addr) {
+    unsigned long ip = 0;
+    int octet, digits, value;
+
+    if (s == NULL)
+	return false;
+    while (*s == ' ' || *s == '\t')
+	s++;
+    for (octet = 0; octet < 4; octet++) {
+	value = 0; digits = 0;
+	while (*s >= '0' && *s <= '9') {
+	    if (++digits > 3)
+		return false;
+	    value = value*10 + (*s - '0');
+	    s++;
+	}
+	if (digits == 0 || value > 255)
+	    return false;
+	ip = (ip << 8) | (unsigned long) value;
+	if (octet < 3) {
+	    if (*s != '.')
+		return false;
+	    s++;
+	}
+    }
+    while (*s == ' ' || *s == '\t')
+	s++;
+    if (*s != '\0')
+	return false;
+    if (addr != NULL)
+	*addr = htonl((in_addr_t) ip);
+    return true;
+}
+
 static bool valid_ipv4(const char *s) {
-    return (inet_addr(s) != INADDR_NONE) || !strcmp(s, "255.255.255.255");
+    return parse_ipv4(s, NULL);
+}
+
+/* ip ya validada por validate_radar_definition() (INADDR_NONE si no lo estuviera) */
+static in_addr_t cfg_ip(const char *s) {
+    in_addr_t addr;
+    return parse_ipv4(s, &addr) ? addr : INADDR_NONE;
+}
+
+/* puerto del .conf: decimal aunque lleve ceros a la izquierda ("05000" es 5000; con
+   strtol(..., 0) era octal, 2560), o hexadecimal con "0x" como se admitia antes.
+   Devuelve -1 si no es un numero entero. */
+static long cfg_port(const char *s) {
+    char *end = NULL;
+    long port;
+
+    if (s == NULL || *s == '\0')
+	return -1;
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+	port = strtol(s, &end, 16);
+    else
+	port = strtol(s, &end, 10);
+    if (end == s || *end != '\0')
+	return -1;
+    return port;
 }
 
 /* comprueba radar_definition (al arrancar y al recargar con SIGHUP); registra el motivo si no vale */
@@ -246,8 +309,7 @@ static bool validate_radar_definition(char **def, int count) {
 	return false;
     }
     for (i=0; i<count/5; i++) {
-	char *end = NULL;
-	long port = strtol(def[(i*5)+2], &end, 0);
+	long port = cfg_port(def[(i*5)+2]);
 
 	if (!valid_ipv4(def[(i*5)+1]) || !valid_ipv4(def[(i*5)+3]) ||
 	    (!strncasecmp(source, "mult", 4) && !valid_ipv4(def[(i*5)+4])) ) {
@@ -255,7 +317,7 @@ static bool validate_radar_definition(char **def, int count) {
 		def[(i*5)+1], def[(i*5)+3], def[(i*5)+4]);
 	    return false;
 	}
-	if (end == def[(i*5)+2] || *end != '\0' || port < 1 || port > 65535) {
+	if (port < 1 || port > 65535) {
 	    log_printf(LOG_ERROR, "radar_definition entry %d (%s): invalid port (%s)\n", i, def[i*5], def[(i*5)+2]);
 	    return false;
 	}
@@ -1007,15 +1069,15 @@ static int open_input_socket(int i) {
 	// segun documentacion, si es SOLARIS cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
 	// resto cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]);
 	//cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
-	cast_group.sin_addr.s_addr = inet_addr(radar_definition[i*5+1]); //htonl(INADDR_ANY);
-	cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //multicast group port
+	cast_group.sin_addr.s_addr = cfg_ip(radar_definition[i*5+1]); //htonl(INADDR_ANY);
+	cast_group.sin_port = htons((unsigned short int)cfg_port(radar_definition[i*5 + 2])); //multicast group port
 	if ( bind(s, (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
 	    log_printf(LOG_ERROR, "bind reader %s\n", strerror(errno));
 	    close(s); return -1;
 	}
 
-	mreq.imr_interface.s_addr = inet_addr(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
-	mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[i*5 + 1]); //multicast group ip
+	mreq.imr_interface.s_addr = cfg_ip(radar_definition[i*5 + 4]); //htonl(INADDR_ANY); 
+	mreq.imr_multiaddr.s_addr = cfg_ip(radar_definition[i*5 + 1]); //multicast group ip
 	if (setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 	    log_printf(LOG_ERROR, "add_membership setsockopt reader: %s\n", strerror(errno));
 	    close(s); return -1;
@@ -1028,7 +1090,7 @@ static int open_input_socket(int i) {
 	setup_recv_buffer(s);
 	cast_group.sin_family = AF_INET;
 	cast_group.sin_addr.s_addr = htonl(INADDR_ANY);
-	cast_group.sin_port = htons((unsigned short int)strtol(radar_definition[i*5 + 2], NULL, 0)); //broadcast group port
+	cast_group.sin_port = htons((unsigned short int)cfg_port(radar_definition[i*5 + 2])); //broadcast group port
 	memset(&cast_group.sin_zero, 0, sizeof(cast_group.sin_zero));
 	if ( bind(s, (struct sockaddr *) &cast_group, sizeof(cast_group)) < 0) {
 	    // error happens when suscribing broadcast addresses
@@ -1047,7 +1109,7 @@ static int open_input_socket(int i) {
 static bool pool_has_iface(struct input_pool_s *pool, int p, in_addr_t iface) {
     int j;
     for (j = pool->first[p]; j != -1; j = pool->next[j])
-	if (inet_addr(pool->def[(j*5)+4]) == iface)
+	if (cfg_ip(pool->def[(j*5)+4]) == iface)
 	    return true;
     return false;
 }
@@ -1067,16 +1129,16 @@ void setup_input_network(struct input_pool_s *pool) {
     socket_count = 0;
 
 	    while (i<(radar_count/5)) {
-		in_addr_t group = inet_addr(radar_definition[(i*5)+1]);
-		long port = strtol(radar_definition[(i*5)+2], NULL, 0);
-		in_addr_t iface = inet_addr(radar_definition[(i*5)+4]);
+		in_addr_t group = cfg_ip(radar_definition[(i*5)+1]);
+		long port = cfg_port(radar_definition[(i*5)+2]);
+		in_addr_t iface = cfg_ip(radar_definition[(i*5)+4]);
 
 		if ( i >= MAX_RADAR_NUMBER ) {
 		    log_printf(LOG_ERROR, "Max number of defined radars reached (%d), exiting\n", MAX_RADAR_NUMBER);
 		    exit(EXIT_FAILURE);
 		}
 		// ip de origen en binario, para no comparar texto en cada paquete recibido
-		radar_destination[i].source_addr = inet_addr(radar_definition[(i*5)+3]);
+		radar_destination[i].source_addr = cfg_ip(radar_definition[(i*5)+3]);
 		radar_destination[i].source_any = (radar_destination[i].source_addr == htonl(INADDR_ANY));
 		radar_destination[i].next = -1;
 		radar_destination[i].socket = -1;
@@ -1087,8 +1149,8 @@ void setup_input_network(struct input_pool_s *pool) {
 		// entregase cada paquete a los dos.
 		for (k=0; k<i; k++) {
 		    if ( (radar_destination[k].socket_index != -1) &&                 // (sin socket si no se pudo abrir en una recarga)
-			(inet_addr(radar_definition[(k*5)+1]) == group) &&        // mismo grupo mcast
-			(strtol(radar_definition[(k*5)+2], NULL, 0) == port) )     // y mismo puerto
+			(cfg_ip(radar_definition[(k*5)+1]) == group) &&        // mismo grupo mcast
+			(cfg_port(radar_definition[(k*5)+2]) == port) )     // y mismo puerto
 			break;
 		}
 
@@ -1108,7 +1170,7 @@ void setup_input_network(struct input_pool_s *pool) {
 		    // se añade al final de la lista de radares del socket (se respeta el orden
 		    // del fichero de configuracion: gana el primero cuya ip de origen coincida)
 		    for (j = socket_first_radar[radar_destination[i].socket_index]; j != -1; j = radar_destination[j].next) {
-			if (inet_addr(radar_definition[(j*5)+4]) == iface)
+			if (cfg_ip(radar_definition[(j*5)+4]) == iface)
 			    joined = true;
 			last = j;
 		    }
@@ -1137,8 +1199,8 @@ void setup_input_network(struct input_pool_s *pool) {
 		    if (pool != NULL) {
 			for (p=0; p<pool->count; p++) {
 			    if ( (pool->fd[p] != -1) &&
-				(inet_addr(pool->def[(pool->first[p]*5)+1]) == group) &&
-				(strtol(pool->def[(pool->first[p]*5)+2], NULL, 0) == port) )
+				(cfg_ip(pool->def[(pool->first[p]*5)+1]) == group) &&
+				(cfg_port(pool->def[(pool->first[p]*5)+2]) == port) )
 				break;
 			}
 			if (p == pool->count)
@@ -1194,17 +1256,17 @@ void setup_input_network(struct input_pool_s *pool) {
 	    if (socket_pool[k] == -1 || strncasecmp(source, "mult", 4))
 		continue;
 	    for (j = pool->first[socket_pool[k]]; j != -1; j = pool->next[j]) {
-		in_addr_t iface = inet_addr(pool->def[(j*5)+4]);
+		in_addr_t iface = cfg_ip(pool->def[(j*5)+4]);
 		bool seen = false, used = false;
 		for (jj = pool->first[socket_pool[k]]; jj != j; jj = pool->next[jj]) // interfaz repetida, ya tratada
-		    if (inet_addr(pool->def[(jj*5)+4]) == iface)
+		    if (cfg_ip(pool->def[(jj*5)+4]) == iface)
 			seen = true;
 		for (jj = socket_first_radar[k]; jj != -1; jj = radar_destination[jj].next)
-		    if (inet_addr(radar_definition[(jj*5)+4]) == iface)
+		    if (cfg_ip(radar_definition[(jj*5)+4]) == iface)
 			used = true;
 		if (!seen && !used) {
 		    mreq.imr_interface.s_addr = iface;
-		    mreq.imr_multiaddr.s_addr = inet_addr(radar_definition[(socket_first_radar[k]*5)+1]);
+		    mreq.imr_multiaddr.s_addr = cfg_ip(radar_definition[(socket_first_radar[k]*5)+1]);
 		    if (setsockopt(s_reader[k], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
 			log_printf(LOG_ERROR, "drop_membership setsockopt reader (ifaz %s): %s\n", pool->def[(j*5)+4], strerror(errno));
 		    }
@@ -1418,12 +1480,30 @@ static void read_pending_config(void) {
     return;
 }
 
-/* true si la entrada i de def (5 cadenas) esta tal cual en other */
+/* true si el campo f (0..4) de radar_definition vale lo mismo en a y b: las ips y el
+   puerto se comparan como numero ("010.001.002.003" == "10.1.2.3", "05000" == "5000"),
+   el nombre (y lo que no se pueda leer como ip/puerto) como texto */
+static bool radar_field_equal(int f, const char *a, const char *b) {
+    in_addr_t ia, ib;
+    long pa, pb;
+
+    if (f == 1 || f == 3 || f == 4) {
+	if (parse_ipv4(a, &ia) && parse_ipv4(b, &ib))
+	    return ia == ib;
+    } else if (f == 2) {
+	pa = cfg_port(a); pb = cfg_port(b);
+	if (pa != -1 && pb != -1)
+	    return pa == pb;
+    }
+    return !strcmp(a, b);
+}
+
+/* true si la entrada i de def (5 cadenas) esta en other */
 static bool radar_entry_in(char **def, int i, char **other, int other_count) {
     int j, f;
     for (j=0; j<other_count/5; j++) {
 	for (f=0; f<5; f++)
-	    if (strcmp(def[(i*5)+f], other[(j*5)+f]))
+	    if (!radar_field_equal(f, def[(i*5)+f], other[(j*5)+f]))
 		break;
 	if (f == 5)
 	    return true;

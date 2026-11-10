@@ -20,6 +20,9 @@
 #             entre los flujos (radares no sincronizados): casi un paquete por
 #             vuelta del bucle, el peor caso para el coste fijo por vuelta
 #   spreaddecode  spread con dest_localhost=true
+#   zeropad   como base, pero el .conf escribe las ips con ceros a la izquierda
+#             ("239.255.001.008", "127.000.000.001") y el puerto como "05000": se
+#             deben leer en decimal (inet_addr() los tomaba como octal)
 #   reload    20 pkt/s por flujo, mode_continuous con rotacion cada 20 s; se graban
 #             los flujos 0..99 y, 2 s despues de un corte, se recarga con SIGHUP:
 #             primero un .conf con error de sintaxis (se rechaza), luego 0..149 y
@@ -40,7 +43,7 @@ WORK=$(readlink -f "$3")
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 FLOWS=150 RATE=50 RECORDS=4 DURATION=20
-LOCALHOST=false SCRM=false NOISE=0 DUP=0 MALFORMED=-1 DUPGROUP=false RELOAD=false SPREAD=false
+LOCALHOST=false SCRM=false NOISE=0 DUP=0 MALFORMED=-1 DUPGROUP=false RELOAD=false SPREAD=false ZEROPAD=false
 case "$SCEN" in
     base) ;;
     decode) LOCALHOST=true ;;
@@ -52,6 +55,7 @@ case "$SCEN" in
     reload) RATE=20 RECORDS=1 DURATION=50 RELOAD=true ;;
     spread) SPREAD=true ;;
     spreaddecode) SPREAD=true LOCALHOST=true ;;
+    zeropad) ZEROPAD=true ;;
     *) echo "escenario desconocido: $SCEN" >&2; exit 2 ;;
 esac
 
@@ -85,7 +89,12 @@ write_conf() {
     echo 'radar_definition = {'
     for ((i = first; i <= last; i++)); do
         sep=","; [ $i -eq $last ] && [ "$DUPGROUP" = false ] && sep=""
-        echo "    \"f$i\", \"239.255.$((1 + i / 250)).$((1 + i % 250))\", \"5000\", \"127.0.0.1\", \"127.0.0.1\"$sep"
+        if [ "$ZEROPAD" = true ]; then
+            printf '    "f%d", "239.255.%03d.%03d", "05000", "127.000.000.001", "127.000.000.001"%s\n' \
+                $i $((1 + i / 250)) $((1 + i % 250)) "$sep"
+        else
+            echo "    \"f$i\", \"239.255.$((1 + i / 250)).$((1 + i % 250))\", \"5000\", \"127.0.0.1\", \"127.0.0.1\"$sep"
+        fi
     done
     if [ "$DUPGROUP" = true ]; then
         echo '    "dup0", "239.255.1.1", "5000", "0.0.0.0", "127.0.0.1"'
