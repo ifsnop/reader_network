@@ -10,6 +10,30 @@
  Ya no se aceptan las formas cortas de inet_addr ("10.1") ni octetos en
  hex en las ips. Escenario zeropad en tests/load: 0 % de pérdidas (el
  binario anterior no arranca con esa configuración).
+- BUG: joingps_s mezclaba mal cualquier fichero que cruzara la medianoche:
+ la hora gps es la hora del día (vuelve a 0 a las 00:00 y el .gps no lleva
+ fecha), así que la primera entrada en cruzarla sacaba todo lo posterior a
+ las 00:00 antes de lo que les quedaba a las demás de antes de las 00:00,
+ y con un fichero que empieza a las 23:59 y otro a las 00:00 salía el de
+ las 00:00 entero delante. Ahora dentro de cada fichero un retroceso de
+ más de 12 h es un cruce de medianoche, y cada entrada se coloca a menos de
+ 12 h de la anterior en la línea de comandos (para juntar varios días,
+ pasarlas en orden cronológico). Pasa también con mode_continuous: los
+ paquetes que llegan justo después de las 00:00 y antes del corte van al
+ fichero que se cierra con hora ~0. Sin medianoche, la salida es idéntica
+ a la de antes. Comprobado con tests/gps/check_join.py.
+- ADD: joingps_s acepta N entradas (el último argumento es la salida); con
+ la misma hora sale primero la entrada posterior, como con dos. Mezcla con
+ un heap que sigue escribiendo de la misma entrada mientras vaya antes que
+ la siguiente: con 8 .gps intercalados (1,1 GB en cache) 0,40 s frente a
+ 2,05 s encadenando joins de dos; con dos entradas, el mismo tiempo que
+ antes (0,096 s con 355 MB en cache, 0,46 s fuera de cache).
+- CAMBIO: joingps_s termina con error si la salida es una de las entradas
+ (antes O_TRUNC la vaciaba antes de leerla), si hay más de una entrada por
+ stdin, y avisa de un registro final cortado (antes se descartaba sin
+ decir nada) y de una entrada cuya hora retrocede sin cruzar la medianoche
+ (la salida no queda ordenada). Los errores de entrada de gps_stream.h
+ dicen el fichero.
 - CAMBIO: joingps_s usa gps_stream.h (dos entradas con lectura por
  bloques escribiendo en la misma salida): de 0,54 s a 0,18 s con dos
  .gps de 367 MB intercalados en cache, misma salida. Un datablock de

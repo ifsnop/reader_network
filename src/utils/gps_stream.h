@@ -37,7 +37,7 @@ along with reader_network. If not, see <http://www.gnu.org/licenses/>.
  * lector forman un tramo. Si es grande (>= GS_DIRECT_MIN, p.ej. filtertime_s,
  * cuya salida es casi siempre un único tramo) se escribe directamente desde
  * el buffer de entrada; si es pequeño (filtros que descartan registros
- * sueltos intercalados, joingps_s alternando entre dos ficheros) se copia a
+ * sueltos intercalados, joingps_s alternando entre varios ficheros) se copia a
  * un buffer de salida de GS_OUT_SIZE que se escribe al llenarse. Escribir
  * cada tramo pequeño con su propio write() costaba millones de llamadas al
  * sistema y era más lento que el stdio anterior. gs_emit() añade bytes
@@ -102,6 +102,7 @@ typedef struct gps_stream {
     size_t run_start, run_len; /* tramo de registros aceptados pendiente de escribir */
     size_t rec, rec_bytes;    /* registro actual (offset en buf, con pre y post) */
     long long rcount;
+    const char *name;         /* para los mensajes de error */
     gs_writer *w;
     gs_writer own_w;          /* el de gs_open() */
 } gps_stream;
@@ -244,12 +245,13 @@ static __inline__ void gs_reader_open(gps_stream *gs, const char *in,
     gs->pre_bytes = pre_bytes;
     gs->post_bytes = post_bytes;
     gs->w = w;
+    gs->name = strcmp(in, "-") ? in : "stdin";
 
     if ( !strcmp(in, "-") ) {
 	gs->fin = 0;
     } else {
 	if ( (gs->fin = open(in, O_RDONLY)) < 0 ) {
-	    fprintf(stderr, "error input file (%s)\n", strerror(errno)); exit(1);
+	    fprintf(stderr, "error input file %s (%s)\n", in, strerror(errno)); exit(1);
 	}
     }
     gs->is_regular = (0 == fstat(gs->fin, &st)) && S_ISREG(st.st_mode);
@@ -268,7 +270,8 @@ static __inline__ void gs_reader_open(gps_stream *gs, const char *in,
 	    fprintf(stderr, "error headerbytes too big (%d)\n", header_bytes); exit(1);
 	}
 	if ( (size_t) header_bytes != (count = gs_read_full(gs->fin, gs->buf, header_bytes)) ) {
-	    fprintf(stderr, "error reading header header_bytes(%d) count(%zu)\n", header_bytes, count);
+	    fprintf(stderr, "error reading header of %s header_bytes(%d) count(%zu)\n",
+		gs->name, header_bytes, count);
 	    exit(EXIT_FAILURE);
 	}
 	gs->rcount += header_bytes;
@@ -308,7 +311,7 @@ static __inline__ unsigned char *gs_next(gps_stream *gs, size_t *db_bytes) {
 		if ( size < 3 ) {
 		    gs_flush_owner(gs->w);
 		    gs_flush_out(gs->w);
-		    fprintf(stderr, "error malformed datablock (size %zu) at offset %lld\n", size, gs->rcount);
+		    fprintf(stderr, "error malformed datablock (size %zu) at offset %lld of %s\n", size, gs->rcount, gs->name);
 		    exit(EXIT_FAILURE);
 		}
 		gs->rec = gs->pos;
@@ -336,6 +339,13 @@ static __inline__ unsigned char *gs_next(gps_stream *gs, size_t *db_bytes) {
 	    gs->len += got;
 	}
     }
+}
+
+/* bytes que sobran al final de la entrada (un registro incompleto que
+ * gs_next() ha descartado); solo tiene sentido después de que gs_next()
+ * devuelva NULL */
+static __inline__ size_t gs_tail_bytes(const gps_stream *gs) {
+    return gs->len - gs->pos;
 }
 
 /* el registro devuelto por el último gs_next() va a la salida */

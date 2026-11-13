@@ -109,7 +109,11 @@ afectados.
 ## Utilidades relacionadas (`src/utils/`)
 
 - `filtertime_s`: recorta un fichero `.gps` a un rango horario.
-- `joingps` / `joingps_s`: fusionan cronológicamente dos ficheros `.gps`.
+- `joingps` / `joingps_s`: fusionan cronológicamente ficheros `.gps` (`joingps`
+  dos; `joingps_s` dos o más, el último argumento es la salida). La hora gps
+  no lleva fecha: `joingps_s` coloca cada entrada a menos de 12 h de la
+  anterior y sigue los cruces de medianoche dentro de cada fichero; para
+  juntar varios días, pasar las entradas en orden cronológico.
 - `cleanast` / `cleanast_s`: quitan el envoltorio GPS, dejan ASTERIX puro.
 - `filtercat*` / `filtersacsic*`: filtran por categoría ASTERIX o SAC/SIC.
 

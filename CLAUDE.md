@@ -314,6 +314,18 @@ binario anterior y medir (ver la sección siguiente).
   (se quitan esos); el signo se lee del texto (`-0` es negativo); un sensor
   es siempre una pareja SAC/SIC exacta con el mismo signo en los dos
   números (`0 -118` se acepta como `-0 -118`).
+- **La hora gps del trailer no lleva fecha**: es la hora del día en 1/128 s
+  (`(t.tv_sec - midnight_t) % 86400` en `reader_network.c`), vuelve a 0 a
+  las 00:00 y la cabecera es toda `0xCD`. Cualquier utilidad que compare
+  horas de registros tiene que tener en cuenta la medianoche. `joingps_s`
+  (N entradas) suma un día al ver un retroceso de más de 12 h dentro de un
+  fichero, y coloca el primer registro de cada entrada a menos de 12 h del
+  de la entrada anterior en la línea de comandos (decidido con Diego: para
+  juntar varios días, entradas en orden cronológico). Con dos entradas
+  vivas usa `jg_merge2()`: con el heap general, el trabajo extra en cada
+  cambio de fichero costaba un 10 % con entradas muy intercaladas.
+  `tests/gps/check_join.py out in1 in2 ... [--wraps K]` comprueba una
+  salida contra una mezcla de referencia escrita aparte.
 
 ## Ficheros `.gps` sintéticos (`tests/gps/gen_gps.py`)
 
